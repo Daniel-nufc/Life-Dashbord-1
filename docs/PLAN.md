@@ -66,7 +66,7 @@ Beispiele:
 | Bereich | Tabellen |
 |---|---|
 | Schule | `Subject` (Kürzel, Name, Farbe, LK/GK, Schwierigkeit 1–5), `TimetableLesson` (Wochentag, Block, Woche A/B, Raum), `TimetableException` (Ausfall/Vertretung), `SchoolHoliday` |
-| Klausuren & Lernen | `Exam` (Fach, Datum, Art), `Topic` (Klausur, Name, Aufwand, Fortschritt %, nächste Wiederholung), `StudySession` (Pomodoro-Log), `Grade` (Punkte 0–15, Gewicht), `Assignment` (Abgabe) |
+| Klausuren & Lernen | `Exam` (Fach, Datum, Art), `Topic` (Klausur, Name, Aufwand, Fortschritt %, nächste Wiederholung), `StudySession` (Pomodoro-Log), `Grade` (Noten 1–6 **oder** Punkte 0–15 je Schuljahr umschaltbar, Gewicht), `Assignment` (Abgabe) |
 | Job | `JobShift` (Datum, Start, Ende, Stundenlohn), `JobSettings` (Minijob-Grenze) |
 | Kalender & Aufgaben | `Event` (eigene Termine, optional mit Systemkalender verknüpft), `ExternalCalendarLink`, `Task` (Bereich, Fälligkeit, Dauer-Schätzung, Verknüpfung) |
 | Planung | `PlanBlock` (Datum, Start, Ende, Typ, Quelle, Status: vorgeschlagen/angenommen/verschoben/abgelehnt/erledigt/verpasst), `PlanFeedback` (Entscheidung + Kontext für das Lernen), `PlannerSettings` (Prioritäten, Tagesfenster, Blocklängen) |
@@ -110,7 +110,7 @@ Unten (Einhand): **Heute · Kalender · Lernen · Sport · Mehr** (Finanzen, Ets
 |---|---|
 | Heute | Großer Titel, Zeitstrahl mit Plan-Blöcken (annehmen/verschieben/ablehnen per Wischen), Karten: nächste Klausur + Countdown, Training, Lernfortschritt, Budget, Etsy, Habits – sortier- und ausblendbar |
 | Kalender | Tag/Woche/Monat, Stundenplan + Termine + Plan-Blöcke, Eintragen per Langdruck |
-| Lernen | Fächer, Klausuren, Themenlisten mit Fortschritt, Lernplan, Fokus-Timer, Noten (Punkte, Durchschnitt), Abgaben |
+| Lernen | Fächer, Klausuren, Themenlisten mit Fortschritt, Lernplan, Fokus-Timer, Noten (Noten oder Punkte, Durchschnitt), Abgaben, später Abi-Rechner (ab Q-Phase) |
 | Sport | Wochenplan (Floorball Mo/Mi + Zusatz), Workout-Log, Diagramme, Schritte/Schlaf |
 | Ziele | Ziele pro Bereich (z. B. Ironman-Weg in Stufen), Habits, Streaks mit Joker |
 | Finanzen | Konten, Umsätze, Budgets, Abos, Sparziele, Monatsprognose |
@@ -135,6 +135,8 @@ Design: große, einklappbare Überschrift oben (One-UI-Stil), runde Karten (24 d
 
 - Minijob in Aussicht (vermutlich im freien Donnerstag-Fenster): Sobald es Schichten gibt, werden sie als feste Termine eingetragen und Lernzeit wird automatisch woandershin verteilt.
 - Tagesfenster: Aufstehen 6:00, Schlafen 22:00. Floorball Mo + Mi (Berliner TSC): Abfahrt 18:00, Training 18:30–20:00 (ändert sich bald → editierbar).
+- **Schullaufbahn:** 11. Klasse (Einführungsphase) am beruflichen Gymnasium (Max-Taut-Schule, OSZ), 3 Jahre bis zum Abi (voraussichtlich 2029). Abi-Rechner und LK-/Prüfungsfach-Planung erst ab der Qualifikationsphase (12/13) relevant; die LK-Wahl kommt als Meilenstein in „Ziele“.
+- **Vorlieben (Fragebogen 08.11.):** lernt am besten nachmittags, Fokus ca. 25 min (Pomodoro 25/5), Schulweg Bahn/Bus < 30 min (kurze Wiederholungen unterwegs), Ton: Coach, der pusht. Ironman-Stand: 5 km geschafft, nächstes Ziel 10 km; Motivationskiller: zu große Ziele, keine Zeit, allein langweilig → immer nur das nächste kleine Ziel zeigen, Partner/Lauftreff-Ideen. Habits: pünktlich schlafen, weniger Handyzeit, Bewegung, Lesen/Vokabeln. Etsy: > 5 Std/Woche (in Klausurwochen automatisch reduziert).
 - Fächer: TuMM = Technik und Management – Management, TuMT = … – Technik, PM = Projektmanagement, BIO-Pro = Biologie, DS = Darstellendes Spiel. LKs/Schwierigkeit trägst du später selbst ein.
 - Ziel „Ironman“ als Stufenweg: 5 km laufen → Sprint-Triathlon (0,75/20/5) → Olympisch (1,5/40/10) → Mitteldistanz (1,9/90/21,1) → Ironman (3,8/180/42,2). Kleine Wochen-Habits mit „Minimalversion“ (10 Minuten zählen auch).
 - Etsy: Winter-Set (Rotkehlchen, Hütte, Fuchs) als Set mit drei Motiven. Offene To-dos: Probedruck Oma, Google-Lens-Check, Mockups + Titelbild, 15-oz-Datei, Entscheidung „Tagesaufgabe pausieren?“. Dazu eine Upload-Checkliste mit KI-Häkchen, „Designed by“ und Nachweis.
@@ -155,13 +157,13 @@ Design: große, einklappbare Überschrift oben (One-UI-Stil), runde Karten (24 d
 
 ## 8. Phasen
 
-Weil die Klausurphase in ~2 Wochen beginnt, kommt **Lernen + Planung früher** als ursprünglich vorgeschlagen.
+Weil die Klausuren in ~2 Wochen beginnen, kommt **Lernen + Planung früher** als ursprünglich vorgeschlagen.
 
 | Phase | Inhalt | Ergebnis zum Testen |
 |---|---|---|
 | 1 | Grundgerüst: Projekt, GitHub-Actions-APK, Theme, Navigation (Handy + Tablet), Room + SQLCipher, Hilt, App-Sperre (Fingerabdruck), Stundenplan A/B | App startet, zeigt Stundenplan, Fingerabdruck-Sperre |
 | 2 | Kalender, Aufgaben & **Hausaufgabenplaner** (+ Job-Schichten): eigener Kalender, Systemkalender lesen/schreiben, To-dos mit Bereichen | Termine und Aufgaben eintragen, im Samsung-Kalender sichtbar |
-| 3 | Lernen & Klausuren: Fächer, Klausuren, Themen, Lernplan rückwärts + Wiederholungen, Fokus-Timer, Noten (Punkte) | Klausuren eintragen → automatischer Lernplan |
+| 3 | Lernen & Klausuren: Fächer, Klausuren, Themen, Lernplan rückwärts + Wiederholungen, Fokus-Timer (25/5), Noten | Klausuren eintragen → automatischer Lernplan |
 | 4 | Heute + Tagesplan-Engine: Zeitstrahl, Vorschläge annehmen/verschieben/ablehnen, Neuplanung, Morgen-Benachrichtigung | Täglicher Plan für die Klausurphase |
 | 5 | Sport + Ziele & Habits: Floorball, Workout-Log, Diagramme, Health Connect, Ironman-Stufen, Streaks | Training loggen, Schritte/Schlaf sehen |
 | 6 | Finanzen: Konten, manuelle Umsätze, DKB-CSV-Import, Kategorien lernen, Budgets, Abos, Prognose | Ausgaben vs. Budget |
@@ -181,5 +183,5 @@ Jede Phase endet mit: App kompiliert, Unit-Tests grün, APK per GitHub Actions, 
 - Kein Tracking, keine Analytics, kein eigener Server. Netzwerk nur für Etsy, Claude und (optional) Sync.
 - Secrets nie in Git (`.gitignore`, GitHub Secrets für den Signatur-Schlüssel).
 - Zustände für Laden, Leer und Fehler (offline, Token abgelaufen, API-Fehler) in jedem Screen.
-- Unit-Tests: Planer, Lernplan-Verteilung, Spaced Repetition, Kategorisierung, Budget/Prognose, Etsy-Netto, Punkte-Durchschnitt.
+- Unit-Tests: Planer, Lernplan-Verteilung, Spaced Repetition, Kategorisierung, Budget/Prognose, Etsy-Netto, Noten-/Punkte-Durchschnitt.
 - README mit kompletter Setup-Anleitung.
