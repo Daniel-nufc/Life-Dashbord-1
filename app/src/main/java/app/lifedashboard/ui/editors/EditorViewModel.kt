@@ -41,12 +41,14 @@ class EditorViewModel @Inject constructor(
     timetable: TimetableRepository,
     private val study: app.lifedashboard.data.repository.StudyRepository,
     private val finance: app.lifedashboard.data.repository.FinanceRepository,
+    private val planDao: app.lifedashboard.data.db.PlanDao,
 ) : ViewModel() {
 
     val subjects: StateFlow<List<SubjectEntity>> =
         timetable.subjects.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     suspend fun nextLessonDate(subjectId: Long, skip: Int): LocalDate? = tasks.nextLessonDate(subjectId, skip = skip)
+    suspend fun estimateMinutes(subjectId: Long): Int = tasks.estimateHomeworkMinutes(subjectId, planDao)
 
     fun saveEvent(event: EventEntity) = launch { events.save(event) }
     fun deleteEvent(id: Long) = launch { events.delete(id) }

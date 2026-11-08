@@ -51,4 +51,10 @@ class EtsyMathTest {
     fun `Saison-Tipp im November`() {
         assertTrue(EtsyMath.seasonalTip(LocalDate.of(2026, 11, 8)).contains("Weihnacht"))
     }
+
+    @Test
+    fun `naechste Saison wird rueckwaerts geplant`() {
+        assertEquals("Valentinstag" to LocalDate.of(2027, 1, 15), EtsyMath.nextSeason(LocalDate.of(2026, 11, 9)))
+        assertEquals("Ostern", EtsyMath.nextSeason(LocalDate.of(2027, 1, 10)).first)
+    }
 }

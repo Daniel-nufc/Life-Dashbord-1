@@ -57,6 +57,45 @@ class SeedDataInitializer @Inject constructor(
             seedHolidays()
             settings.setSeedVersion(6)
         }
+        if (version < 7) {
+            seedAutomation()
+            settings.setSeedVersion(7)
+        }
+    }
+
+    /** Automatik: Gewohnheiten-Regeln, Führerschein-Schritte, Sparziele. */
+    private suspend fun seedAutomation() {
+        val goals = db.goalDao()
+        goals.observeHabits().first().forEach { h ->
+            val rule = when {
+                h.emoji == "🏃" || h.title.contains("Bewegung", true) -> "STEPS"
+                h.emoji == "😴" || h.title.contains("schlafen", true) -> "SLEEP_PHONE"
+                h.emoji == "📵" || h.title.contains("Handyzeit", true) -> "SCREEN_SOCIAL"
+                else -> null
+            }
+            if (rule != null && h.autoRule == null) goals.upsertHabit(h.copy(autoRule = rule))
+        }
+        // Führerschein: Sehtest und Erste-Hilfe-Kurs ergänzen
+        val license = goals.observeGoals().first().firstOrNull { it.title.contains("Führerschein", true) }
+        if (license != null) {
+            val steps = goals.observeMilestones().first().filter { it.goalId == license.id }
+            if (steps.none { it.title.contains("Sehtest", true) }) {
+                val shifted = steps.map { it.copy(sortOrder = it.sortOrder + 2) }
+                shifted.forEach { goals.upsertMilestone(it) }
+                goals.insertMilestones(
+                    listOf(
+                        MilestoneEntity(goalId = license.id, title = "Sehtest (Optiker, ca. 7 €)", sortOrder = 0, done = false),
+                        MilestoneEntity(goalId = license.id, title = "Erste-Hilfe-Kurs (1 Tag)", sortOrder = 1, done = false),
+                    ),
+                )
+            }
+        }
+        // Sparziele (Vorschlag aus dem Fragebogen) – nur wenn noch keine da sind
+        val finance = db.financeDao()
+        if (finance.observeSavings().first().isEmpty()) {
+            finance.upsertSavings(app.lifedashboard.data.db.SavingsGoalEntity(title = "Führerschein", targetCents = 200_000, savedCents = 0, deadlineEpochDay = java.time.LocalDate.of(2027, 12, 31).toEpochDay()))
+            finance.upsertSavings(app.lifedashboard.data.db.SavingsGoalEntity(title = "Feriencamp", targetCents = 40_000, savedCents = 0, deadlineEpochDay = java.time.LocalDate.of(2027, 6, 1).toEpochDay()))
+        }
     }
 
     /** Berliner Ferien und Feiertage 2026/27 (in der App änderbar). */

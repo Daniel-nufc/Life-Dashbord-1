@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Autorenew
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.PieChart
@@ -108,6 +109,8 @@ class FinanceViewModel @Inject constructor(private val repo: FinanceRepository) 
     fun delete(id: Long) = launch { repo.deleteTransaction(id) }
     fun setBudget(category: String, cents: Long) = launch { repo.saveBudget(category, cents) }
     fun setBuffer(cents: Long) = launch { repo.setBuffer(cents) }
+    fun adoptBudgets(list: List<Pair<String, Long>>) = launch { list.forEach { (c, v) -> repo.saveBudget(c, v) } }
+    fun adoptRate(goal: SavingsGoalEntity, cents: Long) = launch { repo.adoptSavingsRate(goal, cents) }
     fun setStartBalance(accountId: Long, cents: Long) = launch {
         repo.accounts().firstOrNull { it.id == accountId }?.let { repo.saveAccount(it.copy(initialBalanceCents = cents)) }
     }
@@ -261,6 +264,42 @@ fun FinanceScreen(onBack: () -> Unit, viewModel: FinanceViewModel = hiltViewMode
                                 Row(Modifier.fillMaxWidth().clickable { budgetFor = cat }.padding(vertical = 3.dp)) {
                                     Text(cat, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                                     Text(cents.euro(), style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
+                    }
+                }
+                if (d.budgetSuggestions.isNotEmpty() || d.savingsRates.isNotEmpty()) {
+                    item {
+                        SectionCard {
+                            TileHeader(Icons.Rounded.AutoAwesome, "Vorschläge der App", LifeArea.ETSY.color)
+                            if (d.budgetSuggestions.isNotEmpty()) {
+                                Text(
+                                    if (d.transactions.isEmpty()) "Start-Budgets (noch keine Umsätze):" else "Budgets aus deinen letzten 3 Monaten:",
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                                d.budgetSuggestions.forEach { (c, v) ->
+                                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) { Text(c, Modifier.weight(1f)); Text("${v.euro()} / Monat") }
+                                }
+                                androidx.compose.material3.FilledTonalButton(onClick = { viewModel.adoptBudgets(d.budgetSuggestions) }, modifier = Modifier.padding(top = 6.dp)) {
+                                    Text("✓ Budgets übernehmen")
+                                }
+                            }
+                            if (d.savingsRates.isNotEmpty()) {
+                                Text("Sparraten, damit deine Ziele pünktlich klappen:", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 10.dp))
+                                d.savingsRates.forEach { (g, rate) ->
+                                    val already = d.recurring.any { it.title == "Sparen: ${g.title}" }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("${g.title}: ${rate.euro()} / Monat", Modifier.weight(1f))
+                                        if (already) Text("✓ fest", color = LifeArea.SPORT.color)
+                                        else TextButton(onClick = { viewModel.adoptRate(g, rate) }) { Text("Als feste Buchung") }
+                                    }
+                                }
+                                if (d.monthlyIncomeCents > 0) {
+                                    Text(
+                                        "Faustregel: 25 % deiner festen Einnahmen = ${(d.monthlyIncomeCents / 4).euro()} pro Monat sparen.",
+                                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
                                 }
                             }
                         }

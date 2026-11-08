@@ -23,6 +23,7 @@ import app.lifedashboard.planner.TimeRange
 import app.lifedashboard.planner.freeSlots
 import app.lifedashboard.planner.minuteToTime
 import app.lifedashboard.planner.minuteOfDay
+import app.lifedashboard.planner.mondayOfWeek
 import app.lifedashboard.ui.today.EntryKind
 import java.time.DayOfWeek
 import java.time.Duration
@@ -49,6 +50,8 @@ class PlanningEngine @Inject constructor(
     private val study: StudyRepository,
     private val tasks: TaskRepository,
     private val training: app.lifedashboard.data.repository.TrainingRepository,
+    private val etsyDao: app.lifedashboard.data.db.EtsyDao,
+    private val goalDao: app.lifedashboard.data.db.GoalDao,
 ) {
     private val mutex = Mutex()
 
@@ -115,7 +118,8 @@ class PlanningEngine @Inject constructor(
             .groupBy { it.demandKey }.mapValues { (_, l) -> l.sumOf { it.endMinute - it.startMinute } }
 
         val trainings = runCatching { training.sessionsFor(date) }.getOrDefault(emptyList()).filter { !it.done && !it.skipped }
-        val demands = (buildDemands(date, day, range.allTasks, overview, settings) + trainings.map { t ->
+        val extra = etsyDemands(date, day, range.allTasks, overview) + goalDemands(date, day)
+        val demands = (buildDemands(date, day, range.allTasks, overview, settings) + extra + trainings.map { t ->
             Demand(
                 key = t.session.key,
                 type = DemandType.SPORT,
@@ -175,8 +179,72 @@ class PlanningEngine @Inject constructor(
             }
             DemandType.STUDY, DemandType.REVIEW -> study.recordSession(null, minutes, System.currentTimeMillis() - minutes * 60_000L)
             DemandType.SPORT -> trainingFor(block)?.let { training.markDone(it.session) }
+            DemandType.ETSY -> if (block.demandKey.startsWith("etsy:design:")) {
+                // Schritt erledigt → Motiv rückt in der Pipeline eine Station weiter
+                etsyDao.observeDesigns().first().firstOrNull { it.id == block.refId }?.let { d ->
+                    app.lifedashboard.data.db.DesignStatus.entries.getOrNull(d.status.ordinal + 1)?.let { etsyDao.upsertDesign(d.copy(status = it)) }
+                }
+            }
             else -> Unit
         }
+    }
+
+    /**
+     * Etsy: aus der Motiv-Pipeline die nächsten Schritte mit Dauer; fehlen Motive für die nächste Saison,
+     * kommt „Neue Motive erstellen“ dazu. Tagesbudget werktags 45, am Wochenende 75, Klausurphase 25 Min.
+     */
+    private suspend fun etsyDemands(date: LocalDate, day: app.lifedashboard.data.repository.DayAgenda, tasks: List<app.lifedashboard.data.db.TaskEntity>, overview: StudyOverview): List<Demand> {
+        val epoch = date.toEpochDay()
+        var budget = when {
+            isExamPhase(overview, date) -> 25
+            day.isSchoolFree -> 75
+            else -> 45
+        }
+        val (season, deadline) = app.lifedashboard.planner.EtsyMath.nextSeason(date)
+        val result = mutableListOf<Demand>()
+        val designs = etsyDao.observeDesigns().first().filter { it.status != app.lifedashboard.data.db.DesignStatus.ONLINE }
+            .sortedByDescending { it.status.ordinal }
+        for (d in designs) {
+            val (minutes, step) = when (d.status) {
+                app.lifedashboard.data.db.DesignStatus.IDEA -> 60 to "Motiv in Canva erstellen"
+                app.lifedashboard.data.db.DesignStatus.CREATED -> 20 to "Qualität prüfen"
+                app.lifedashboard.data.db.DesignStatus.CHECKED -> 30 to "Probedruck mit Oma"
+                app.lifedashboard.data.db.DesignStatus.TEST_PRINT -> 45 to "Mockup + Titelbild"
+                app.lifedashboard.data.db.DesignStatus.MOCKUP -> 30 to "Listing schreiben"
+                app.lifedashboard.data.db.DesignStatus.LISTING -> 20 to "Hochladen (KI-Häkchen!)"
+                app.lifedashboard.data.db.DesignStatus.ONLINE -> continue
+            }
+            if (budget < minutes) continue
+            result += Demand("etsy:design:${d.id}:${d.status.name}", DemandType.ETSY, "Etsy: $step – ${d.title}", minutes, 0.65, deadline, minChunk = minutes, maxChunk = minutes, refId = d.id)
+            budget -= minutes
+        }
+        // Neue Motive für die nächste Saison (Ziel: 3 pro Woche)
+        val monday = date.mondayOfWeek()
+        val newThisWeek = etsyDao.observeDesigns().first().count {
+            java.time.Instant.ofEpochMilli(it.createdAtMillis).atZone(java.time.ZoneId.systemDefault()).toLocalDate() >= monday
+        }
+        if (newThisWeek < 3 && budget >= 30) {
+            result += Demand("etsy:new:$epoch", DemandType.ETSY, "Etsy: neue Motive fürs $season-Set (bis ${deadline.dayOfMonth}.${deadline.monthValue}. online)", minOf(budget, 60), 0.6, deadline, minChunk = 30, maxChunk = 60)
+        }
+        // Etsy-To-dos ohne Datum (z. B. Account erstellen) nach vorne holen, solange Budget übrig
+        tasks.filter { !it.done && it.area == app.lifedashboard.data.db.LifeArea.ETSY && it.dueEpochDay == null }.take(1).forEach { t ->
+            if (budget >= t.estimatedMinutes.coerceAtMost(60)) {
+                result += Demand("task:${t.id}", DemandType.ETSY, t.title, t.estimatedMinutes, 0.6, deadline, minChunk = minOf(25, t.estimatedMinutes), maxChunk = 50, refId = t.id)
+            }
+        }
+        return result
+    }
+
+    /** Ziele: an freien Tagen den nächsten Schritt jedes Ziels vorschlagen (Ironman & Abi laufen über Training/Lernen). */
+    private suspend fun goalDemands(date: LocalDate, day: app.lifedashboard.data.repository.DayAgenda): List<Demand> {
+        if (!day.isSchoolFree) return emptyList()
+        val milestones = goalDao.observeMilestones().first()
+        return goalDao.observeGoals().first()
+            .filter { !it.done && !it.title.contains("Ironman", true) && !it.title.contains("Abi", true) }
+            .mapNotNull { g ->
+                val next = milestones.filter { it.goalId == g.id && !it.done }.minByOrNull { it.sortOrder } ?: return@mapNotNull null
+                Demand("goal:${next.id}", DemandType.TASK, "Ziel ${g.title}: ${next.title}", 30, 0.55, minChunk = 30, maxChunk = 30, refId = next.id)
+            }
     }
 
     private suspend fun trainingFor(block: PlanBlockEntity) =
@@ -311,25 +379,6 @@ class PlanningEngine @Inject constructor(
                 refId = topic.id,
             )
         }
-
-        // 4) Etsy: >5 Std/Woche, in der Klausurphase reduziert
-        val weekend = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
-        val etsyMinutes = when {
-            examPhase -> 25
-            weekend -> 75
-            else -> 45
-        }
-        val nextEtsy = allTasks.firstOrNull { !it.done && it.area == LifeArea.ETSY }
-        demands += Demand(
-            key = "etsy:$epoch",
-            type = DemandType.ETSY,
-            title = "Etsy: " + (nextEtsy?.title ?: "Motive & Listings"),
-            minutes = etsyMinutes,
-            priority = 0.6,
-            minChunk = 25,
-            maxChunk = 50,
-            refId = nextEtsy?.id,
-        )
 
         return demands
     }

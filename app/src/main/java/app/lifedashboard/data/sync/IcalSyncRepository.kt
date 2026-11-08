@@ -16,6 +16,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 /**
@@ -27,7 +28,36 @@ class IcalSyncRepository @Inject constructor(
     private val sources: IcalSourceDao,
     private val events: EventDao,
     private val tasks: TaskDao,
+    private val study: app.lifedashboard.data.repository.StudyRepository,
+    private val studyDao: app.lifedashboard.data.db.StudyDao,
+    private val timetable: app.lifedashboard.data.repository.TimetableRepository,
 ) {
+    private val examWords = Regex("\\b(klausur|klassenarbeit|lek|lernerfolgskontrolle|test|kontrolle)\\b", RegexOption.IGNORE_CASE)
+
+    /** Klausuren in Abos erkennen und automatisch anlegen (Lernplan startet dann von selbst). */
+    private suspend fun detectExams(source: IcalSourceEntity, items: List<app.lifedashboard.planner.IcsEvent>) {
+        val subjects = timetable.subjects.first()
+        val existing = studyDao.observeExams().first()
+        items.filter { examWords.containsMatchIn(it.summary) && !it.startDate.isBefore(java.time.LocalDate.now()) }.forEach { item ->
+            val marker = "ical:${source.id}:${item.uid}"
+            if (existing.any { it.note == marker }) return@forEach
+            val intent = app.lifedashboard.planner.QuickParser.parse(
+                item.summary, java.time.LocalDate.now(), subjects.map { app.lifedashboard.planner.QuickSubject(it.code, it.name) },
+            )
+            val code = (intent as? app.lifedashboard.planner.QuickIntent.Exam)?.subjectCode
+                ?: (intent as? app.lifedashboard.planner.QuickIntent.Homework)?.subjectCode
+            val subject = subjects.firstOrNull { s -> code != null && (s.code.equals(code, true) || s.code.substringBefore('-').equals(code, true)) }
+                ?: subjects.firstOrNull { item.summary.contains(it.name, true) || item.summary.contains(it.code.substringBefore('-'), true) }
+                ?: return@forEach
+            study.saveExam(
+                app.lifedashboard.data.db.ExamEntity(
+                    subjectId = subject.id, dateEpochDay = item.startDate.toEpochDay(), title = item.summary.take(60),
+                    kind = app.lifedashboard.data.db.ExamKind.KLAUSUR, note = marker,
+                ),
+                null,
+            )
+        }
+    }
     val all: Flow<List<IcalSourceEntity>> = sources.observeAll()
 
     suspend fun save(source: IcalSourceEntity): Long = sources.upsert(source)
@@ -59,6 +89,7 @@ class IcalSyncRepository @Inject constructor(
             val to = LocalDate.now().plusDays(180)
             val relevant = parsed.filter { !it.startDate.isBefore(from) && !it.startDate.isAfter(to) }
             if (source.importAsTasks) importTasks(source, relevant) else importEvents(source, relevant)
+            detectExams(source, relevant)
             sources.setResult(source.id, now, null)
             true
         } catch (e: Exception) {

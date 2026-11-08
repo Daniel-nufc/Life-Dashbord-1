@@ -70,7 +70,20 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class GoalsViewModel @Inject constructor(private val repo: GoalRepository) : ViewModel() {
+class GoalsViewModel @Inject constructor(
+    private val repo: GoalRepository,
+    private val usage: app.lifedashboard.data.sync.UsageRepository,
+    private val automation: app.lifedashboard.data.repository.AutomationRepository,
+) : ViewModel() {
+    private val _usageAllowed = kotlinx.coroutines.flow.MutableStateFlow(usage.hasPermission())
+    val usageAllowed: StateFlow<Boolean> = _usageAllowed
+
+    fun refreshAuto() {
+        _usageAllowed.value = usage.hasPermission()
+        viewModelScope.launch { runCatching { automation.autoCheckHabits() } }
+    }
+
+    fun usageSettingsIntent() = usage.settingsIntent()
     val habits: StateFlow<List<HabitStatus>> = repo.habits().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val goals: StateFlow<List<GoalWithMilestones>> = repo.goals.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -98,6 +111,12 @@ class GoalsViewModel @Inject constructor(private val repo: GoalRepository) : Vie
 fun GoalsScreen(onBack: () -> Unit, viewModel: GoalsViewModel = hiltViewModel()) {
     val habits by viewModel.habits.collectAsStateWithLifecycle()
     val goals by viewModel.goals.collectAsStateWithLifecycle()
+    val usageAllowed by viewModel.usageAllowed.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        viewModel.refreshAuto()
+        onPauseOrDispose { }
+    }
     var addHabit by remember { mutableStateOf(false) }
     var addGoal by remember { mutableStateOf(false) }
 
@@ -122,6 +141,14 @@ fun GoalsScreen(onBack: () -> Unit, viewModel: GoalsViewModel = hiltViewModel())
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         habits.forEach { status -> HabitRow(status, viewModel) }
+                        if (!usageAllowed && habits.any { it.habit.autoRule == "SCREEN_SOCIAL" || it.habit.autoRule == "SLEEP_PHONE" }) {
+                            Text(
+                                "Handyzeit und Schlafenszeit automatisch abhaken: Erlaube einmal den „Nutzungsdatenzugriff“ für Life Dashboard. Die Daten bleiben auf dem Handy.",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                            TextButton(onClick = { context.startActivity(viewModel.usageSettingsIntent()) }) { Text("Nutzungsdatenzugriff erlauben") }
+                        }
                     }
                 }
                 item {
@@ -186,6 +213,18 @@ private fun HabitRow(status: HabitStatus, viewModel: GoalsViewModel) {
         Checkbox(checked = status.doneToday, onCheckedChange = { viewModel.toggleHabit(status.habit.id, it) })
         Column(Modifier.weight(1f)) {
             Text("${status.habit.emoji} ${status.habit.title}", style = MaterialTheme.typography.bodyLarge)
+            status.habit.autoRule?.let { rule ->
+                Text(
+                    "automatisch: " + when (rule) {
+                        "STEPS" -> "ab 6.000 Schritten oder Training"
+                        "SLEEP_PHONE" -> "Handy nach 22:30 nicht benutzt"
+                        "SCREEN_SOCIAL" -> "Social Media & Videos unter 2 Std"
+                        else -> rule
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
                 status.lastWeek.forEach { done ->
                     Box(

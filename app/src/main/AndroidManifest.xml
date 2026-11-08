@@ -14,6 +14,8 @@
     <uses-permission android:name="android.permission.health.READ_DISTANCE" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Handyzeit für die Gewohnheit „Handyzeit unter 2 Std“ (Erlaubnis gibt man selbst in den Einstellungen) -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
 
     <queries>
         <package android:name="com.google.android.apps.healthdata" />

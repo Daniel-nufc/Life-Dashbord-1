@@ -37,10 +37,15 @@ class ReminderWorker @AssistedInject constructor(
     private val engine: PlanningEngine,
     private val study: StudyRepository,
     private val finance: FinanceRepository,
+    private val automation: app.lifedashboard.data.repository.AutomationRepository,
+    private val training: app.lifedashboard.data.repository.TrainingRepository,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
         runCatching { check() }
+        runCatching { automation.autoCheckHabits() }
+        runCatching { training.syncFromHealth() }
+        runCatching { finance.generateRecurring() }
         app.lifedashboard.widget.updateWidgets(applicationContext)
         return Result.success()
     }

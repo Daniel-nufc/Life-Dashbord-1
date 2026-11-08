@@ -63,6 +63,22 @@ object EtsyMath {
         sales.groupBy { it.title }.mapValues { (_, l) -> l.sumOf { it.priceCents * it.quantity } }
             .toList().sortedByDescending { it.second }.take(limit)
 
+    /** Nächste Saison mit Termin, bis wann die Listings online sein sollten (rückwärts planen). */
+    fun nextSeason(today: LocalDate): Pair<String, LocalDate> {
+        val y = today.year
+        val seasons = listOf(
+            "Valentinstag" to LocalDate.of(y, 1, 15),
+            "Ostern" to LocalDate.of(y, 2, 25),
+            "Muttertag" to LocalDate.of(y, 4, 10),
+            "Vatertag & Sommer" to LocalDate.of(y, 5, 10),
+            "Einschulung" to LocalDate.of(y, 7, 10),
+            "Halloween" to LocalDate.of(y, 9, 10),
+            "Weihnachten" to LocalDate.of(y, 10, 31),
+        )
+        return seasons.firstOrNull { !it.second.isBefore(today.plusDays(14)) }
+            ?: ("Valentinstag" to LocalDate.of(y + 1, 1, 15))
+    }
+
     /** Saison-Tipp für Tassen-/Sublimationsvorlagen. */
     fun seasonalTip(today: LocalDate): String = when (today.month) {
         Month.SEPTEMBER, Month.OCTOBER -> "Weihnachten kommt: Winter- und Weihnachts-Motive jetzt online stellen – viele kaufen Vorlagen früh, um selbst noch zu produzieren."

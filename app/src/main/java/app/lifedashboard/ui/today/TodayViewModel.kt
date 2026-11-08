@@ -104,6 +104,7 @@ class TodayViewModel @Inject constructor(
     private val goals: GoalRepository,
     private val finance: app.lifedashboard.data.repository.FinanceRepository,
     private val etsy: app.lifedashboard.data.repository.EtsyRepository,
+    private val automation: app.lifedashboard.data.repository.AutomationRepository,
 ) : ViewModel() {
 
     /** Tickt jede Minute, damit „Jetzt“ und „Als Nächstes“ aktuell bleiben. */
@@ -127,6 +128,7 @@ class TodayViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayUiState.Loading)
 
     init {
+        viewModelScope.launch { runCatching { automation.autoCheckHabits() } }
         // Plan automatisch aktualisieren, wenn sich Termine/Aufgaben/Klausuren ändern oder 15 Min vergehen
         viewModelScope.launch {
             date.flatMapLatest { d ->

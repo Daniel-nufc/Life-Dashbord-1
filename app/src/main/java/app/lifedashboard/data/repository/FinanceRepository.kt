@@ -24,7 +24,7 @@ import kotlinx.coroutines.flow.first
 val DEFAULT_CATEGORIES = listOf(
     "Lebensmittel", "Essen gehen", "Mobilität", "Abos", "Kleidung", "Shopping", "Drogerie & Gesundheit",
     "Freizeit", "Sport", "Schule", "Etsy", "Führerschein", "Feriencamp", "Geschenke", "Sonstiges",
-    "Taschengeld", "Job", "Etsy-Einnahmen",
+    "Taschengeld", "Job", "Etsy-Einnahmen", "Sparen",
 )
 
 data class BudgetStatus(val category: String, val limitCents: Long, val spentCents: Long) {
@@ -46,6 +46,12 @@ data class FinanceOverview(
     val subscriptions: List<SubscriptionDetector.Subscription>,
     val savings: List<SavingsGoalEntity>,
     val categories: List<String>,
+    /** Vorschläge: Kategorie → Monatsbudget (aus den letzten 3 Monaten oder Startwerte) */
+    val budgetSuggestions: List<Pair<String, Long>>,
+    /** Sparziel → nötige Rate pro Monat */
+    val savingsRates: List<Pair<SavingsGoalEntity, Long>>,
+    /** Monatliche feste Einnahmen (Taschengeld …) */
+    val monthlyIncomeCents: Long,
 )
 
 data class ImportResult(val added: Int, val duplicates: Int)
@@ -92,8 +98,48 @@ class FinanceRepository @Inject constructor(
                 subscriptions = SubscriptionDetector.detect(imported),
                 savings = e.savings,
                 categories = (DEFAULT_CATEGORIES + b.tx.mapNotNull { it.category }).distinct(),
+                budgetSuggestions = suggestBudgets(b.tx, b.budgets, today),
+                savingsRates = e.savings.mapNotNull { g ->
+                    val deadline = g.deadlineEpochDay?.let(LocalDate::ofEpochDay) ?: return@mapNotNull null
+                    val months = java.time.temporal.ChronoUnit.MONTHS.between(YearMonth.from(today), YearMonth.from(deadline)).coerceAtLeast(1)
+                    val missing = (g.targetCents - g.savedCents).coerceAtLeast(0)
+                    if (missing == 0L) null else g to (((missing / months) + 99) / 100 * 100)
+                },
+                monthlyIncomeCents = e.recurring.filter { it.active && it.amountCents > 0 }.sumOf { it.amountCents },
             )
         }
+    }
+
+    /**
+     * Budget-Vorschläge: Durchschnitt der letzten 3 vollen Monate je Kategorie, aufgerundet auf 5 €.
+     * Ohne Daten: Startwerte (Essen gehen 15 €, Shopping 10 €, Freizeit 10 €).
+     */
+    private fun suggestBudgets(tx: List<TransactionEntity>, existing: List<BudgetEntity>, today: LocalDate): List<Pair<String, Long>> {
+        val have = existing.map { it.category }.toSet()
+        val months = (1..3).map { YearMonth.from(today).minusMonths(it.toLong()) }
+        val firstDay = months.last().atDay(1).toEpochDay()
+        val lastDay = months.first().atEndOfMonth().toEpochDay()
+        val spent = tx.filter { it.amountCents < 0 && it.dateEpochDay in firstDay..lastDay && it.category != null && it.recurringId == null }
+        val suggestions = if (spent.isEmpty()) {
+            listOf("Essen gehen" to 1500L, "Shopping" to 1000L, "Freizeit" to 1000L)
+        } else {
+            spent.groupBy { it.category!! }.mapValues { (_, l) -> -l.sumOf { it.amountCents } / 3 }
+                .filter { it.value >= 300 && it.key !in setOf("Sparen", "Taschengeld", "Job") }
+                .map { (c, avg) -> c to ((avg + 499) / 500 * 500) }
+                .sortedByDescending { it.second }
+        }
+        return suggestions.filter { it.first !in have }
+    }
+
+    /** Sparrate als feste Buchung (am 22., nach dem Taschengeld) – zählt automatisch aufs Sparziel. */
+    suspend fun adoptSavingsRate(goal: SavingsGoalEntity, monthlyCents: Long) {
+        val account = dao.accounts().firstOrNull { it.kind == app.lifedashboard.data.db.AccountKind.BANK } ?: dao.accounts().firstOrNull() ?: return
+        dao.upsertRecurring(
+            RecurringEntity(
+                accountId = account.id, title = "Sparen: ${goal.title}", amountCents = -monthlyCents, dayOfMonth = 22,
+                category = "Sparen", active = true, lastGeneratedEpochDay = LocalDate.now().toEpochDay(),
+            ),
+        )
     }
 
     private suspend fun learnedRules(): List<Categorizer.Rule> = dao.rules().map { Categorizer.Rule(it.keyword, it.category, it.hits) }
@@ -149,6 +195,12 @@ class FinanceRepository @Inject constructor(
                 val due = month.atDay(minOf(r.dayOfMonth, month.lengthOfMonth()))
                 if (due.isAfter(last) && !due.isAfter(today)) {
                     if (dao.countRecurringOn(r.id, due.toEpochDay()) == 0) {
+                        if (r.category == "Sparen" && r.title.startsWith("Sparen: ")) {
+                            val goalTitle = r.title.removePrefix("Sparen: ")
+                            dao.observeSavings().first().firstOrNull { it.title == goalTitle }?.let { g ->
+                                dao.upsertSavings(g.copy(savedCents = g.savedCents - r.amountCents))
+                            }
+                        }
                         dao.upsertTransaction(
                             TransactionEntity(
                                 accountId = r.accountId,

@@ -53,6 +53,23 @@ class TaskRepository @Inject constructor(
     suspend fun delete(id: Long) = dao.delete(id)
 
     /**
+     * Schätzt die Dauer einer Hausaufgabe aus deinen bisherigen Erledigungen im Fach
+     * (tatsächlich erledigte Planblöcke, sonst deine Schätzungen). Standard 30 Min.
+     */
+    suspend fun estimateHomeworkMinutes(subjectId: Long, planDao: app.lifedashboard.data.db.PlanDao): Int {
+        val doneTasks = dao.observeAll().first().filter { it.subjectId == subjectId && it.kind == app.lifedashboard.data.db.TaskKind.HOMEWORK && it.done }
+            .takeLast(10)
+        if (doneTasks.isEmpty()) return 30
+        val today = LocalDate.now().toEpochDay()
+        val blocks = planDao.between(today - 120, today).filter { it.status == app.lifedashboard.data.db.PlanStatus.DONE }
+        val minutes = doneTasks.map { t ->
+            blocks.filter { it.demandKey == "task:${t.id}" }.sumOf { it.endMinute - it.startMinute }.takeIf { it > 0 } ?: t.estimatedMinutes
+        }
+        val avg = minutes.average()
+        return (((avg + 7) / 15).toInt() * 15).coerceIn(15, 120)
+    }
+
+    /**
      * Wann hat das Fach das nächste Mal Unterricht? Berücksichtigt A/B-Wochen.
      * @param skip 0 = nächste Stunde, 1 = übernächste
      */

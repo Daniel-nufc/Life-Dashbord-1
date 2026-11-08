@@ -105,7 +105,7 @@ class SettingsRepository @Inject constructor(
                 weekendDayStart = minuteToTime(p[WEEKEND_START] ?: (9 * 60 + 30)),
                 seedVersion = p[SEED_VERSION] ?: 0,
                 bufferCents = p[BUFFER] ?: 0L,
-                jobWageCents = p[JOB_WAGE] ?: 0L,
+                jobWageCents = p[JOB_WAGE] ?: 1390L,
                 todayCards = (p[TODAY_CARDS]?.split(',')?.filter { it.isNotBlank() } ?: emptyList()).let { saved ->
                     saved.filter { it in ALL_TODAY_CARDS } + ALL_TODAY_CARDS.filter { it !in saved }
                 },

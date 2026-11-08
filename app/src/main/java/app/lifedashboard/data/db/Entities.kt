@@ -249,6 +249,8 @@ data class HabitEntity(
     val area: LifeArea,
     val active: Boolean,
     val sortOrder: Int,
+    /** Automatisch abhaken: STEPS, SLEEP_PHONE, SCREEN_SOCIAL oder null (manuell) */
+    val autoRule: String? = null,
 )
 
 @Entity(tableName = "habit_logs", indices = [Index(value = ["habitId", "dateEpochDay"], unique = true)])

@@ -188,10 +188,16 @@ private fun HomeworkDialog(
     var nextLesson by remember { mutableStateOf<LocalDate?>(null) }
     var secondLesson by remember { mutableStateOf<LocalDate?>(null) }
 
+    var estimated by remember { mutableStateOf(false) }
     LaunchedEffect(subjectId) {
         val id = subjectId
         nextLesson = id?.let { vm.nextLessonDate(it, 0) }
         secondLesson = id?.let { vm.nextLessonDate(it, 1) }
+        // Dauer automatisch aus deinen bisherigen Hausaufgaben im Fach schätzen
+        if (id != null && (original == null || original.id == 0L)) {
+            minutes = vm.estimateMinutes(id)
+            estimated = true
+        }
     }
     val due: LocalDate? = when (dueMode) {
         0 -> nextLesson
@@ -253,8 +259,8 @@ private fun HomeworkDialog(
         } else if (subjectId != null && due == null) {
             Text("Keine Stunde in den nächsten Wochen gefunden – bitte Datum wählen.", color = MaterialTheme.colorScheme.error)
         }
-        FieldLabel("Wie lange ungefähr?")
-        ChoiceChips(durationOptions, minutes) { minutes = it }
+        FieldLabel("Wie lange ungefähr?" + if (estimated) " (geschätzt aus deinen bisherigen Hausaufgaben)" else "")
+        ChoiceChips(durationOptions, minutes) { minutes = it; estimated = false }
     }
 }
 

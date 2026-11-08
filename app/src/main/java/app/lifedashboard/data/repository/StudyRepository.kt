@@ -19,6 +19,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 
 data class ExamWithTopics(val exam: ExamEntity, val subject: SubjectEntity?, val topics: List<TopicEntity>) {
     val date: LocalDate get() = LocalDate.ofEpochDay(exam.dateEpochDay)
@@ -89,8 +90,14 @@ class StudyRepository @Inject constructor(
     }
 
     suspend fun saveExam(exam: ExamEntity, topicTitles: List<String>?, defaultEffort: Int = 60): Long {
+        val isNew = exam.id == 0L
         val id = dao.upsertExam(exam).let { if (exam.id != 0L) exam.id else it }
-        topicTitles?.filter { it.isNotBlank() }?.forEach { title ->
+        // Neue Klausur ohne Themen → typische Themen vorschlagen, damit der Lernplan sofort startet
+        val titles = if (isNew && topicTitles.isNullOrEmpty()) {
+            val subject = timetable.subjects.first().firstOrNull { it.id == exam.subjectId }
+            subject?.let { TopicSuggestions.forSubject(it.code, it.name) }.orEmpty()
+        } else topicTitles
+        titles?.filter { it.isNotBlank() }?.forEach { title ->
             dao.upsertTopic(TopicEntity(examId = id, title = title.trim(), effortMinutes = defaultEffort, progress = 0, intervalDays = 0, nextReviewEpochDay = null, lastReviewedEpochDay = null))
         }
         return id
