@@ -49,6 +49,30 @@ class SeedDataInitializer @Inject constructor(
             seedFinance()
             settings.setSeedVersion(4)
         }
+        if (version < 5) {
+            seedEtsyDesigns()
+            settings.setSeedVersion(5)
+        }
+    }
+
+    /** Winter-Set (fertig, Probedruck bei Oma steht noch aus). */
+    private suspend fun seedEtsyDesigns() {
+        val now = System.currentTimeMillis()
+        fun design(title: String, page: Int) = app.lifedashboard.data.db.EtsyDesignEntity(
+            setName = "Winter-Set",
+            title = title,
+            status = app.lifedashboard.data.db.DesignStatus.CHECKED,
+            canvaRef = "Canva DAHZ_AX8P3M, Seite $page",
+            note = "Tassen-Wrap 11 oz, 2850 × 1200 px, PNG (~224 dpi)",
+            createdAtMillis = now,
+        )
+        db.etsyDao().insertDesigns(
+            listOf(
+                design("Rotkehlchen mit Laterne", 1),
+                design("Hütte im Schnee mit Brücke", 2),
+                design("Fuchs mit Strickschal", 3),
+            ),
+        )
     }
 
     /** Konten DKB + Bargeld und dein Taschengeld (Eltern 20 € am 21., Opa 20 € bar). */

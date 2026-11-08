@@ -340,3 +340,36 @@ data class SavingsGoalEntity(
     val savedCents: Long,
     val deadlineEpochDay: Long?,
 )
+
+/** Station eines Motivs auf dem Weg in den Shop. */
+enum class DesignStatus { IDEA, CREATED, CHECKED, TEST_PRINT, MOCKUP, LISTING, ONLINE }
+
+@Entity(tableName = "etsy_designs")
+data class EtsyDesignEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val setName: String,
+    val title: String,
+    val status: DesignStatus,
+    val canvaRef: String?,
+    val note: String?,
+    val createdAtMillis: Long,
+)
+
+@Entity(tableName = "etsy_sales", indices = [Index("dateEpochDay")])
+data class EtsySaleEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val dateEpochDay: Long,
+    val orderRef: String,
+    val title: String,
+    val priceCents: Long,
+    val quantity: Int,
+)
+
+/** Aufrufe und Favoriten pro Monat (aus der Etsy-Statistik abgeschrieben, später per API). */
+@Entity(tableName = "etsy_stats", indices = [Index(value = ["monthKey"], unique = true)])
+data class EtsyStatsEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val monthKey: String,
+    val views: Int,
+    val favorites: Int,
+)

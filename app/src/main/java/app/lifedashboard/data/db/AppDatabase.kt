@@ -40,8 +40,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         BudgetEntity::class,
         RecurringEntity::class,
         SavingsGoalEntity::class,
+        EtsyDesignEntity::class,
+        EtsySaleEntity::class,
+        EtsyStatsEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -56,6 +59,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun sportDao(): SportDao
     abstract fun goalDao(): GoalDao
     abstract fun financeDao(): FinanceDao
+    abstract fun etsyDao(): EtsyDao
 
     companion object {
         const val NAME = "lifedashboard.db"
@@ -225,6 +229,28 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+        /** Phase 7: Etsy-Motive, Verkäufe, Statistik. */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `etsy_designs` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`setName` TEXT NOT NULL, `title` TEXT NOT NULL, `status` TEXT NOT NULL, `canvaRef` TEXT, `note` TEXT, " +
+                        "`createdAtMillis` INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `etsy_sales` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`dateEpochDay` INTEGER NOT NULL, `orderRef` TEXT NOT NULL, `title` TEXT NOT NULL, `priceCents` INTEGER NOT NULL, " +
+                        "`quantity` INTEGER NOT NULL)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_etsy_sales_dateEpochDay` ON `etsy_sales` (`dateEpochDay`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `etsy_stats` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`monthKey` TEXT NOT NULL, `views` INTEGER NOT NULL, `favorites` INTEGER NOT NULL)",
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_etsy_stats_monthKey` ON `etsy_stats` (`monthKey`)")
+            }
+        }
+
+        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
     }
 }

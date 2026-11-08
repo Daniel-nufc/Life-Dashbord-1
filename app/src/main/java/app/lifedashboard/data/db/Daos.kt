@@ -330,3 +330,33 @@ interface FinanceDao {
     @Query("DELETE FROM savings_goals WHERE id = :id")
     suspend fun deleteSavings(id: Long)
 }
+
+@Dao
+interface EtsyDao {
+    @Query("SELECT * FROM etsy_designs ORDER BY setName, id")
+    fun observeDesigns(): Flow<List<EtsyDesignEntity>>
+
+    @Upsert
+    suspend fun upsertDesign(design: EtsyDesignEntity)
+
+    @Insert
+    suspend fun insertDesigns(designs: List<EtsyDesignEntity>)
+
+    @Query("DELETE FROM etsy_designs WHERE id = :id")
+    suspend fun deleteDesign(id: Long)
+
+    @Query("SELECT * FROM etsy_sales ORDER BY dateEpochDay DESC, id DESC")
+    fun observeSales(): Flow<List<EtsySaleEntity>>
+
+    @Upsert
+    suspend fun upsertSale(sale: EtsySaleEntity)
+
+    @Query("DELETE FROM etsy_sales WHERE id = :id")
+    suspend fun deleteSale(id: Long)
+
+    @Query("SELECT * FROM etsy_stats ORDER BY monthKey DESC")
+    fun observeStats(): Flow<List<EtsyStatsEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putStats(stats: EtsyStatsEntity)
+}

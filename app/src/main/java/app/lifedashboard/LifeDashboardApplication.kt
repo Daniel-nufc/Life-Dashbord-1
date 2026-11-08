@@ -20,6 +20,8 @@ class LifeDashboardApplication : Application(), Configuration.Provider {
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
 
+    @Inject lateinit var notifier: app.lifedashboard.data.notify.Notifier
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(workerFactory).build()
 
@@ -27,5 +29,7 @@ class LifeDashboardApplication : Application(), Configuration.Provider {
         super.onCreate()
         appScope.launch { seedData.seedIfNeeded() }
         IcalSyncWorker.schedule(this)
+        notifier.createChannels()
+        app.lifedashboard.data.notify.ReminderWorker.schedule(this)
     }
 }

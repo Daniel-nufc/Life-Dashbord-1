@@ -126,6 +126,7 @@ fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
                 contentPadding = padding.listPadding(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                item { app.lifedashboard.ui.editors.QuickInputBar(onRequest = { editing = it }) }
                 item {
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         filters.forEachIndexed { index, f ->

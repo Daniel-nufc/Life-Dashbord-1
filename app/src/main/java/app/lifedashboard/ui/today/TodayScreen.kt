@@ -72,6 +72,7 @@ private val HeroColors = listOf(Color(0xFF3D7BF7), Color(0xFF7B5CF0), Color(0xFF
 fun TodayScreen(
     onOpenTasks: () -> Unit,
     onOpenGoals: () -> Unit,
+    onOpenReview: () -> Unit,
     viewModel: TodayViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -89,6 +90,17 @@ fun TodayScreen(
                 verticalItemSpacing = 12.dp,
             ) {
                 item(span = StaggeredGridItemSpan.FullLine) { Hero(s) }
+                if (s.now.dayOfWeek == java.time.DayOfWeek.SUNDAY || s.now.dayOfWeek == java.time.DayOfWeek.SATURDAY) {
+                    item(span = StaggeredGridItemSpan.FullLine) {
+                        SectionCard(onClick = onOpenReview) {
+                            TileHeader(Icons.Rounded.AutoAwesome, "Dein Wochenrückblick 📊", LifeArea.SCHOOL.color)
+                            Text("Was lief gut, was nicht – und Vorschläge für die neue Woche. 2 Minuten.", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+                item(span = StaggeredGridItemSpan.FullLine) {
+                    app.lifedashboard.ui.editors.QuickInputBar(onRequest = { editing = it })
+                }
                 item { NowTile(s) }
                 item {
                     TasksTile(

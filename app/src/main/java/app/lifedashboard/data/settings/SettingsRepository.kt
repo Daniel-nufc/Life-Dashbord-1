@@ -40,6 +40,7 @@ data class AppSettings(
     val bufferCents: Long,
     /** Stundenlohn im Job in Cent (0 = noch nicht eingetragen). */
     val jobWageCents: Long,
+    val etsyFees: app.lifedashboard.planner.EtsyFees,
 ) {
     fun weekCalculator() = SchoolWeekCalculator(abReferenceMonday, abReferenceType)
 
@@ -69,6 +70,12 @@ class SettingsRepository @Inject constructor(
                 seedVersion = p[SEED_VERSION] ?: 0,
                 bufferCents = p[BUFFER] ?: 0L,
                 jobWageCents = p[JOB_WAGE] ?: 0L,
+                etsyFees = app.lifedashboard.planner.EtsyFees(
+                    listingFeeCents = p[ETSY_LISTING] ?: 18L,
+                    transactionPercent = (p[ETSY_TRANSACTION_BP] ?: 650) / 100.0,
+                    processingPercent = (p[ETSY_PROCESSING_BP] ?: 400) / 100.0,
+                    processingFixedCents = p[ETSY_PROCESSING_FIXED] ?: 30L,
+                ),
                 priorityOrder = (p[PRIORITY_ORDER] ?: "SCHOOL,SPORT,ETSY").split(',').filter { it.isNotBlank() },
                 systemCalendarIds = p[SYSTEM_CALENDARS].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
             )
@@ -114,6 +121,15 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[JOB_WAGE] = cents.coerceAtLeast(0) }
     }
 
+    suspend fun setEtsyFees(fees: app.lifedashboard.planner.EtsyFees) {
+        dataStore.edit {
+            it[ETSY_LISTING] = fees.listingFeeCents
+            it[ETSY_TRANSACTION_BP] = (fees.transactionPercent * 100).toInt()
+            it[ETSY_PROCESSING_BP] = (fees.processingPercent * 100).toInt()
+            it[ETSY_PROCESSING_FIXED] = fees.processingFixedCents
+        }
+    }
+
     suspend fun setSeedVersion(version: Int) {
         dataStore.edit { it[SEED_VERSION] = version }
     }
@@ -133,6 +149,10 @@ class SettingsRepository @Inject constructor(
         val PRIORITY_ORDER = stringPreferencesKey("priority_order")
         val BUFFER = androidx.datastore.preferences.core.longPreferencesKey("buffer_cents")
         val JOB_WAGE = androidx.datastore.preferences.core.longPreferencesKey("job_wage_cents")
+        val ETSY_LISTING = androidx.datastore.preferences.core.longPreferencesKey("etsy_listing_cents")
+        val ETSY_TRANSACTION_BP = intPreferencesKey("etsy_transaction_bp")
+        val ETSY_PROCESSING_BP = intPreferencesKey("etsy_processing_bp")
+        val ETSY_PROCESSING_FIXED = androidx.datastore.preferences.core.longPreferencesKey("etsy_processing_fixed_cents")
 
         /** KW 46/2026 (ab Mo 9.11.) ist Woche A. */
         val DEFAULT_AB_REFERENCE: LocalDate = LocalDate.of(2026, 11, 9)

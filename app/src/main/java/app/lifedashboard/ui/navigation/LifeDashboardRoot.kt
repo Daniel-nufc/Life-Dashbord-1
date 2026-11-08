@@ -38,10 +38,12 @@ private const val SPORT_ROUTE = "sport"
 private const val CONNECTIONS_ROUTE = "connections"
 private const val GOALS_ROUTE = "goals"
 private const val FINANCE_ROUTE = "finance"
+private const val ETSY_ROUTE = "etsy"
+private const val REVIEW_ROUTE = "review"
 
 /** Unterseiten gehören optisch zu einem Tab (z. B. Sport → Mehr). */
 private fun topLevelFor(route: String?): String? = when (route) {
-    SPORT_ROUTE, CONNECTIONS_ROUTE, GOALS_ROUTE, FINANCE_ROUTE -> TopLevelDestination.MORE.route
+    SPORT_ROUTE, CONNECTIONS_ROUTE, GOALS_ROUTE, FINANCE_ROUTE, ETSY_ROUTE, REVIEW_ROUTE -> TopLevelDestination.MORE.route
     else -> route
 }
 
@@ -63,6 +65,17 @@ fun LifeDashboardRoot() {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentTab = topLevelFor(backStackEntry?.destination?.route)
 
+    // Einmal nach Benachrichtigungen fragen (Android 13+)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val notificationLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!granted) notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
+
     NavigationSuiteScaffold(
         navigationSuiteItems = {
             TopLevelDestination.entries.forEach { destination ->
@@ -80,6 +93,7 @@ fun LifeDashboardRoot() {
                 TodayScreen(
                     onOpenTasks = { navController.openTab(TopLevelDestination.TASKS.route) },
                     onOpenGoals = { navController.navigate(GOALS_ROUTE) },
+                    onOpenReview = { navController.navigate(REVIEW_ROUTE) },
                 )
             }
             composable(TopLevelDestination.CALENDAR.route) { CalendarScreen() }
@@ -91,6 +105,15 @@ fun LifeDashboardRoot() {
                     onOpenConnections = { navController.navigate(CONNECTIONS_ROUTE) },
                     onOpenGoals = { navController.navigate(GOALS_ROUTE) },
                     onOpenFinance = { navController.navigate(FINANCE_ROUTE) },
+                    onOpenEtsy = { navController.navigate(ETSY_ROUTE) },
+                    onOpenReview = { navController.navigate(REVIEW_ROUTE) },
+                )
+            }
+            composable(REVIEW_ROUTE) { app.lifedashboard.ui.review.ReviewScreen(onBack = { navController.popBackStack() }) }
+            composable(ETSY_ROUTE) {
+                app.lifedashboard.ui.etsy.EtsyScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenTasks = { navController.openTab(TopLevelDestination.TASKS.route) },
                 )
             }
             composable(FINANCE_ROUTE) { app.lifedashboard.ui.finance.FinanceScreen(onBack = { navController.popBackStack() }) }

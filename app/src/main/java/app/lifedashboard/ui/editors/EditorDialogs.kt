@@ -41,6 +41,7 @@ import app.lifedashboard.data.db.SubjectEntity
 import app.lifedashboard.data.db.TaskEntity
 import app.lifedashboard.data.db.TaskKind
 import app.lifedashboard.planner.minuteToTime
+import app.lifedashboard.data.repository.euro
 import app.lifedashboard.ui.components.friendly
 import app.lifedashboard.ui.components.hhmm
 import app.lifedashboard.ui.components.pickDate
@@ -61,6 +62,15 @@ fun EditorHost(request: EditRequest?, onDismiss: () -> Unit, viewModel: EditorVi
         is EditRequest.Todo -> TodoDialog(request, onDismiss, viewModel)
         is EditRequest.Shift -> ShiftDialog(request, onDismiss, viewModel)
         is EditRequest.Routine -> RoutineDialog(request, onDismiss, viewModel)
+        is EditRequest.Exam -> app.lifedashboard.ui.learn.ExamDialog(
+            original = request.exam.takeIf { it.id != 0L },
+            subjects = subjects,
+            onSave = { exam, topics -> viewModel.saveExam(exam, topics); onDismiss() },
+            onDelete = { onDismiss() },
+            onDismiss = onDismiss,
+            preset = request.exam,
+        )
+        is EditRequest.Expense -> ExpenseDialog(request, onDismiss, viewModel)
     }
 }
 
@@ -110,10 +120,10 @@ private fun EventDialog(request: EditRequest.Event, onDismiss: () -> Unit, vm: E
     var note by remember { mutableStateOf(original?.note ?: "") }
 
     EditorDialog(
-        title = if (original == null) "Neuer Termin" else "Termin bearbeiten",
+        title = if (original == null || original.id == 0L) "Neuer Termin" else "Termin bearbeiten",
         canSave = title.isNotBlank(),
         onDismiss = onDismiss,
-        onDelete = original?.let { { vm.deleteEvent(it.id); onDismiss() } },
+        onDelete = original?.takeIf { it.id != 0L }?.let { { vm.deleteEvent(it.id); onDismiss() } },
         onSave = {
             vm.saveEvent(
                 EventEntity(
@@ -173,7 +183,7 @@ private fun HomeworkDialog(
     var title by remember { mutableStateOf(original?.title ?: "") }
     var minutes by remember { mutableIntStateOf(original?.estimatedMinutes ?: 30) }
     // 0 = nächste Stunde, 1 = übernächste, -1 = eigenes Datum
-    var dueMode by remember { mutableIntStateOf(if (original == null) 0 else -1) }
+    var dueMode by remember { mutableIntStateOf(if (original == null || (original.id == 0L && original.dueEpochDay == null)) 0 else -1) }
     var customDate by remember { mutableStateOf(original?.dueEpochDay?.let(LocalDate::ofEpochDay) ?: LocalDate.now().plusDays(1)) }
     var nextLesson by remember { mutableStateOf<LocalDate?>(null) }
     var secondLesson by remember { mutableStateOf<LocalDate?>(null) }
@@ -190,10 +200,10 @@ private fun HomeworkDialog(
     }
 
     EditorDialog(
-        title = if (original == null) "Neue Hausaufgabe" else "Hausaufgabe bearbeiten",
+        title = if (original == null || original.id == 0L) "Neue Hausaufgabe" else "Hausaufgabe bearbeiten",
         canSave = subjectId != null && title.isNotBlank(),
         onDismiss = onDismiss,
-        onDelete = original?.let { { vm.deleteTask(it.id); onDismiss() } },
+        onDelete = original?.takeIf { it.id != 0L }?.let { { vm.deleteTask(it.id); onDismiss() } },
         onSave = {
             vm.saveTask(
                 TaskEntity(
@@ -262,10 +272,10 @@ private fun TodoDialog(request: EditRequest.Todo, onDismiss: () -> Unit, vm: Edi
     var note by remember { mutableStateOf(original?.note ?: "") }
 
     EditorDialog(
-        title = if (original == null) "Neue Aufgabe" else "Aufgabe bearbeiten",
+        title = if (original == null || original.id == 0L) "Neue Aufgabe" else "Aufgabe bearbeiten",
         canSave = title.isNotBlank(),
         onDismiss = onDismiss,
-        onDelete = original?.let { { vm.deleteTask(it.id); onDismiss() } },
+        onDelete = original?.takeIf { it.id != 0L }?.let { { vm.deleteTask(it.id); onDismiss() } },
         onSave = {
             vm.saveTask(
                 TaskEntity(
@@ -313,10 +323,10 @@ private fun ShiftDialog(request: EditRequest.Shift, onDismiss: () -> Unit, vm: E
     var note by remember { mutableStateOf(original?.note ?: "") }
 
     EditorDialog(
-        title = if (original == null) "Neue Job-Schicht" else "Schicht bearbeiten",
+        title = if (original == null || original.id == 0L) "Neue Job-Schicht" else "Schicht bearbeiten",
         canSave = end.isAfter(start),
         onDismiss = onDismiss,
-        onDelete = original?.let { { vm.deleteShift(it.id); onDismiss() } },
+        onDelete = original?.takeIf { it.id != 0L }?.let { { vm.deleteShift(it.id); onDismiss() } },
         onSave = {
             vm.saveShift(
                 JobShiftEntity(
@@ -412,5 +422,29 @@ private fun RoutineDialog(request: EditRequest.Routine, onDismiss: () -> Unit, v
             Text("Aktiv", modifier = Modifier.weight(1f))
             Switch(checked = active, onCheckedChange = { active = it })
         }
+    }
+}
+
+// ---------------------------------------------------------------- Ausgabe (aus Schnelleingabe)
+
+@Composable
+private fun ExpenseDialog(request: EditRequest.Expense, onDismiss: () -> Unit, vm: EditorViewModel) {
+    val tx = request.tx
+    var what by remember { mutableStateOf(tx.counterparty) }
+    var category by remember { mutableStateOf(tx.category) }
+    EditorDialog(
+        title = "Ausgabe: " + (-tx.amountCents).euro(),
+        canSave = what.isNotBlank(),
+        onDismiss = onDismiss,
+        onDelete = null,
+        onSave = {
+            vm.saveExpense(tx.copy(counterparty = what.trim(), category = category))
+            onDismiss()
+        },
+    ) {
+        OutlinedTextField(what, { what = it }, label = { Text("Wofür?") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        FieldLabel("Kategorie" + if (category != null) "" else " (bitte wählen)")
+        ChoiceChips(app.lifedashboard.data.repository.DEFAULT_CATEGORIES.take(12).map { it to it }, category) { category = it }
+        Text("Wird vom Bargeld abgezogen – in Finanzen änderbar.", style = MaterialTheme.typography.bodySmall)
     }
 }

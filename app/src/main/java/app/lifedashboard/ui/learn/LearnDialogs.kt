@@ -91,12 +91,14 @@ fun ExamDialog(
     onSave: (ExamEntity, List<String>) -> Unit,
     onDelete: (Long) -> Unit,
     onDismiss: () -> Unit,
+    preset: ExamEntity? = null,
 ) {
     val context = LocalContext.current
-    var subjectId by remember { mutableStateOf(original?.subjectId) }
-    var date by remember { mutableStateOf(original?.let { LocalDate.ofEpochDay(it.dateEpochDay) } ?: LocalDate.now().plusDays(14)) }
-    var kind by remember { mutableStateOf(original?.kind ?: ExamKind.KLAUSUR) }
-    var title by remember { mutableStateOf(original?.title ?: "") }
+    val start = original ?: preset
+    var subjectId by remember { mutableStateOf(start?.subjectId) }
+    var date by remember { mutableStateOf(start?.let { LocalDate.ofEpochDay(it.dateEpochDay) } ?: LocalDate.now().plusDays(14)) }
+    var kind by remember { mutableStateOf(start?.kind ?: ExamKind.KLAUSUR) }
+    var title by remember { mutableStateOf(start?.title ?: "") }
     var topics by remember { mutableStateOf("") }
 
     DialogFrame(

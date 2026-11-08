@@ -15,6 +15,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AttachMoney
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.SportsHockey
@@ -110,7 +111,7 @@ class MoreViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoals: () -> Unit, onOpenFinance: () -> Unit, viewModel: MoreViewModel = hiltViewModel()) {
+fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoals: () -> Unit, onOpenFinance: () -> Unit, onOpenEtsy: () -> Unit, onOpenReview: () -> Unit, viewModel: MoreViewModel = hiltViewModel()) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var editName by remember { mutableStateOf(false) }
@@ -125,11 +126,12 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoa
                 item { SectionTitle("Bereiche") }
                 item {
                     SectionCard {
+                        AreaItem(Icons.Rounded.Insights, LifeArea.SCHOOL.color, "Wochenrückblick", "Was lief gut, was nicht, Vorschläge", onOpenReview)
                         AreaItem(Icons.Rounded.CalendarMonth, LifeArea.SCHOOL.color, "Kalender & Abos", "Handy-Kalender, Lernraum, IServ, WebUntis", onOpenConnections)
                         AreaItem(Icons.Rounded.SportsHockey, LifeArea.SPORT.color, "Sport", "Training-Log, Schritte & Schlaf, Floorball-Zeiten", onOpenSport)
                         AreaItem(Icons.Rounded.Flag, LifeArea.PRIVATE.color, "Ziele & Gewohnheiten", "Ironman-Weg, Abi 1,7, Streaks", onOpenGoals)
                         AreaItem(Icons.Rounded.AttachMoney, LifeArea.JOB.color, "Finanzen", "Konten, Budgets, Puffer, Sparziele, DKB-Import", onOpenFinance)
-                        AreaItem(Icons.Rounded.Storefront, LifeArea.ETSY.color, "Etsy-Shop", "kommt in Phase 7 – To-dos schon unter „Aufgaben“", null)
+                        AreaItem(Icons.Rounded.Storefront, LifeArea.ETSY.color, "Etsy-Shop", "Umsatz, Motiv-Pipeline, Checkliste", onOpenEtsy)
                     }
                 }
 
