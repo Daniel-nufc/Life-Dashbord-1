@@ -194,9 +194,12 @@ private fun Hero(s: TodayUiState.Ready) {
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Pill("Woche ${s.weekType.name}", Color.White.copy(alpha = 0.25f))
-                    Pill(if (s.isSchoolDay) "Schultag" else "Schulfrei", Color.White.copy(alpha = 0.25f))
+                    Pill(s.holiday ?: if (s.isSchoolDay) "Schultag" else "Schulfrei", Color.White.copy(alpha = 0.25f))
                 }
                 Spacer(Modifier.height(12.dp))
+                if (s.examsToday.isNotEmpty()) {
+                    Text("📝 Heute: Klausur ${s.examsToday.joinToString()} – du schaffst das!", color = Color.White, fontWeight = FontWeight.Bold)
+                }
                 Text(s.coachLine, color = Color.White, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
             }
             Spacer(Modifier.width(12.dp))

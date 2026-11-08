@@ -1,11 +1,18 @@
 package app.lifedashboard.data.repository
 
 import app.lifedashboard.data.db.EventEntity
+import app.lifedashboard.data.db.ExamEntity
 import app.lifedashboard.data.db.JobShiftEntity
+import app.lifedashboard.data.db.PlanBlockEntity
 import app.lifedashboard.data.db.RoutineBlockEntity
+import app.lifedashboard.data.db.SchoolHolidayEntity
+import app.lifedashboard.data.db.StudyDao
 import app.lifedashboard.data.db.SubjectEntity
 import app.lifedashboard.data.db.TaskEntity
 import app.lifedashboard.data.settings.AppSettings
+import app.lifedashboard.data.sync.ExternalEvent
+import app.lifedashboard.data.sync.SystemCalendarRepository
+import app.lifedashboard.planner.DateRange
 import app.lifedashboard.planner.WeekType
 import app.lifedashboard.ui.today.DayTimelineBuilder
 import app.lifedashboard.ui.today.TimelineEntry
@@ -18,8 +25,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
-import app.lifedashboard.data.sync.ExternalEvent
-import app.lifedashboard.data.sync.SystemCalendarRepository
 
 /** Alles, was an einem Tag passiert – aus allen Bereichen zusammengeführt. */
 data class DayAgenda(
@@ -32,17 +37,21 @@ data class DayAgenda(
     val tasksDue: List<TaskEntity>,
     val settings: AppSettings,
     val externalEvents: List<ExternalEvent> = emptyList(),
+    /** Name der Ferien / des Feiertags, falls schulfrei */
+    val holiday: String? = null,
+    val exams: List<ExamEntity> = emptyList(),
 ) {
     val isWeekend: Boolean get() = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
+    val isSchoolFree: Boolean get() = isWeekend || holiday != null
 
-    fun timeline(planBlocks: List<app.lifedashboard.data.db.PlanBlockEntity> = emptyList()): List<TimelineEntry> = DayTimelineBuilder.build(
+    fun timeline(planBlocks: List<PlanBlockEntity> = emptyList()): List<TimelineEntry> = DayTimelineBuilder.build(
         lessons = lessons,
         routines = routines,
         events = events,
         shifts = shifts,
         externalEvents = externalEvents,
         planBlocks = planBlocks,
-        dayStart = settings.dayStartFor(date),
+        dayStart = settings.dayStartFor(date, holiday != null),
         dayEnd = settings.dayEnd,
         commuteMinutes = settings.schoolCommuteMinutes,
     )
@@ -56,8 +65,52 @@ data class AgendaRange(
 )
 
 /**
- * Führt Stundenplan, Training, Termine, Schichten und Aufgaben zusammen.
- * Heute und Kalender lesen beide hier – eine Änderung erscheint daher überall gleichzeitig.
+ * Baut beliebige Zeiträume aus Regeln: Stundenplan (A/B), feste Trainings (Wochentage),
+ * Ferien und Feiertage – nichts wird für einen festen Zeitraum vorab erzeugt.
+ * Reine Funktion → mit Tests über ein ganzes Schuljahr geprüft.
+ */
+object AgendaBuilder {
+    fun buildDays(
+        from: LocalDate,
+        days: Int,
+        lessons: List<LessonItem>,
+        routines: List<RoutineBlockEntity>,
+        settings: AppSettings,
+        holidays: List<SchoolHolidayEntity>,
+        events: List<EventEntity> = emptyList(),
+        shifts: List<JobShiftEntity> = emptyList(),
+        tasks: List<TaskEntity> = emptyList(),
+        external: List<ExternalEvent> = emptyList(),
+        exams: List<ExamEntity> = emptyList(),
+    ): List<DayAgenda> {
+        val ranges: List<Pair<SchoolHolidayEntity, DateRange>> = holidays.map { it to it.range() }
+        val calculator = settings.weekCalculator(ranges.map { it.second })
+        return (0 until days).map { offset ->
+            val date = from.plusDays(offset.toLong())
+            val epoch = date.toEpochDay()
+            val weekType = calculator.weekTypeFor(date)
+            val weekend = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
+            val holiday = ranges.firstOrNull { date in it.second }?.first?.name
+            DayAgenda(
+                date = date,
+                weekType = weekType,
+                lessons = if (weekend || holiday != null) emptyList() else lessons.forDay(date.dayOfWeek, weekType),
+                routines = routines.forDay(date.dayOfWeek),
+                events = events.filter { it.dateEpochDay == epoch },
+                shifts = shifts.filter { it.dateEpochDay == epoch },
+                tasksDue = tasks.filter { !it.done && it.dueEpochDay == epoch },
+                settings = settings,
+                externalEvents = external.filter { it.date == date },
+                holiday = holiday,
+                exams = exams.filter { it.dateEpochDay == epoch },
+            )
+        }
+    }
+}
+
+/**
+ * Führt Stundenplan, Training, Termine, Schichten, Klausuren und Aufgaben zusammen.
+ * Heute, Kalender, Planung und Widgets lesen alle hier – eine Änderung erscheint überall.
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @Singleton
@@ -69,6 +122,8 @@ class AgendaRepository @Inject constructor(
     private val tasks: TaskRepository,
     private val settingsRepository: app.lifedashboard.data.settings.SettingsRepository,
     private val systemCalendar: SystemCalendarRepository,
+    private val schoolCalendar: SchoolCalendarRepository,
+    private val studyDao: StudyDao,
 ) {
     private fun externalEvents(from: LocalDate, to: LocalDate): Flow<List<ExternalEvent>> =
         combine(settingsRepository.settings.map { it.systemCalendarIds }.distinctUntilChanged(), systemCalendar.changes()) { ids, _ -> ids }
@@ -76,35 +131,22 @@ class AgendaRepository @Inject constructor(
 
     fun observe(from: LocalDate, days: Int): Flow<AgendaRange> {
         val to = from.plusDays((days - 1).toLong())
-        val base = combine(timetable.lessons, timetable.subjects, routines.routines, settingsRepository.settings) { l, s, r, st ->
-            BaseData(l, s, r, st)
+        val base = combine(timetable.lessons, timetable.subjects, routines.routines, settingsRepository.settings, schoolCalendar.holidays) { l, s, r, st, h ->
+            BaseData(l, s, r, st, h)
         }
-        val dynamic = combine(events.between(from, to), jobs.between(from, to), tasks.tasks, externalEvents(from, to)) { e, j, t, x ->
-            DynamicData(e, j, t, x)
-        }
+        val dynamic = combine(
+            events.between(from, to),
+            jobs.between(from, to),
+            tasks.tasks,
+            externalEvents(from, to),
+            studyDao.observeExamsBetween(from.toEpochDay(), to.toEpochDay()),
+        ) { e, j, t, x, ex -> DynamicData(e, j, t, x, ex) }
         return combine(base, dynamic) { b, d ->
-            val eventList = d.events
-            val shiftList = d.shifts
-            val taskList = d.tasks
-            val calculator = b.settings.weekCalculator()
-            val dayList = (0 until days).map { offset ->
-                val date = from.plusDays(offset.toLong())
-                val weekType = calculator.weekTypeFor(date)
-                val weekend = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
-                val epoch = date.toEpochDay()
-                DayAgenda(
-                    date = date,
-                    weekType = weekType,
-                    lessons = if (weekend) emptyList() else b.lessons.forDay(date.dayOfWeek, weekType),
-                    routines = b.routines.forDay(date.dayOfWeek),
-                    events = eventList.filter { it.dateEpochDay == epoch },
-                    shifts = shiftList.filter { it.dateEpochDay == epoch },
-                    tasksDue = taskList.filter { !it.done && it.dueEpochDay == epoch },
-                    settings = b.settings,
-                    externalEvents = d.external.filter { it.date == date },
-                )
-            }
-            AgendaRange(dayList, taskList, b.subjects.associateBy { it.id }, b.settings)
+            val dayList = AgendaBuilder.buildDays(
+                from = from, days = days, lessons = b.lessons, routines = b.routines, settings = b.settings,
+                holidays = b.holidays, events = d.events, shifts = d.shifts, tasks = d.tasks, external = d.external, exams = d.exams,
+            )
+            AgendaRange(dayList, d.tasks, b.subjects.associateBy { it.id }, b.settings)
         }
     }
 
@@ -113,6 +155,7 @@ class AgendaRepository @Inject constructor(
         val shifts: List<JobShiftEntity>,
         val tasks: List<TaskEntity>,
         val external: List<ExternalEvent>,
+        val exams: List<ExamEntity>,
     )
 
     private data class BaseData(
@@ -120,5 +163,6 @@ class AgendaRepository @Inject constructor(
         val subjects: List<SubjectEntity>,
         val routines: List<RoutineBlockEntity>,
         val settings: AppSettings,
+        val holidays: List<SchoolHolidayEntity>,
     )
 }

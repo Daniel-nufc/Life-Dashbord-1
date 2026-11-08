@@ -38,19 +38,22 @@ data class TimetableUiState(
 class TimetableViewModel @Inject constructor(
     private val repository: TimetableRepository,
     settings: SettingsRepository,
+    private val schoolCalendar: app.lifedashboard.data.repository.SchoolCalendarRepository,
 ) : ViewModel() {
 
     private val selectedWeek = MutableStateFlow<WeekType?>(null)
+
+    private val settingsWithHolidays = combine(settings.settings, schoolCalendar.ranges) { s, r -> s to r }
 
     val state: StateFlow<TimetableUiState> = combine(
         repository.lessons,
         repository.periods,
         repository.subjects,
-        settings.settings,
+        settingsWithHolidays,
         selectedWeek,
-    ) { lessons, periods, subjects, s, selected ->
+    ) { lessons, periods, subjects, (s, free), selected ->
         // Am Wochenende zeigen wir direkt die kommende Woche.
-        val planningWeek = s.weekCalculator().weekTypeForPlanning(LocalDate.now())
+        val planningWeek = s.weekCalculator(free).weekTypeForPlanning(LocalDate.now())
         val week = selected ?: planningWeek
         val days = (1..5).map { DayOfWeek.of(it) }.map { day ->
             val dayLessons = lessons.forDay(day, week)

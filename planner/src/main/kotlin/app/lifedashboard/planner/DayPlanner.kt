@@ -84,18 +84,21 @@ object DayPlanner {
         freeSlots: List<TimeRange>,
         demands: List<Demand>,
         config: PlannerConfig = PlannerConfig(),
+        /** Höchstens so viele Minuten insgesamt verplanen (Tageslimit, geschützte Freizeit) */
+        maxTotalMinutes: Int = Int.MAX_VALUE,
     ): List<PlannedBlock> {
         val segments = freeSlots.sortedBy { it.start }.toMutableList()
         val result = mutableListOf<PlannedBlock>()
+        var budget = maxTotalMinutes
 
         val ordered = demands
             .filter { it.minutes > 0 }
             .sortedByDescending { score(it, date, config) }
 
         for (demand in ordered) {
-            var remaining = demand.minutes
+            var remaining = minOf(demand.minutes, budget)
             var guard = 0
-            while (remaining > 0 && guard++ < 20) {
+            while (remaining > 0 && budget > 0 && guard++ < 20) {
                 val minNeeded = minOf(demand.minChunk, remaining)
                 val candidates = segments.filter { it.duration.toMinutes() >= minNeeded }
                 if (candidates.isEmpty()) break
@@ -107,6 +110,7 @@ object DayPlanner {
                 val range = TimeRange(best.start, best.start.plusMinutes(chunk.toLong()))
                 result += PlannedBlock(demand.key, demand.type, demand.title, range, demand.refId)
                 remaining -= chunk
+                budget -= chunk
 
                 // Segment verkleinern (inkl. Pause danach)
                 val index = segments.indexOf(best)

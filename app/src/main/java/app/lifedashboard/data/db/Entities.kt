@@ -373,3 +373,15 @@ data class EtsyStatsEntity(
     val views: Int,
     val favorites: Int,
 )
+
+enum class HolidayKind { SCHOOL_HOLIDAY, PUBLIC_HOLIDAY, SCHOOL_FREE }
+
+/** Ferien, Feiertag oder eigener schulfreier Tag (z. B. Studientag). */
+@Entity(tableName = "school_holidays", indices = [Index("startEpochDay")])
+data class SchoolHolidayEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val startEpochDay: Long,
+    val endEpochDay: Long,
+    val kind: HolidayKind,
+)

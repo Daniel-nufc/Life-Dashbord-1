@@ -73,4 +73,15 @@ class DayPlannerTest {
         val now = DayPlanner.from(slots, LocalTime.of(16, 30))
         assertEquals(listOf(TimeRange.of(16, 30, 18, 0), TimeRange.of(20, 15, 22, 0)), now)
     }
+
+    @Test
+    fun `Tageslimit wird eingehalten`() {
+        val plan = DayPlanner.plan(
+            monday, slots,
+            listOf(Demand("a", DemandType.STUDY, "A", 120, 1.0), Demand("b", DemandType.ETSY, "B", 120, 0.6)),
+            maxTotalMinutes = 90,
+        )
+        assertTrue(plan.sumOf { it.range.duration.toMinutes() } <= 90)
+        assertNoOverlap(plan)
+    }
 }

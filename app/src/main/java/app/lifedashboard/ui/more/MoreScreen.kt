@@ -15,6 +15,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AttachMoney
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Backup
+import androidx.compose.material.icons.rounded.BeachAccess
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
@@ -74,9 +75,12 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class MoreViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
+    schoolCalendar: app.lifedashboard.data.repository.SchoolCalendarRepository,
 ) : ViewModel() {
     val settings: StateFlow<AppSettings?> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val freeRanges: StateFlow<List<app.lifedashboard.planner.DateRange>> = schoolCalendar.ranges
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun setAppLock(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setAppLockEnabled(enabled) }
@@ -129,8 +133,9 @@ class MoreViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoals: () -> Unit, onOpenFinance: () -> Unit, onOpenEtsy: () -> Unit, onOpenReview: () -> Unit, onOpenBackup: () -> Unit, viewModel: MoreViewModel = hiltViewModel()) {
+fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoals: () -> Unit, onOpenFinance: () -> Unit, onOpenEtsy: () -> Unit, onOpenReview: () -> Unit, onOpenBackup: () -> Unit, onOpenHolidays: () -> Unit, viewModel: MoreViewModel = hiltViewModel()) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val freeRanges by viewModel.freeRanges.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var editName by remember { mutableStateOf(false) }
 
@@ -145,6 +150,7 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoa
                 item {
                     SectionCard {
                         AreaItem(Icons.Rounded.Insights, LifeArea.SCHOOL.color, "Wochenrückblick", "Was lief gut, was nicht, Vorschläge", onOpenReview)
+                        AreaItem(Icons.Rounded.BeachAccess, LifeArea.SPORT.color, "Ferien & freie Tage", "Berliner Ferien 2026/27, eigene Studientage", onOpenHolidays)
                         AreaItem(Icons.Rounded.CalendarMonth, LifeArea.SCHOOL.color, "Kalender & Abos", "Handy-Kalender, Lernraum, IServ, WebUntis", onOpenConnections)
                         AreaItem(Icons.Rounded.SportsHockey, LifeArea.SPORT.color, "Sport", "Training-Log, Schritte & Schlaf, Floorball-Zeiten", onOpenSport)
                         AreaItem(Icons.Rounded.Flag, LifeArea.PRIVATE.color, "Ziele & Gewohnheiten", "Ironman-Weg, Abi 1,7, Streaks", onOpenGoals)
@@ -211,7 +217,7 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoa
                             supportingContent = { Text("Falls A/B einmal nicht stimmt (z. B. nach den Ferien)") },
                             colors = transparentItem(),
                         )
-                        val thisWeek = s.weekCalculator().weekTypeFor(LocalDate.now())
+                        val thisWeek = s.weekCalculator(freeRanges).weekTypeFor(LocalDate.now())
                         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                             WeekType.entries.forEachIndexed { index, week ->
                                 SegmentedButton(

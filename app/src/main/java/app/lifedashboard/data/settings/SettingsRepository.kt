@@ -46,11 +46,16 @@ data class AppSettings(
     /** Ausgeblendete Karten auf „Heute“ */
     val hiddenTodayCards: Set<String>,
 ) {
-    fun weekCalculator() = SchoolWeekCalculator(abReferenceMonday, abReferenceType)
+    /**
+     * A/B-Woche als Zählung der Schulwochen ab dem Ankerdatum (KW 46/2026 = A).
+     * Reine Ferienwochen werden übersprungen – deshalb immer die Ferien mitgeben.
+     */
+    fun weekCalculator(freeRanges: List<app.lifedashboard.planner.DateRange>) =
+        SchoolWeekCalculator(abReferenceMonday, abReferenceType, freeRanges, skipHolidayWeeks = true)
 
-    /** Am Wochenende beginnt der Tag später. */
-    fun dayStartFor(date: LocalDate): LocalTime =
-        if (date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY) weekendDayStart else dayStart
+    /** Am Wochenende (und in den Ferien) beginnt der Tag später. */
+    fun dayStartFor(date: LocalDate, schoolFree: Boolean = false): LocalTime =
+        if (schoolFree || date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY) weekendDayStart else dayStart
 }
 
 /** Alle Karten, die auf „Heute“ angezeigt werden können. */

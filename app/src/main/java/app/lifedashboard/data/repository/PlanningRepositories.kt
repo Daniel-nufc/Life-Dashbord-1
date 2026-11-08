@@ -41,6 +41,7 @@ class TaskRepository @Inject constructor(
     private val dao: TaskDao,
     private val timetable: TimetableRepository,
     private val settings: SettingsRepository,
+    private val schoolCalendar: SchoolCalendarRepository,
 ) {
     val tasks: Flow<List<TaskEntity>> = dao.observeAll()
 
@@ -67,7 +68,8 @@ class TaskRepository @Inject constructor(
                 },
             )
         }.distinct()
-        val calculator = settings.settings.first().weekCalculator()
-        return nextOccurrence(after, slots, calculator::weekTypeFor, skip)
+        val free = schoolCalendar.currentRanges()
+        val calculator = settings.settings.first().weekCalculator(free)
+        return nextOccurrence(after, slots, calculator::weekTypeFor, skip, isSchoolDay = { !app.lifedashboard.planner.isSchoolFree(it, free) })
     }
 }

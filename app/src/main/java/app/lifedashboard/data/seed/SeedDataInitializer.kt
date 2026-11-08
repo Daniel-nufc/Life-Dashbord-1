@@ -53,6 +53,26 @@ class SeedDataInitializer @Inject constructor(
             seedEtsyDesigns()
             settings.setSeedVersion(5)
         }
+        if (version < 6) {
+            seedHolidays()
+            settings.setSeedVersion(6)
+        }
+    }
+
+    /** Berliner Ferien und Feiertage 2026/27 (in der App änderbar). */
+    private suspend fun seedHolidays() {
+        val dao = db.holidayDao()
+        if (dao.all().isNotEmpty()) return
+        dao.insertAll(
+            app.lifedashboard.planner.BerlinSchoolCalendar.entries.map {
+                app.lifedashboard.data.db.SchoolHolidayEntity(
+                    name = it.name,
+                    startEpochDay = it.range.start.toEpochDay(),
+                    endEpochDay = it.range.endInclusive.toEpochDay(),
+                    kind = if (it.publicHoliday) app.lifedashboard.data.db.HolidayKind.PUBLIC_HOLIDAY else app.lifedashboard.data.db.HolidayKind.SCHOOL_HOLIDAY,
+                )
+            },
+        )
     }
 
     /** Winter-Set (fertig, Probedruck bei Oma steht noch aus). */

@@ -66,7 +66,7 @@ fun EditorHost(request: EditRequest?, onDismiss: () -> Unit, viewModel: EditorVi
             original = request.exam.takeIf { it.id != 0L },
             subjects = subjects,
             onSave = { exam, topics -> viewModel.saveExam(exam, topics); onDismiss() },
-            onDelete = { onDismiss() },
+            onDelete = { id -> viewModel.deleteExam(id); onDismiss() },
             onDismiss = onDismiss,
             preset = request.exam,
         )

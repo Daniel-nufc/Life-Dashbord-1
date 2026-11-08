@@ -126,6 +126,9 @@ interface StudyDao {
     @Query("SELECT * FROM exams ORDER BY dateEpochDay")
     fun observeExams(): Flow<List<ExamEntity>>
 
+    @Query("SELECT * FROM exams WHERE dateEpochDay BETWEEN :fromDay AND :toDay ORDER BY dateEpochDay")
+    fun observeExamsBetween(fromDay: Long, toDay: Long): Flow<List<ExamEntity>>
+
     @Query("SELECT * FROM topics ORDER BY id")
     fun observeTopics(): Flow<List<TopicEntity>>
 
@@ -170,6 +173,9 @@ interface PlanDao {
 
     @Query("SELECT * FROM plan_blocks WHERE dateEpochDay BETWEEN :fromDay AND :toDay")
     suspend fun between(fromDay: Long, toDay: Long): List<PlanBlockEntity>
+
+    @Query("SELECT * FROM plan_blocks WHERE dateEpochDay BETWEEN :fromDay AND :toDay ORDER BY dateEpochDay, startMinute")
+    fun observeBetween(fromDay: Long, toDay: Long): Flow<List<PlanBlockEntity>>
 
     @Query("SELECT * FROM plan_blocks WHERE id = :id")
     suspend fun byId(id: Long): PlanBlockEntity?
@@ -359,4 +365,22 @@ interface EtsyDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun putStats(stats: EtsyStatsEntity)
+}
+
+@Dao
+interface HolidayDao {
+    @Query("SELECT * FROM school_holidays ORDER BY startEpochDay")
+    fun observeAll(): Flow<List<SchoolHolidayEntity>>
+
+    @Query("SELECT * FROM school_holidays ORDER BY startEpochDay")
+    suspend fun all(): List<SchoolHolidayEntity>
+
+    @Insert
+    suspend fun insertAll(items: List<SchoolHolidayEntity>)
+
+    @Upsert
+    suspend fun upsert(item: SchoolHolidayEntity)
+
+    @Query("DELETE FROM school_holidays WHERE id = :id")
+    suspend fun delete(id: Long)
 }

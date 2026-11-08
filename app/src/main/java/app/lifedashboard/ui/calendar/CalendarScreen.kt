@@ -132,6 +132,7 @@ private fun WeekContent(
 ) {
     val week by viewModel.week.collectAsStateWithLifecycle()
     val weekStart by viewModel.weekStart.collectAsStateWithLifecycle()
+    val plan by viewModel.plan.collectAsStateWithLifecycle()
     val range = week
     if (range == null) {
         LoadingState()
@@ -164,12 +165,19 @@ private fun WeekContent(
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = "Nächste Woche")
                 }
             }
-            if (weekStart != planningMonday()) {
-                TextButton(onClick = viewModel::thisWeek) { Text("Zur aktuellen Woche") }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (weekStart != planningMonday()) {
+                    TextButton(onClick = viewModel::thisWeek) { Text("Zur aktuellen Woche") }
+                }
+                val proposals = plan.count { it.status == app.lifedashboard.data.db.PlanStatus.PROPOSED }
+                if (proposals > 0) {
+                    androidx.compose.material3.FilledTonalButton(onClick = viewModel::acceptWeek) { Text("✓ Woche übernehmen ($proposals)") }
+                }
+                TextButton(onClick = viewModel::replanWeek) { Text("↻ Neu planen") }
             }
         }
         items(range.days, key = { it.date.toEpochDay() }) { day ->
-            DayCard(day, range, viewModel, onAdd, onEdit, onOpenTimetable)
+            DayCard(day, range, plan.filter { it.dateEpochDay == day.date.toEpochDay() }, viewModel, onAdd, onEdit, onOpenTimetable)
         }
     }
 }
@@ -178,6 +186,7 @@ private fun WeekContent(
 private fun DayCard(
     day: DayAgenda,
     range: AgendaRange,
+    plan: List<app.lifedashboard.data.db.PlanBlockEntity>,
     viewModel: CalendarViewModel,
     onAdd: (LocalDate) -> Unit,
     onEdit: (EditRequest) -> Unit,
@@ -194,11 +203,23 @@ private fun DayCard(
                 )
                 Text(day.date.format(dayFormatter), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            day.holiday?.let { Pill(it.take(22), LifeArea.SPORT.color) }
             if (isToday) Pill("Heute", MaterialTheme.colorScheme.primary)
             IconButton(onClick = { onAdd(day.date) }) { Icon(Icons.Rounded.Add, contentDescription = "Eintragen") }
         }
 
         var empty = true
+        day.exams.forEach { exam ->
+            empty = false
+            val subject = range.subjects[exam.subjectId]
+            AgendaLine(
+                time = "📝",
+                icon = Icons.Rounded.School,
+                color = androidx.compose.ui.graphics.Color(0xFFE53935),
+                title = "${exam.kind.name.lowercase().replaceFirstChar { it.uppercase() }}: ${subject?.name ?: exam.title}",
+                subtitle = exam.title.ifBlank { null } ?: "Antippen zum Bearbeiten oder Löschen",
+            ) { onEdit(EditRequest.Exam(exam)) }
+        }
         if (day.lessons.isNotEmpty()) {
             empty = false
             val first = day.lessons.mapNotNull { it.timeRange }.minOfOrNull { it.start }
@@ -242,6 +263,35 @@ private fun DayCard(
                     request?.let(onEdit)
                 }
             }
+        plan.filter { it.status == app.lifedashboard.data.db.PlanStatus.PROPOSED || it.status == app.lifedashboard.data.db.PlanStatus.ACCEPTED || it.status == app.lifedashboard.data.db.PlanStatus.DONE }
+            .forEach { block ->
+                empty = false
+                val area = when (block.type) {
+                    app.lifedashboard.planner.DemandType.ETSY -> LifeArea.ETSY
+                    app.lifedashboard.planner.DemandType.SPORT -> LifeArea.SPORT
+                    app.lifedashboard.planner.DemandType.TASK -> LifeArea.PRIVATE
+                    else -> LifeArea.SCHOOL
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        AgendaLine(
+                            time = "%02d:%02d".format(block.startMinute / 60, block.startMinute % 60),
+                            icon = area.icon,
+                            color = area.color,
+                            title = block.title,
+                            subtitle = when (block.status) {
+                                app.lifedashboard.data.db.PlanStatus.PROPOSED -> "Vorschlag · ${block.endMinute - block.startMinute} Min"
+                                app.lifedashboard.data.db.PlanStatus.ACCEPTED -> "Eingeplant ✓"
+                                else -> "Erledigt ✓"
+                            },
+                        ) {}
+                    }
+                    if (block.status == app.lifedashboard.data.db.PlanStatus.PROPOSED) {
+                        IconButton(onClick = { viewModel.accept(block) }) { Text("✓") }
+                        IconButton(onClick = { viewModel.decline(block) }) { Text("✕") }
+                    }
+                }
+            }
         if (day.tasksDue.isNotEmpty()) {
             empty = false
             Text(
@@ -263,7 +313,7 @@ private fun DayCard(
         }
         if (empty) {
             Text(
-                if (day.isWeekend) "Frei – genieß es 😎" else "Nichts eingetragen",
+                if (day.isSchoolFree) "Frei – genieß es 😎" else "Nichts eingetragen",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 6.dp),

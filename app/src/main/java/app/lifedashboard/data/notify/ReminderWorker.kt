@@ -133,8 +133,10 @@ class ReminderWorker @AssistedInject constructor(
             }
         }
 
-        // 7) Wochenrückblick sonntags ab 18 Uhr
+        // 7) Wochenrückblick + automatischer Wochenentwurf sonntags ab 18 Uhr
         if (today.dayOfWeek == DayOfWeek.SUNDAY && now.hour in 18..21) {
+            runCatching { engine.planDays(today.plusDays(1), 7) }
+            notifier.send("weekplan", Channel.PLAN, "Dein Wochenplan-Entwurf ist fertig 🗓️", "Im Kalender ansehen und mit einem Tipp übernehmen – oder einzelne Blöcke ändern.", ignoreLimit = true)
             notifier.send("review", Channel.REVIEW, "Dein Wochenrückblick ist da 📊", "Was lief gut, was nicht – und ein Plan für die neue Woche. Dauert 2 Minuten.", ignoreLimit = true)
         }
     }

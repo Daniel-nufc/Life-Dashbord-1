@@ -18,12 +18,15 @@ fun nextOccurrence(
     slots: List<WeeklySlot>,
     weekTypeOf: (LocalDate) -> WeekType,
     skip: Int = 0,
-    horizonDays: Int = 42,
+    horizonDays: Int = 60,
+    /** false für Ferien und Feiertage – dort findet kein Unterricht statt */
+    isSchoolDay: (LocalDate) -> Boolean = { true },
 ): LocalDate? {
     if (slots.isEmpty()) return null
     var remaining = skip
     for (offset in 1..horizonDays) {
         val date = after.plusDays(offset.toLong())
+        if (!isSchoolDay(date)) continue
         val matches = slots.any { slot ->
             slot.day == date.dayOfWeek && (slot.weekType == null || slot.weekType == weekTypeOf(date))
         }

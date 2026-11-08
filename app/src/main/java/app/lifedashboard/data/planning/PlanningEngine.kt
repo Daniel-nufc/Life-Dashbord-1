@@ -53,9 +53,27 @@ class PlanningEngine @Inject constructor(
 
     fun observeDay(date: LocalDate): Flow<List<PlanBlockEntity>> = dao.observeDay(date.toEpochDay())
 
-    suspend fun replan(date: LocalDate = LocalDate.now()) = mutex.withLock {
+    suspend fun replan(date: LocalDate = LocalDate.now()) = mutex.withLock { replanLocked(date) }
+
+    /** Plant mehrere Tage nacheinander (z. B. die ganze Woche). Vergangene Tage werden übersprungen. */
+    suspend fun planDays(from: LocalDate, days: Int) = mutex.withLock {
         val today = LocalDate.now()
-        if (date.isBefore(today)) return@withLock
+        (0 until days).map { from.plusDays(it.toLong()) }.filter { !it.isBefore(today) }.forEach { replanLocked(it) }
+    }
+
+    /** „Woche übernehmen“: alle Vorschläge im Zeitraum annehmen. */
+    suspend fun acceptAll(from: LocalDate, to: LocalDate) = mutex.withLock {
+        dao.between(from.toEpochDay(), to.toEpochDay()).filter { it.status == PlanStatus.PROPOSED }.forEach {
+            dao.setStatus(it.id, PlanStatus.ACCEPTED)
+            feedback(it, FeedbackAction.ACCEPTED)
+        }
+    }
+
+    fun observeRange(from: LocalDate, to: LocalDate): Flow<List<PlanBlockEntity>> = dao.observeBetween(from.toEpochDay(), to.toEpochDay())
+
+    private suspend fun replanLocked(date: LocalDate) {
+        val today = LocalDate.now()
+        if (date.isBefore(today)) return
         val epoch = date.toEpochDay()
         val now = LocalTime.now()
         val nowMinute = if (date == today) now.minuteOfDay() else 0
@@ -82,21 +100,32 @@ class PlanningEngine @Inject constructor(
         val settings = range.settings
 
         val fixed = day.timeline().filter { it.kind != EntryKind.FREE }.map { it.range } + blockedRanges
-        val window = TimeRange(settings.dayStartFor(date), settings.dayEnd)
+        val window = TimeRange(settings.dayStartFor(date, day.holiday != null), settings.dayEnd)
         var free = freeSlots(window, fixed, Duration.ofMinutes(15))
         if (date == today) {
             val start = minuteToTime(((nowMinute + 4) / 5) * 5)
             free = DayPlanner.from(free, start)
         }
 
-        val alreadyPlanned = kept.groupBy { it.demandKey }.mapValues { (_, l) -> l.sumOf { it.endMinute - it.startMinute } }
+        // Was ist schon an ANDEREN Tagen geplant? (z. B. Hausaufgabe am Montag → nicht nochmal am Dienstag)
+        val windowBlocks = dao.between(today.toEpochDay(), today.toEpochDay() + 14)
+            .filter { it.status == PlanStatus.PROPOSED || it.status == PlanStatus.ACCEPTED || it.status == PlanStatus.DONE }
+        val alreadyPlanned = (windowBlocks.filter { it.dateEpochDay != epoch } + kept)
+            .groupBy { it.demandKey }.mapValues { (_, l) -> l.sumOf { it.endMinute - it.startMinute } }
+
         val demands = buildDemands(date, day, range.allTasks, overview, settings)
             .filter { it.key !in declinedKeys }
             .map { it.copy(minutes = it.minutes - (alreadyPlanned[it.key] ?: 0)) }
             .filter { it.minutes >= 10 }
 
+        // Tageslimit: werktags max. 3 Std, am Wochenende/in den Ferien 4 Std – und mind. 1 Std echte Freizeit bleibt
+        val totalFree = free.sumOf { it.duration.toMinutes() }.toInt()
+        val alreadyToday = kept.sumOf { it.endMinute - it.startMinute }
+        val cap = (if (day.isSchoolFree) 240 else 180) - alreadyToday
+        val budget = minOf(cap, totalFree - 60).coerceAtLeast(0)
+
         val config = PlannerConfig(typeWeight = typeWeights(settings, overview, date), preferences = preferenceModel())
-        val planned = DayPlanner.plan(date, free, demands, config)
+        val planned = DayPlanner.plan(date, free, demands, config, maxTotalMinutes = budget)
         dao.insertAll(
             planned.map {
                 PlanBlockEntity(
@@ -210,6 +239,8 @@ class PlanningEngine @Inject constructor(
         allTasks.filter { !it.done }.forEach { task ->
             val due = task.dueEpochDay
             val soon = due != null && due <= epoch + 3
+            // An einem zukünftigen Tag nur planen, solange die Abgabe noch bevorsteht
+            if (due != null && date.isAfter(LocalDate.now()) && due <= epoch) return@forEach
             val isEtsy = task.area == LifeArea.ETSY
             if (!soon && !(isEtsy && due == null)) return@forEach
             if (isEtsy && due == null) return@forEach // Etsy ohne Datum läuft über den Etsy-Block
@@ -237,7 +268,7 @@ class PlanningEngine @Inject constructor(
         // 2) Lernplan für diesen Tag (rückwärts von Klausuren)
         overview.plan.filter { it.date == date }.forEach { alloc ->
             demands += Demand(
-                key = "study:${alloc.examId}:${alloc.topicId ?: 0}:${if (alloc.isReview) "r" else "l"}",
+                key = "study:$epoch:${alloc.examId}:${alloc.topicId ?: 0}:${if (alloc.isReview) "r" else "l"}",
                 type = if (alloc.isReview) DemandType.REVIEW else DemandType.STUDY,
                 title = alloc.title,
                 minutes = alloc.minutes,
@@ -252,7 +283,7 @@ class PlanningEngine @Inject constructor(
         // 3) Fällige Wiederholungen (Spaced Repetition) – kurz, gut für die Bahn
         overview.dueReviews.forEach { (exam, topic) ->
             demands += Demand(
-                key = "review:${topic.id}",
+                key = "review:$epoch:${topic.id}",
                 type = DemandType.REVIEW,
                 title = "Wiederholen: ${exam.subject?.code ?: ""} ${topic.title}".trim(),
                 minutes = 10,
@@ -272,7 +303,7 @@ class PlanningEngine @Inject constructor(
         }
         val nextEtsy = allTasks.firstOrNull { !it.done && it.area == LifeArea.ETSY }
         demands += Demand(
-            key = "etsy:daily",
+            key = "etsy:$epoch",
             type = DemandType.ETSY,
             title = "Etsy: " + (nextEtsy?.title ?: "Motive & Listings"),
             minutes = etsyMinutes,
@@ -287,7 +318,7 @@ class PlanningEngine @Inject constructor(
         val hasJob = day.shifts.isNotEmpty()
         if (!hasTraining && !hasJob && date.dayOfWeek in setOf(DayOfWeek.TUESDAY, DayOfWeek.THURSDAY, DayOfWeek.SATURDAY)) {
             demands += Demand(
-                key = "sport:run",
+                key = "sport:run:$epoch",
                 type = DemandType.SPORT,
                 title = "Laufen (Ziel 10 km) – locker, 30 Min",
                 minutes = if (examPhase) 25 else 35,

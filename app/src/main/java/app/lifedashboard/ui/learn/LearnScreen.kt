@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Pause
@@ -279,6 +280,7 @@ private fun NextExamHero(next: ExamWithTopics) {
 @Composable
 private fun ExamCard(exam: ExamWithTopics, viewModel: LearnViewModel, onEdit: (ExamEntity) -> Unit) {
     var newTopic by remember(exam.exam.id) { mutableStateOf("") }
+    var confirmDelete by remember(exam.exam.id) { mutableStateOf(false) }
     val accent = exam.subject?.let { Color(it.colorArgb) } ?: LifeArea.SCHOOL.color
     SectionCard(onClick = { onEdit(exam.exam) }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -292,6 +294,18 @@ private fun ExamCard(exam: ExamWithTopics, viewModel: LearnViewModel, onEdit: (E
                 )
             }
             Pill("${exam.progress} %", accent)
+            IconButton(onClick = { confirmDelete = true }) {
+                Icon(androidx.compose.material.icons.Icons.Rounded.Delete, "Klausur löschen", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        if (confirmDelete) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { confirmDelete = false },
+                title = { Text("Klausur löschen?") },
+                text = { Text("${exam.subject?.name ?: exam.exam.title} am ${exam.date.friendly()} – mit allen Themen und dem Lernplan.") },
+                confirmButton = { TextButton(onClick = { viewModel.deleteExam(exam.exam.id); confirmDelete = false }) { Text("Löschen", color = MaterialTheme.colorScheme.error) } },
+                dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Abbrechen") } },
+            )
         }
         LinearProgressIndicator(
             progress = { exam.progress / 100f },

@@ -60,6 +60,7 @@ class EditorViewModel @Inject constructor(
 
     fun saveRoutine(routine: RoutineBlockEntity) = launch { routines.save(routine) }
     fun saveExam(exam: app.lifedashboard.data.db.ExamEntity, topics: List<String>) = launch { study.saveExam(exam, topics) }
+    fun deleteExam(id: Long) = launch { study.deleteExam(id) }
     fun saveExpense(tx: app.lifedashboard.data.db.TransactionEntity) = launch { finance.saveTransaction(tx, learn = false) }
 
     /**
