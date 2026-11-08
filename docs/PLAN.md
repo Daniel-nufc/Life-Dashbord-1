@@ -20,6 +20,7 @@
 | Benachrichtigungen | Ruhezeit 22:00–6:00, max. 5 pro Tag, Morgen-Zusammenfassung 6:15 |
 | Backup | Wöchentlich automatisch, mit Passwort verschlüsselt, in einen Ordner deiner Wahl |
 | Streaks | 1 Joker-Tag pro Woche – ein verpasster Tag zerstört nichts |
+| Minijob | Eigener Bereich „Job“: Schichten als feste Blöcke (der Planer weicht aus), Stunden + Verdienst landen in Finanzen, Warnung vor der Minijob-Grenze |
 
 ---
 
@@ -64,6 +65,7 @@ Beispiele:
 |---|---|
 | Schule | `Subject` (Kürzel, Name, Farbe, LK/GK, Schwierigkeit 1–5), `TimetableLesson` (Wochentag, Block, Woche A/B, Raum), `TimetableException` (Ausfall/Vertretung), `SchoolHoliday` |
 | Klausuren & Lernen | `Exam` (Fach, Datum, Art), `Topic` (Klausur, Name, Aufwand, Fortschritt %, nächste Wiederholung), `StudySession` (Pomodoro-Log), `Grade` (Punkte 0–15, Gewicht), `Assignment` (Abgabe) |
+| Job | `JobShift` (Datum, Start, Ende, Stundenlohn), `JobSettings` (Minijob-Grenze) |
 | Kalender & Aufgaben | `Event` (eigene Termine, optional mit Systemkalender verknüpft), `ExternalCalendarLink`, `Task` (Bereich, Fälligkeit, Dauer-Schätzung, Verknüpfung) |
 | Planung | `PlanBlock` (Datum, Start, Ende, Typ, Quelle, Status: vorgeschlagen/angenommen/verschoben/abgelehnt/erledigt/verpasst), `PlanFeedback` (Entscheidung + Kontext für das Lernen), `PlannerSettings` (Prioritäten, Tagesfenster, Blocklängen) |
 | Sport | `TrainingTemplate` (z. B. Floorball Mo/Mi), `Workout`, `WorkoutExercise`, `ExerciseSet`, `HealthDaily` (Schritte, Schlaf aus Health Connect) |
@@ -129,6 +131,7 @@ Design: große, einklappbare Überschrift oben (One-UI-Stil), runde Karten (24 d
 | Do | E-B F309 · frei ab 9:30 | gleich |
 | Fr | MA-B F309 · PM F210 · E-B F309 · GeWi-B E207 | MA-B F309 · PM F210 · TuMT-B G113 · frei |
 
+- Minijob in Aussicht (vermutlich im freien Donnerstag-Fenster): Sobald es Schichten gibt, werden sie als feste Termine eingetragen und Lernzeit wird automatisch woandershin verteilt.
 - Tagesfenster: Aufstehen 6:00, Schlafen 22:00. Floorball Mo + Mi (Berliner TSC), Uhrzeiten offen.
 - Ziel „Ironman“ als Stufenweg: 5 km laufen → Sprint-Triathlon (0,75/20/5) → Olympisch (1,5/40/10) → Mitteldistanz (1,9/90/21,1) → Ironman (3,8/180/42,2). Kleine Wochen-Habits mit „Minimalversion“ (10 Minuten zählen auch).
 - Etsy: Winter-Set (Rotkehlchen, Hütte, Fuchs) als Set mit drei Motiven. Offene To-dos: Probedruck Oma, Google-Lens-Check, Mockups + Titelbild, 15-oz-Datei, Entscheidung „Tagesaufgabe pausieren?“. Dazu eine Upload-Checkliste mit KI-Häkchen, „Designed by“ und Nachweis.
@@ -154,7 +157,7 @@ Weil die Klausurphase in ~2 Wochen beginnt, kommt **Lernen + Planung früher** a
 | Phase | Inhalt | Ergebnis zum Testen |
 |---|---|---|
 | 1 | Grundgerüst: Projekt, GitHub-Actions-APK, Theme, Navigation (Handy + Tablet), Room + SQLCipher, Hilt, App-Sperre (Fingerabdruck), Stundenplan A/B | App startet, zeigt Stundenplan, Fingerabdruck-Sperre |
-| 2 | Kalender & Aufgaben: eigener Kalender, Systemkalender lesen/schreiben, To-dos mit Bereichen | Termine und Aufgaben eintragen, im Samsung-Kalender sichtbar |
+| 2 | Kalender & Aufgaben (+ Job-Schichten): eigener Kalender, Systemkalender lesen/schreiben, To-dos mit Bereichen | Termine und Aufgaben eintragen, im Samsung-Kalender sichtbar |
 | 3 | Lernen & Klausuren: Fächer, Klausuren, Themen, Lernplan rückwärts + Wiederholungen, Fokus-Timer, Noten (Punkte) | Klausuren eintragen → automatischer Lernplan |
 | 4 | Heute + Tagesplan-Engine: Zeitstrahl, Vorschläge annehmen/verschieben/ablehnen, Neuplanung, Morgen-Benachrichtigung | Täglicher Plan für die Klausurphase |
 | 5 | Sport + Ziele & Habits: Floorball, Workout-Log, Diagramme, Health Connect, Ironman-Stufen, Streaks | Training loggen, Schritte/Schlaf sehen |
