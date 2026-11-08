@@ -23,6 +23,8 @@ import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.ChecklistRtl
 import androidx.compose.material.icons.rounded.DirectionsBus
 import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.Euro
+import androidx.compose.material.icons.rounded.Storefront
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.FilledTonalButton
@@ -64,6 +66,7 @@ import app.lifedashboard.ui.editors.EditRequest
 import app.lifedashboard.ui.editors.EditorHost
 import app.lifedashboard.ui.editors.QuickAddSheet
 import app.lifedashboard.ui.tasks.TaskRow
+import app.lifedashboard.data.repository.euro
 import java.time.LocalDate
 
 private val HeroColors = listOf(Color(0xFF3D7BF7), Color(0xFF7B5CF0), Color(0xFFC04FD8))
@@ -101,21 +104,6 @@ fun TodayScreen(
                 item(span = StaggeredGridItemSpan.FullLine) {
                     app.lifedashboard.ui.editors.QuickInputBar(onRequest = { editing = it })
                 }
-                item { NowTile(s) }
-                item {
-                    TasksTile(
-                        s,
-                        onToggle = viewModel::toggleTask,
-                        onEdit = { task ->
-                            editing = if (task.kind == app.lifedashboard.data.db.TaskKind.HOMEWORK) {
-                                EditRequest.Homework(task)
-                            } else {
-                                EditRequest.Todo(task, null)
-                            }
-                        },
-                        onOpenTasks = onOpenTasks,
-                    )
-                }
                 if (s.allDayEvents.isNotEmpty() || s.externalAllDay.isNotEmpty()) {
                     item {
                         SectionCard {
@@ -136,28 +124,49 @@ fun TodayScreen(
                         }
                     }
                 }
-                item(span = StaggeredGridItemSpan.FullLine) {
-                    TimelineCard(
-                        s,
-                        actions = PlanActions(
-                            accept = viewModel::accept,
-                            done = viewModel::done,
-                            decline = viewModel::decline,
-                            later = viewModel::later,
-                            replan = viewModel::replanNow,
-                        ),
-                    ) { entry ->
-                        editing = when (entry.kind) {
-                            EntryKind.EVENT -> s.events.firstOrNull { it.id == entry.refId }?.let { EditRequest.Event(it, LocalDate.now()) }
-                            EntryKind.JOB -> s.shifts.firstOrNull { it.id == entry.refId }?.let { EditRequest.Shift(it, LocalDate.now()) }
-                            EntryKind.ROUTINE -> s.routines.firstOrNull { it.id == entry.refId }?.let { EditRequest.Routine(it) }
-                            else -> null
+                s.cards.forEach { card ->
+                    when (card) {
+                        "NOW" -> item(key = card) { NowTile(s) }
+                        "TASKS" -> item(key = card) {
+                            TasksTile(
+                                s,
+                                onToggle = viewModel::toggleTask,
+                                onEdit = { task ->
+                                    editing = if (task.kind == app.lifedashboard.data.db.TaskKind.HOMEWORK) {
+                                        EditRequest.Homework(task)
+                                    } else {
+                                        EditRequest.Todo(task, null)
+                                    }
+                                },
+                                onOpenTasks = onOpenTasks,
+                            )
+                        }
+                        "EXAM" -> item(key = card) { ExamTile(s) }
+                        "HABITS" -> if (s.habits.isNotEmpty()) {
+                            item(key = card) { HabitsTile(s, onToggle = viewModel::toggleHabit, onOpen = onOpenGoals) }
+                        }
+                        "MONEY" -> item(key = card) { MoneyTile(s) }
+                        "ETSY" -> item(key = card) { EtsyTile(s) }
+                        "TIMELINE" -> item(key = card, span = StaggeredGridItemSpan.FullLine) {
+                            TimelineCard(
+                                s,
+                                actions = PlanActions(
+                                    accept = viewModel::accept,
+                                    done = viewModel::done,
+                                    decline = viewModel::decline,
+                                    later = viewModel::later,
+                                    replan = viewModel::replanNow,
+                                ),
+                            ) { entry ->
+                                editing = when (entry.kind) {
+                                    EntryKind.EVENT -> s.events.firstOrNull { it.id == entry.refId }?.let { EditRequest.Event(it, LocalDate.now()) }
+                                    EntryKind.JOB -> s.shifts.firstOrNull { it.id == entry.refId }?.let { EditRequest.Shift(it, LocalDate.now()) }
+                                    EntryKind.ROUTINE -> s.routines.firstOrNull { it.id == entry.refId }?.let { EditRequest.Routine(it) }
+                                    else -> null
+                                }
+                            }
                         }
                     }
-                }
-                item { ExamTile(s) }
-                if (s.habits.isNotEmpty()) {
-                    item { HabitsTile(s, onToggle = viewModel::toggleHabit, onOpen = onOpenGoals) }
                 }
             }
         }
@@ -451,3 +460,35 @@ private fun HabitsTile(s: TodayUiState.Ready, onToggle: (Long, Boolean) -> Unit,
         TextButton(onClick = onOpen, modifier = Modifier.align(Alignment.End)) { Text("Ziele ansehen") }
     }
 }
+
+@Composable
+private fun MoneyTile(s: TodayUiState.Ready) {
+    SectionCard {
+        TileHeader(Icons.Rounded.Euro, "Geld diesen Monat", LifeArea.JOB.color)
+        Text("Verfügbar: ${s.availableCents.euroText()}", style = MaterialTheme.typography.titleLarge)
+        if (s.budgetTotalCents > 0) {
+            val ratio = (s.monthSpentCents.toFloat() / s.budgetTotalCents).coerceAtMost(1f)
+            Text("Ausgegeben ${s.monthSpentCents.euroText()} von ${s.budgetTotalCents.euroText()} Budget", style = MaterialTheme.typography.bodyMedium)
+            androidx.compose.material3.LinearProgressIndicator(
+                progress = { ratio },
+                color = if (ratio >= 0.8f) Color(0xFFF2A21D) else LifeArea.SPORT.color,
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            )
+        } else {
+            Text("Ausgegeben: ${s.monthSpentCents.euroText()} · Budgets unter Mehr → Finanzen", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun EtsyTile(s: TodayUiState.Ready) {
+    SectionCard {
+        TileHeader(Icons.Rounded.Storefront, "Etsy", LifeArea.ETSY.color) {
+            Pill("${s.etsyOrders} Best.", LifeArea.ETSY.color)
+        }
+        Text("Umsatz diesen Monat: ${s.etsyRevenueCents.euroText()}", style = MaterialTheme.typography.titleMedium)
+        s.etsyNextStep?.let { Text("Nächster Schritt: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+}
+
+private fun Long.euroText() = euro()

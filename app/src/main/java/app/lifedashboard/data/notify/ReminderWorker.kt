@@ -41,6 +41,7 @@ class ReminderWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         runCatching { check() }
+        app.lifedashboard.widget.updateWidgets(applicationContext)
         return Result.success()
     }
 

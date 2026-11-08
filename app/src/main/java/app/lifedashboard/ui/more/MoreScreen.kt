@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AttachMoney
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
@@ -104,6 +105,23 @@ class MoreViewModel @Inject constructor(
         }
     }
 
+    fun toggleCard(key: String) {
+        val st = settings.value ?: return
+        val hidden = if (key in st.hiddenTodayCards) st.hiddenTodayCards - key else st.hiddenTodayCards + key
+        viewModelScope.launch { settingsRepository.setTodayCards(st.todayCards, hidden) }
+    }
+
+    fun moveCardUp(key: String) {
+        val st = settings.value ?: return
+        val order = st.todayCards.toMutableList()
+        val i = order.indexOf(key)
+        if (i > 0) {
+            order[i] = order[i - 1]
+            order[i - 1] = key
+            viewModelScope.launch { settingsRepository.setTodayCards(order, st.hiddenTodayCards) }
+        }
+    }
+
     fun setWeekendStart(minuteOfDay: Int) {
         viewModelScope.launch { settingsRepository.setWeekendDayStart(minuteOfDay) }
     }
@@ -111,7 +129,7 @@ class MoreViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoals: () -> Unit, onOpenFinance: () -> Unit, onOpenEtsy: () -> Unit, onOpenReview: () -> Unit, viewModel: MoreViewModel = hiltViewModel()) {
+fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoals: () -> Unit, onOpenFinance: () -> Unit, onOpenEtsy: () -> Unit, onOpenReview: () -> Unit, onOpenBackup: () -> Unit, viewModel: MoreViewModel = hiltViewModel()) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var editName by remember { mutableStateOf(false) }
@@ -143,6 +161,24 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoa
                             headlineContent = { Text("Dein Name") },
                             supportingContent = { Text(s.userName) },
                             modifier = Modifier.clickable { editName = true },
+                            colors = transparentItem(),
+                        )
+                        ListItem(
+                            headlineContent = { Text("Karten auf „Heute“") },
+                            supportingContent = {
+                                Column {
+                                    Text("Ein-/ausblenden und mit ↑ nach oben holen.")
+                                    s.todayCards.forEachIndexed { index, key ->
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            androidx.compose.material3.Checkbox(checked = key !in s.hiddenTodayCards, onCheckedChange = { viewModel.toggleCard(key) })
+                                            Text(app.lifedashboard.data.settings.todayCardLabel(key), modifier = Modifier.weight(1f))
+                                            if (index > 0) {
+                                                IconButton(onClick = { viewModel.moveCardUp(key) }) { Icon(Icons.Rounded.KeyboardArrowUp, "nach oben") }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
                             colors = transparentItem(),
                         )
                         ListItem(
@@ -209,6 +245,12 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoa
                             },
                             colors = transparentItem(),
                         )
+                    }
+                }
+                item { SectionTitle("Daten") }
+                item {
+                    SectionCard {
+                        AreaItem(Icons.Rounded.Backup, LifeArea.SCHOOL.color, "Backup & Übertragen", "Verschlüsselt sichern, aufs Tablet übertragen", onOpenBackup)
                     }
                 }
                 item { SectionTitle("Info") }

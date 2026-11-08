@@ -41,12 +41,30 @@ data class AppSettings(
     /** Stundenlohn im Job in Cent (0 = noch nicht eingetragen). */
     val jobWageCents: Long,
     val etsyFees: app.lifedashboard.planner.EtsyFees,
+    /** Reihenfolge der Karten auf „Heute“ */
+    val todayCards: List<String>,
+    /** Ausgeblendete Karten auf „Heute“ */
+    val hiddenTodayCards: Set<String>,
 ) {
     fun weekCalculator() = SchoolWeekCalculator(abReferenceMonday, abReferenceType)
 
     /** Am Wochenende beginnt der Tag später. */
     fun dayStartFor(date: LocalDate): LocalTime =
         if (date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY) weekendDayStart else dayStart
+}
+
+/** Alle Karten, die auf „Heute“ angezeigt werden können. */
+val ALL_TODAY_CARDS = listOf("NOW", "TASKS", "EXAM", "TIMELINE", "HABITS", "MONEY", "ETSY")
+
+fun todayCardLabel(key: String) = when (key) {
+    "NOW" -> "Jetzt & Als Nächstes"
+    "TASKS" -> "Hausaufgaben & Aufgaben"
+    "EXAM" -> "Nächste Klausur"
+    "TIMELINE" -> "Tagesplan"
+    "HABITS" -> "Gewohnheiten"
+    "MONEY" -> "Ausgaben vs. Budget"
+    "ETSY" -> "Etsy"
+    else -> key
 }
 
 /** Einfache Einstellungen (kein sensibler Inhalt) – gespeichert mit Jetpack DataStore. */
@@ -70,6 +88,10 @@ class SettingsRepository @Inject constructor(
                 seedVersion = p[SEED_VERSION] ?: 0,
                 bufferCents = p[BUFFER] ?: 0L,
                 jobWageCents = p[JOB_WAGE] ?: 0L,
+                todayCards = (p[TODAY_CARDS]?.split(',')?.filter { it.isNotBlank() } ?: emptyList()).let { saved ->
+                    saved.filter { it in ALL_TODAY_CARDS } + ALL_TODAY_CARDS.filter { it !in saved }
+                },
+                hiddenTodayCards = p[HIDDEN_CARDS]?.split(',')?.filter { it.isNotBlank() }?.toSet() ?: emptySet(),
                 etsyFees = app.lifedashboard.planner.EtsyFees(
                     listingFeeCents = p[ETSY_LISTING] ?: 18L,
                     transactionPercent = (p[ETSY_TRANSACTION_BP] ?: 650) / 100.0,
@@ -121,6 +143,13 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[JOB_WAGE] = cents.coerceAtLeast(0) }
     }
 
+    suspend fun setTodayCards(order: List<String>, hidden: Set<String>) {
+        dataStore.edit {
+            it[TODAY_CARDS] = order.joinToString(",")
+            it[HIDDEN_CARDS] = hidden.joinToString(",")
+        }
+    }
+
     suspend fun setEtsyFees(fees: app.lifedashboard.planner.EtsyFees) {
         dataStore.edit {
             it[ETSY_LISTING] = fees.listingFeeCents
@@ -149,6 +178,8 @@ class SettingsRepository @Inject constructor(
         val PRIORITY_ORDER = stringPreferencesKey("priority_order")
         val BUFFER = androidx.datastore.preferences.core.longPreferencesKey("buffer_cents")
         val JOB_WAGE = androidx.datastore.preferences.core.longPreferencesKey("job_wage_cents")
+        val TODAY_CARDS = stringPreferencesKey("today_cards")
+        val HIDDEN_CARDS = stringPreferencesKey("hidden_today_cards")
         val ETSY_LISTING = androidx.datastore.preferences.core.longPreferencesKey("etsy_listing_cents")
         val ETSY_TRANSACTION_BP = intPreferencesKey("etsy_transaction_bp")
         val ETSY_PROCESSING_BP = intPreferencesKey("etsy_processing_bp")

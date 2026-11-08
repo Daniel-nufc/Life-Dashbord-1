@@ -15,6 +15,7 @@ import app.lifedashboard.data.repository.AgendaRange
 import app.lifedashboard.data.repository.AgendaRepository
 import app.lifedashboard.data.repository.ExamWithTopics
 import app.lifedashboard.data.repository.GoalRepository
+import app.lifedashboard.data.repository.nextStepHint
 import app.lifedashboard.data.repository.HabitStatus
 import app.lifedashboard.data.repository.StudyOverview
 import app.lifedashboard.data.repository.StudyRepository
@@ -70,11 +71,26 @@ sealed interface TodayUiState {
         val plannedBlocks: Int,
         val nextExam: ExamWithTopics?,
         val habits: List<HabitStatus>,
+        val cards: List<String>,
+        val monthSpentCents: Long,
+        val budgetTotalCents: Long,
+        val availableCents: Long,
+        val etsyRevenueCents: Long,
+        val etsyOrders: Int,
+        val etsyNextStep: String?,
         val now: LocalDateTime,
     ) : TodayUiState
 }
 
-private data class Inputs(val range: AgendaRange, val plan: List<PlanBlockEntity>, val study: StudyOverview, val habits: List<HabitStatus>)
+private data class Inputs(
+    val range: AgendaRange,
+    val plan: List<PlanBlockEntity>,
+    val study: StudyOverview,
+    val habits: List<HabitStatus>,
+    val extra: Extra,
+)
+
+private data class Extra(val money: app.lifedashboard.data.repository.FinanceOverview?, val etsy: app.lifedashboard.data.repository.EtsyOverview?)
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
@@ -84,6 +100,8 @@ class TodayViewModel @Inject constructor(
     private val engine: PlanningEngine,
     study: StudyRepository,
     private val goals: GoalRepository,
+    private val finance: app.lifedashboard.data.repository.FinanceRepository,
+    private val etsy: app.lifedashboard.data.repository.EtsyRepository,
 ) : ViewModel() {
 
     /** Tickt jede Minute, damit „Jetzt“ und „Als Nächstes“ aktuell bleiben. */
@@ -98,7 +116,8 @@ class TodayViewModel @Inject constructor(
     private val date = clock.map { it.toLocalDate() }.distinctUntilChanged()
 
     private val inputs = date.flatMapLatest { d ->
-        combine(agenda.observe(d, 2), engine.observeDay(d), study.overview(d), goals.habits(d)) { r, p, s, h -> Inputs(r, p, s, h) }
+        val extra = combine(finance.overview(d), etsy.overview(d)) { m, e -> Extra(m, e) }
+        combine(agenda.observe(d, 2), engine.observeDay(d), study.overview(d), goals.habits(d), extra) { r, p, s, h, x -> Inputs(r, p, s, h, x) }
     }
 
     val state: StateFlow<TodayUiState> = inputs
@@ -200,6 +219,13 @@ class TodayViewModel @Inject constructor(
             plannedBlocks = input.plan.count { it.status != PlanStatus.DECLINED && it.status != PlanStatus.MOVED },
             nextExam = nextExam,
             habits = input.habits,
+            cards = range.settings.todayCards.filter { it !in range.settings.hiddenTodayCards },
+            monthSpentCents = input.extra.money?.monthSpentCents ?: 0,
+            budgetTotalCents = input.extra.money?.budgets?.sumOf { it.limitCents } ?: 0,
+            availableCents = input.extra.money?.availableCents ?: 0,
+            etsyRevenueCents = input.extra.etsy?.thisMonth?.revenueCents ?: 0,
+            etsyOrders = input.extra.etsy?.thisMonth?.orders ?: 0,
+            etsyNextStep = input.extra.etsy?.nextDesign?.let { "${it.title}: ${it.status.nextStepHint()}" },
             now = now,
         )
     }
