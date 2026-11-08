@@ -12,11 +12,16 @@ Zeigt alle Lebensbereiche auf einen Blick und **plant Tag und Woche aktiv**: Sch
 | Phase | Inhalt | Status |
 |---|---|---|
 | 1 | Grundgerüst, Stundenplan A/B, App-Sperre, automatischer APK-Build | ✅ |
-| 2a | Buntes Design, Kalender (Woche), Termine, Hausaufgaben, Aufgaben, Job-Schichten, Training bearbeiten | ✅ |
-| 2b | Samsung-/Google-Kalender, Abgaben aus Lernraum/IServ (iCal) | ⏳ |
-| 3 | Lernen & Klausuren, Lernplan | ⏳ |
-| 4 | Heute + Tagesplanung | ⏳ |
-| 5–11 | Sport, Finanzen, Etsy, Schnelleingabe, Benachrichtigungen, Widgets, Backup | ⏳ |
+| 2 | Buntes Design, Kalender (Woche), Termine, Hausaufgaben, Aufgaben, Job-Schichten, Handy-Kalender, Lernraum/IServ-Abos (iCal) | ✅ |
+| 3 | Lernen: Klausuren, Themen, Lernplan rückwärts, Wiederholungen, Notenpunkte & Ziel 1,7, Fokus-Timer 25/5 | ✅ |
+| 4 | Intelligente Tagesplanung: Vorschläge annehmen/verschieben/ablehnen, Neuplanung, lernt aus Entscheidungen | ✅ |
+| 5 | Sport-Log, Health Connect (Schritte & Schlaf), Ziele, Gewohnheiten mit Streaks & Joker | ✅ |
+| 6 | Finanzen: DKB + Bargeld, CSV-Import, Kategorien lernen, Budgets, Puffer, Abos, Sparziele, Prognose | ✅ |
+| 7 | Etsy: Umsatz/Netto, Motiv-Pipeline, Verkäufe, Statistik, Checkliste (API, sobald der Shop live ist) | ✅ / API ⏳ |
+| 8 | Offline-Schnelleingabe („Mi 17 Uhr Zahnarzt“, „HA Mathe S. 45“ …) | ✅ |
+| 9 | Benachrichtigungen (Ruhezeit, max. 5/Tag, Coach-Ton) + Wochenrückblick | ✅ |
+| 10 | Homescreen-Widgets: Heute & Klausur-Countdown | ✅ |
+| 11 | Verschlüsseltes Backup, Auto-Backup, Übertragung Handy ↔ Tablet | ✅ |
 
 ---
 
@@ -63,13 +68,30 @@ Der Schlüssel liegt **nicht** im Code, sondern als Secret bei GitHub:
 
 ---
 
-## 3. Was du in Phase 1 testen kannst
-- **App-Sperre:** Beim Öffnen fragt die App nach Fingerabdruck oder PIN. Nach mehr als 1 Minute im Hintergrund sperrt sie sich wieder. Abschalten unter *Mehr → App-Sperre*.
-- **Heute:** Zeigt deinen Tagesablauf mit Unterricht, Schul- und Heimweg, Floorball und **freien Zeitfenstern** sowie „Jetzt / Als Nächstes“.
-- **Kalender → Stundenplan:** Umschalten zwischen Woche A und B. Ein Tipp auf einen Block öffnet den Dialog zum Ändern (Fach, Raum, „gilt für A/B/jede Woche“).
-- **Mehr:** A/B-Woche korrigieren, Schulweg-Minuten einstellen.
-- **Tablet:** Navigation an der Seite, im Stundenplan mehrere Tage nebeneinander.
-- **Dark Mode & Dynamic Color:** Die Farben folgen deinem Hintergrundbild und dem Dark-Mode-Schalter.
+## 3. Kurzer Rundgang
+
+- **Heute:** Begrüßung, Coach-Satz und Freizeit-Ring. Darunter die Schnelleingabe („Mi 17 Uhr Zahnarzt“). Der **Tagesplan** zeigt Schule, Training und Termine, die App schlägt Blöcke dafür vor. Mit ✓ Passt, ⏭ Später oder ✕ entscheidest du, und die App lernt daraus. Dazu kommen Kacheln für Aufgaben, Klausur, Gewohnheiten, Geld und Etsy. Die Karten lassen sich unter *Mehr → Einstellungen* sortieren und ausblenden.
+- **Kalender:** Wochenansicht mit allem Wichtigen und der Stundenplan (A/B), über **+** trägst du Neues ein.
+- **Aufgaben:** Hausaufgaben (automatisch fällig zur nächsten Stunde des Fachs) und To-dos mit Filtern.
+- **Lernen:** Klausuren mit Themen und Fortschritt, automatischer Lernplan, Wiederholungen, Notenpunkte mit Ziel 1,7, Fokus-Timer.
+- **Mehr:**
+  - Sport (Log, Schritte & Schlaf, Floorball-Zeiten)
+  - Ziele & Gewohnheiten
+  - Finanzen
+  - Etsy
+  - Wochenrückblick
+  - Kalender & Abos (Handy-Kalender, Lernraum-Link)
+  - Backup & Übertragen
+  - Einstellungen (A/B-Woche, Schulweg, Wochenende, Prioritäten, App-Sperre)
+- **Widgets:** Homescreen lange drücken → Widgets → „Life Dashboard“.
+
+### Erste Schritte nach der Installation
+1. *Mehr → Einstellungen:* Schulweg-Minuten prüfen und den Namen anpassen.
+2. *Lernen → Klausuren:* Klausuren mit Themen eintragen, dann entsteht der Lernplan.
+3. *Lernen → Noten:* Pro Fach einstellen, wie schwer es dir fällt (Antippen).
+4. *Mehr → Finanzen:* den Startstand von DKB und Bargeld eintragen und den **Puffer** festlegen.
+5. *Mehr → Kalender & Abos:* Handy-Kalender erlauben, optional den Lernraum-Link eintragen.
+6. *Mehr → Sport:* Health Connect verbinden.
 
 ---
 
@@ -89,7 +111,9 @@ planner/    Planungs-Logik ohne Android (freie Zeitfenster, A/B-Woche, später L
 docs/       Plan & Doku
 ```
 
-**Tests lokal ausführen:** `./gradlew test`
+**Tests lokal ausführen:** `./gradlew :planner:test :app:testDebugUnitTest`
+
+Getestet werden: Planer (freie Zeiten, A/B-Woche, nächste Stunde, Tagesplanung), Lernplan & Spaced Repetition, Noten, Streaks, iCal-Leser, DKB-CSV, Kategorisierung, Abo-Erkennung, Monatsprognose, Etsy-Gebühren, Schnelleingabe und **alle Datenbank-Migrationen** (damit Updates nie Daten verlieren).
 Die Tests laufen auch bei jedem Push auf GitHub.
 
 > Die Versionen sind bewusst bewährte Stände (AGP 8.13 / API 36). Die App läuft damit auf Android 17 (S25) und Android 16 (Tab S8+). Ein Upgrade auf AGP 9 / API 37 folgt in einer späteren Phase.

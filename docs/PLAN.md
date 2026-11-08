@@ -1,6 +1,6 @@
 # Life Dashboard – Projektplan (Entwurf v1, 08.11.2026)
 
-> Status: **freigegeben** – Phase 1 in Arbeit.
+> Status: **Phasen 1–11 umgesetzt** (08.11.2026). Offen: Etsy-API-Anbindung (sobald der Shop live ist), optional KI-Assistent.
 
 ---
 
