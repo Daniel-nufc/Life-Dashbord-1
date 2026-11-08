@@ -36,6 +36,10 @@ data class AppSettings(
     val systemCalendarIds: Set<Long>,
     /** Reihenfolge der Bereiche bei Konflikten, Standard: Schule > Sport > Etsy. */
     val priorityOrder: List<String>,
+    /** Geschützter Puffer (Notgroschen) in Cent – wird nie als „verfügbar“ gezählt. */
+    val bufferCents: Long,
+    /** Stundenlohn im Job in Cent (0 = noch nicht eingetragen). */
+    val jobWageCents: Long,
 ) {
     fun weekCalculator() = SchoolWeekCalculator(abReferenceMonday, abReferenceType)
 
@@ -63,6 +67,8 @@ class SettingsRepository @Inject constructor(
                 userName = p[USER_NAME] ?: "Daniel",
                 weekendDayStart = minuteToTime(p[WEEKEND_START] ?: (9 * 60 + 30)),
                 seedVersion = p[SEED_VERSION] ?: 0,
+                bufferCents = p[BUFFER] ?: 0L,
+                jobWageCents = p[JOB_WAGE] ?: 0L,
                 priorityOrder = (p[PRIORITY_ORDER] ?: "SCHOOL,SPORT,ETSY").split(',').filter { it.isNotBlank() },
                 systemCalendarIds = p[SYSTEM_CALENDARS].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
             )
@@ -100,6 +106,14 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[PRIORITY_ORDER] = order.joinToString(",") }
     }
 
+    suspend fun setBufferCents(cents: Long) {
+        dataStore.edit { it[BUFFER] = cents.coerceAtLeast(0) }
+    }
+
+    suspend fun setJobWageCents(cents: Long) {
+        dataStore.edit { it[JOB_WAGE] = cents.coerceAtLeast(0) }
+    }
+
     suspend fun setSeedVersion(version: Int) {
         dataStore.edit { it[SEED_VERSION] = version }
     }
@@ -117,6 +131,8 @@ class SettingsRepository @Inject constructor(
         val SEED_VERSION = intPreferencesKey("seed_version")
         val SYSTEM_CALENDARS = stringPreferencesKey("system_calendar_ids")
         val PRIORITY_ORDER = stringPreferencesKey("priority_order")
+        val BUFFER = androidx.datastore.preferences.core.longPreferencesKey("buffer_cents")
+        val JOB_WAGE = androidx.datastore.preferences.core.longPreferencesKey("job_wage_cents")
 
         /** KW 46/2026 (ab Mo 9.11.) ist Woche A. */
         val DEFAULT_AB_REFERENCE: LocalDate = LocalDate.of(2026, 11, 9)

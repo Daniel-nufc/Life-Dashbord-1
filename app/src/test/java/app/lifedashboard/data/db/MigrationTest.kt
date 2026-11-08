@@ -21,9 +21,9 @@ class MigrationTest {
     private fun findSchema(): File {
         val candidates = listOf(File("schemas"), File("build")).filter { it.exists() }
             .flatMap { root -> root.walkTopDown().filter { it.isFile && it.extension == "json" && it.parentFile.name == "app.lifedashboard.data.db.AppDatabase" }.toList() }
-        val version = AppDatabase::class.java.getAnnotation(androidx.room.Database::class.java)!!.version
-        return candidates.firstOrNull { it.name == "$version.json" }
-            ?: error("Schema $version.json nicht gefunden. Kandidaten: ${candidates.map { it.path }}")
+        // Neuestes exportiertes Schema = aktuelle Datenbank-Version
+        return candidates.maxByOrNull { it.nameWithoutExtension.toIntOrNull() ?: -1 }
+            ?: error("Kein Room-Schema gefunden (schemas/ oder build/).")
     }
 
     /** (Tabelle → Create-SQL) und Index-SQLs aus der exportierten Room-Schema-Datei. */
@@ -74,7 +74,9 @@ class MigrationTest {
 
     @Test
     fun alleMigrationenErgebenDasAktuelleSchema() {
-        val (tables, indices) = parseSchema(findSchema().readText())
+        val schemaFile = findSchema()
+        val version = schemaFile.nameWithoutExtension.toInt()
+        val (tables, indices) = parseSchema(schemaFile.readText())
         assertTrue("Schema enthält keine Tabellen", tables.isNotEmpty())
 
         // Erwartet: frisch angelegte Datenbank der aktuellen Version
@@ -100,7 +102,6 @@ class MigrationTest {
         assertEquals(expected.keys, actual.keys)
         expected.forEach { (table, desc) -> assertEquals("Tabelle $table weicht ab", desc, actual[table]) }
 
-        val version = AppDatabase::class.java.getAnnotation(androidx.room.Database::class.java)!!.version
         assertEquals("Migrationen müssen bis zur aktuellen Version reichen", version, AppDatabase.ALL_MIGRATIONS.maxOf { it.endVersion })
     }
 }

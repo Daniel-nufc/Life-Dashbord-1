@@ -37,10 +37,11 @@ enum class TopLevelDestination(val route: String, val label: String, val icon: I
 private const val SPORT_ROUTE = "sport"
 private const val CONNECTIONS_ROUTE = "connections"
 private const val GOALS_ROUTE = "goals"
+private const val FINANCE_ROUTE = "finance"
 
 /** Unterseiten gehören optisch zu einem Tab (z. B. Sport → Mehr). */
 private fun topLevelFor(route: String?): String? = when (route) {
-    SPORT_ROUTE, CONNECTIONS_ROUTE, GOALS_ROUTE -> TopLevelDestination.MORE.route
+    SPORT_ROUTE, CONNECTIONS_ROUTE, GOALS_ROUTE, FINANCE_ROUTE -> TopLevelDestination.MORE.route
     else -> route
 }
 
@@ -89,8 +90,10 @@ fun LifeDashboardRoot() {
                     onOpenSport = { navController.navigate(SPORT_ROUTE) },
                     onOpenConnections = { navController.navigate(CONNECTIONS_ROUTE) },
                     onOpenGoals = { navController.navigate(GOALS_ROUTE) },
+                    onOpenFinance = { navController.navigate(FINANCE_ROUTE) },
                 )
             }
+            composable(FINANCE_ROUTE) { app.lifedashboard.ui.finance.FinanceScreen(onBack = { navController.popBackStack() }) }
             composable(SPORT_ROUTE) { SportScreen(onBack = { navController.popBackStack() }) }
             composable(GOALS_ROUTE) { app.lifedashboard.ui.goals.GoalsScreen(onBack = { navController.popBackStack() }) }
             composable(CONNECTIONS_ROUTE) { ConnectionsScreen(onBack = { navController.popBackStack() }) }

@@ -261,3 +261,72 @@ interface GoalDao {
     @Insert
     suspend fun insertMilestones(milestones: List<MilestoneEntity>)
 }
+
+@Dao
+interface FinanceDao {
+    @Query("SELECT * FROM accounts ORDER BY sortOrder, id")
+    fun observeAccounts(): Flow<List<AccountEntity>>
+
+    @Query("SELECT * FROM accounts ORDER BY sortOrder, id")
+    suspend fun accounts(): List<AccountEntity>
+
+    @Upsert
+    suspend fun upsertAccount(account: AccountEntity): Long
+
+    @Query("SELECT * FROM transactions ORDER BY dateEpochDay DESC, id DESC")
+    fun observeTransactions(): Flow<List<TransactionEntity>>
+
+    @Upsert
+    suspend fun upsertTransaction(tx: TransactionEntity)
+
+    @Insert
+    suspend fun insertTransactions(tx: List<TransactionEntity>)
+
+    @Query("DELETE FROM transactions WHERE id = :id")
+    suspend fun deleteTransaction(id: Long)
+
+    @Query("SELECT importHash FROM transactions WHERE importHash IS NOT NULL")
+    suspend fun importHashes(): List<String>
+
+    @Query("SELECT COUNT(*) FROM transactions WHERE recurringId = :recurringId AND dateEpochDay = :day")
+    suspend fun countRecurringOn(recurringId: Long, day: Long): Int
+
+    @Query("SELECT * FROM category_rules")
+    fun observeRules(): Flow<List<CategoryRuleEntity>>
+
+    @Query("SELECT * FROM category_rules")
+    suspend fun rules(): List<CategoryRuleEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putRule(rule: CategoryRuleEntity)
+
+    @Query("SELECT * FROM budgets ORDER BY category")
+    fun observeBudgets(): Flow<List<BudgetEntity>>
+
+    @Upsert
+    suspend fun upsertBudget(budget: BudgetEntity)
+
+    @Query("DELETE FROM budgets WHERE category = :category")
+    suspend fun deleteBudget(category: String)
+
+    @Query("SELECT * FROM recurring ORDER BY dayOfMonth")
+    fun observeRecurring(): Flow<List<RecurringEntity>>
+
+    @Query("SELECT * FROM recurring WHERE active = 1")
+    suspend fun activeRecurring(): List<RecurringEntity>
+
+    @Upsert
+    suspend fun upsertRecurring(r: RecurringEntity)
+
+    @Query("DELETE FROM recurring WHERE id = :id")
+    suspend fun deleteRecurring(id: Long)
+
+    @Query("SELECT * FROM savings_goals ORDER BY id")
+    fun observeSavings(): Flow<List<SavingsGoalEntity>>
+
+    @Upsert
+    suspend fun upsertSavings(goal: SavingsGoalEntity)
+
+    @Query("DELETE FROM savings_goals WHERE id = :id")
+    suspend fun deleteSavings(id: Long)
+}

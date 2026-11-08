@@ -34,8 +34,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         HabitLogEntity::class,
         GoalEntity::class,
         MilestoneEntity::class,
+        AccountEntity::class,
+        TransactionEntity::class,
+        CategoryRuleEntity::class,
+        BudgetEntity::class,
+        RecurringEntity::class,
+        SavingsGoalEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -49,6 +55,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun planDao(): PlanDao
     abstract fun sportDao(): SportDao
     abstract fun goalDao(): GoalDao
+    abstract fun financeDao(): FinanceDao
 
     companion object {
         const val NAME = "lifedashboard.db"
@@ -182,6 +189,42 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        /** Phase 6: Finanzen. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `accounts` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `kind` TEXT NOT NULL, `initialBalanceCents` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `transactions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`accountId` INTEGER NOT NULL, `dateEpochDay` INTEGER NOT NULL, `amountCents` INTEGER NOT NULL, " +
+                        "`counterparty` TEXT NOT NULL, `description` TEXT NOT NULL, `category` TEXT, `importHash` TEXT, `recurringId` INTEGER)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_dateEpochDay` ON `transactions` (`dateEpochDay`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_accountId` ON `transactions` (`accountId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_importHash` ON `transactions` (`importHash`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `category_rules` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`keyword` TEXT NOT NULL, `category` TEXT NOT NULL, `hits` INTEGER NOT NULL)",
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_category_rules_keyword` ON `category_rules` (`keyword`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `budgets` (`category` TEXT NOT NULL, `monthlyLimitCents` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`category`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `recurring` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`accountId` INTEGER NOT NULL, `title` TEXT NOT NULL, `amountCents` INTEGER NOT NULL, `dayOfMonth` INTEGER NOT NULL, " +
+                        "`category` TEXT, `active` INTEGER NOT NULL, `lastGeneratedEpochDay` INTEGER)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `savings_goals` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`title` TEXT NOT NULL, `targetCents` INTEGER NOT NULL, `savedCents` INTEGER NOT NULL, `deadlineEpochDay` INTEGER)",
+                )
+            }
+        }
+
+        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
     }
 }

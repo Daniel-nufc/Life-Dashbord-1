@@ -275,3 +275,68 @@ data class MilestoneEntity(
     val sortOrder: Int,
     val done: Boolean,
 )
+
+enum class AccountKind { BANK, CASH, SAVINGS }
+
+@Entity(tableName = "accounts")
+data class AccountEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val kind: AccountKind,
+    val initialBalanceCents: Long,
+    val sortOrder: Int,
+)
+
+/** Umsatz in Cent (negativ = Ausgabe). Kategorie als Name, z. B. „Lebensmittel“. */
+@Entity(
+    tableName = "transactions",
+    indices = [Index("dateEpochDay"), Index("accountId"), Index("importHash")],
+)
+data class TransactionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val accountId: Long,
+    val dateEpochDay: Long,
+    val amountCents: Long,
+    val counterparty: String,
+    val description: String,
+    val category: String?,
+    val importHash: String?,
+    val recurringId: Long?,
+)
+
+/** Gelernte Kategorie-Regel aus deinen Korrekturen. */
+@Entity(tableName = "category_rules", indices = [Index(value = ["keyword"], unique = true)])
+data class CategoryRuleEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val keyword: String,
+    val category: String,
+    val hits: Int,
+)
+
+@Entity(tableName = "budgets")
+data class BudgetEntity(
+    @PrimaryKey val category: String,
+    val monthlyLimitCents: Long,
+)
+
+/** Feste Buchung jeden Monat (Taschengeld, Abo …) – wird automatisch eingetragen. */
+@Entity(tableName = "recurring")
+data class RecurringEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val accountId: Long,
+    val title: String,
+    val amountCents: Long,
+    val dayOfMonth: Int,
+    val category: String?,
+    val active: Boolean,
+    val lastGeneratedEpochDay: Long?,
+)
+
+@Entity(tableName = "savings_goals")
+data class SavingsGoalEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val targetCents: Long,
+    val savedCents: Long,
+    val deadlineEpochDay: Long?,
+)

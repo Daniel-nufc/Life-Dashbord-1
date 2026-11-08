@@ -7,7 +7,10 @@ import app.lifedashboard.data.db.RoutineBlockEntity
 import app.lifedashboard.data.db.SchoolPeriodEntity
 import app.lifedashboard.data.db.SubjectEntity
 import app.lifedashboard.data.db.TimetableLessonEntity
+import app.lifedashboard.data.db.AccountEntity
+import app.lifedashboard.data.db.AccountKind
 import app.lifedashboard.data.db.GoalEntity
+import app.lifedashboard.data.db.RecurringEntity
 import app.lifedashboard.data.db.HabitEntity
 import app.lifedashboard.data.db.MilestoneEntity
 import app.lifedashboard.data.db.TaskEntity
@@ -42,6 +45,21 @@ class SeedDataInitializer @Inject constructor(
             seedGoalsAndHabits()
             settings.setSeedVersion(3)
         }
+        if (version < 4) {
+            seedFinance()
+            settings.setSeedVersion(4)
+        }
+    }
+
+    /** Konten DKB + Bargeld und dein Taschengeld (Eltern 20 € am 21., Opa 20 € bar). */
+    private suspend fun seedFinance() {
+        val dao = db.financeDao()
+        if (dao.accounts().isNotEmpty()) return
+        val dkb = dao.upsertAccount(AccountEntity(name = "DKB Girokonto", kind = AccountKind.BANK, initialBalanceCents = 0, sortOrder = 0))
+        val cash = dao.upsertAccount(AccountEntity(name = "Bargeld", kind = AccountKind.CASH, initialBalanceCents = 0, sortOrder = 1))
+        val today = java.time.LocalDate.now().toEpochDay()
+        dao.upsertRecurring(RecurringEntity(accountId = dkb, title = "Taschengeld Eltern", amountCents = 2000, dayOfMonth = 21, category = "Taschengeld", active = true, lastGeneratedEpochDay = today))
+        dao.upsertRecurring(RecurringEntity(accountId = cash, title = "Taschengeld Opa", amountCents = 2000, dayOfMonth = 1, category = "Taschengeld", active = true, lastGeneratedEpochDay = today))
     }
 
     /** Deine Gewohnheiten und Ziele aus dem Fragebogen (08.11.2026). */
