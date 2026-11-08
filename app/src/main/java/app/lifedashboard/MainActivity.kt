@@ -1,0 +1,83 @@
+package app.lifedashboard
+
+import android.os.Bundle
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+import androidx.biometric.BiometricPrompt
+import androidx.compose.runtime.getValue
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.lifedashboard.core.security.AppLockManager
+import app.lifedashboard.ui.lock.LockScreen
+import app.lifedashboard.ui.navigation.LifeDashboardRoot
+import app.lifedashboard.ui.theme.LifeDashboardTheme
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+
+@AndroidEntryPoint
+class MainActivity : FragmentActivity() {
+
+    @Inject lateinit var appLock: AppLockManager
+
+    private var promptShowing = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+        setContent {
+            LifeDashboardTheme {
+                val locked by appLock.locked.collectAsStateWithLifecycle()
+                if (locked) {
+                    LockScreen(onUnlockRequest = ::authenticate)
+                } else {
+                    LifeDashboardRoot()
+                }
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        appLock.onAppForeground()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        appLock.onAppBackground()
+    }
+
+    /** Fingerabdruck/Gesicht, ersatzweise Geräte-PIN. Ohne eingerichtete Sperre: direkt öffnen. */
+    private fun authenticate() {
+        if (promptShowing) return
+        val authenticators = BIOMETRIC_STRONG or DEVICE_CREDENTIAL
+        if (BiometricManager.from(this).canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
+            appLock.unlock()
+            return
+        }
+        val prompt = BiometricPrompt(
+            this,
+            ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    promptShowing = false
+                    appLock.unlock()
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    promptShowing = false
+                }
+            },
+        )
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Life Dashboard entsperren")
+            .setSubtitle("Mit Fingerabdruck oder Geräte-PIN")
+            .setAllowedAuthenticators(authenticators)
+            .build()
+        promptShowing = true
+        prompt.authenticate(info)
+    }
+}

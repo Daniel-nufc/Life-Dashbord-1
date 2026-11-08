@@ -1,0 +1,72 @@
+name: Android-Build
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Java 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle einrichten
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Signatur-Schlüssel aus GitHub-Secrets holen
+        env:
+          KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$STORE_PASSWORD" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "SIGNING_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "HAS_SIGNING=true" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Keine Signatur-Secrets gesetzt – APK wird mit wechselndem Debug-Schlüssel signiert (Updates nur nach Deinstallation). Siehe README."
+          fi
+
+      - name: Unit-Tests
+        run: ./gradlew --no-daemon test
+
+      - name: APK bauen
+        run: ./gradlew --no-daemon :app:assembleRelease
+
+      - name: APK umbenennen
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk "dist/LifeDashboard-${{ github.run_number }}.apk"
+
+      - name: APK als Artefakt hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: LifeDashboard-${{ github.run_number }}
+          path: dist/*.apk
+
+      - name: Release zum Herunterladen aufs Handy erstellen
+        if: env.HAS_SIGNING == 'true' && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Life Dashboard Build ${{ github.run_number }} (${{ github.ref_name }})
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          body: |
+            Automatisch gebaut aus `${{ github.ref_name }}` (${{ github.sha }}).
+            Zum Installieren die APK unten auf dem Handy/Tablet herunterladen und öffnen.
+          files: dist/*.apk

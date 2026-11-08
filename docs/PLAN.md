@@ -1,6 +1,6 @@
 # Life Dashboard – Projektplan (Entwurf v1, 08.11.2026)
 
-> Status: **wartet auf OK**. Erst nach Freigabe wird Code geschrieben.
+> Status: **freigegeben** – Phase 1 in Arbeit.
 
 ---
 
@@ -16,7 +16,9 @@
 | Bank | **DKB, manuelle Eingabe**. Optional: DKB-CSV-Export importieren (Datei bleibt auf dem Handy, niemand sonst sieht sie) |
 | Etsy | Shop entsteht gerade → zuerst **manuelles Etsy-Modul** (Motiv-Pipeline, To-dos, Verkäufe eintragen). Etsy-API (OAuth/PKCE, nur lesen), sobald der Shop live ist |
 | Kalender | Eigener Kalender in der App (lesen **und** schreiben) + Android Calendar Provider (Samsung-/Google-Kalender lesen, optional in einen gewählten Kalender schreiben) |
-| KI-Assistent | Claude API mit Tool-Use (siehe Abschnitt 7). Opt-in, jede Aktion wird vorher zur Bestätigung angezeigt |
+| KI-Assistent | **Später** (kostet Geld). Bis dahin kostenlose Offline-Schnelleingabe („Mi 17 Uhr Zahnarzt“) |
+| Sync Handy ↔ Tablet | **Export-/Import-Datei** (verschlüsselt). Automatischer Sync evtl. später |
+| Hausaufgaben | Hausaufgabenplaner: Fälligkeit = automatisch nächste Stunde des Fachs laut Stundenplan, wird in freie Zeit eingeplant |
 | Benachrichtigungen | Ruhezeit 22:00–6:00, max. 5 pro Tag, Morgen-Zusammenfassung 6:15 |
 | Backup | Wöchentlich automatisch, mit Passwort verschlüsselt, in einen Ordner deiner Wahl |
 | Streaks | 1 Joker-Tag pro Woche – ein verpasster Tag zerstört nichts |
@@ -121,9 +123,9 @@ Design: große, einklappbare Überschrift oben (One-UI-Stil), runde Karten (24 d
 
 ## 6. Startdaten (echte Daten statt nur Beispiele)
 
-**Stundenplan** (Blöcke: 08:00–09:30 · 09:50–11:20 · 11:40–13:10 · 13:30–15:00). Ob KW 46 die A- oder B-Woche ist, ist noch offen.
+**Stundenplan** (Blöcke: 08:00–09:30 · 09:50–11:20 · 11:40–13:10 · 13:30–15:00). KW 46 (9.–13.11.) = **Woche A**, KW 47 = Woche B.
 
-| | Woche wie KW 46 | Woche wie KW 47 |
+| | Woche A (z. B. KW 46) | Woche B (z. B. KW 47) |
 |---|---|---|
 | Mo | DE-B F309 · BIO F305 · GeWi-B E207 · DS G025 | MA-B F309 · BIO F305 · GeWi-B E207 · DS G025 |
 | Di | TuMM-B G112 · TuMM-B G112 · TuMT-B G113 · TuMT-B G113 | gleich |
@@ -132,14 +134,15 @@ Design: große, einklappbare Überschrift oben (One-UI-Stil), runde Karten (24 d
 | Fr | MA-B F309 · PM F210 · E-B F309 · GeWi-B E207 | MA-B F309 · PM F210 · TuMT-B G113 · frei |
 
 - Minijob in Aussicht (vermutlich im freien Donnerstag-Fenster): Sobald es Schichten gibt, werden sie als feste Termine eingetragen und Lernzeit wird automatisch woandershin verteilt.
-- Tagesfenster: Aufstehen 6:00, Schlafen 22:00. Floorball Mo + Mi (Berliner TSC), Uhrzeiten offen.
+- Tagesfenster: Aufstehen 6:00, Schlafen 22:00. Floorball Mo + Mi (Berliner TSC): Abfahrt 18:00, Training 18:30–20:00 (ändert sich bald → editierbar).
+- Fächer: TuMM = Technik und Management – Management, TuMT = … – Technik, PM = Projektmanagement, BIO-Pro = Biologie, DS = Darstellendes Spiel. LKs/Schwierigkeit trägst du später selbst ein.
 - Ziel „Ironman“ als Stufenweg: 5 km laufen → Sprint-Triathlon (0,75/20/5) → Olympisch (1,5/40/10) → Mitteldistanz (1,9/90/21,1) → Ironman (3,8/180/42,2). Kleine Wochen-Habits mit „Minimalversion“ (10 Minuten zählen auch).
 - Etsy: Winter-Set (Rotkehlchen, Hütte, Fuchs) als Set mit drei Motiven. Offene To-dos: Probedruck Oma, Google-Lens-Check, Mockups + Titelbild, 15-oz-Datei, Entscheidung „Tagesaufgabe pausieren?“. Dazu eine Upload-Checkliste mit KI-Häkchen, „Designed by“ und Nachweis.
 - Berliner Schulferien 2026/27 hinterlegt.
 
 ---
 
-## 7. KI-Assistent
+## 7. KI-Assistent (später, optional – aktuell nicht geplant, weil kostenpflichtig)
 
 - Eingabe per Text oder Sprache, z. B. „Trag Mittwoch 17 Uhr Zahnarzt ein“, „Mathe-Klausur am 2.12., Themen: Ableitungen, Integrale“, „Verschieb mein Lernen heute auf morgen“.
 - Technik: **Claude API mit Tool-Use**. Die App stellt Werkzeuge bereit (`termin_anlegen`, `aufgabe_anlegen`, `klausur_anlegen`, `plan_verschieben`, `ausgabe_eintragen` …). Claude wählt aus, die App zeigt eine **Bestätigungskarte**, erst dann wird gespeichert. Jede Aktion ist rückgängig machbar.
@@ -157,16 +160,16 @@ Weil die Klausurphase in ~2 Wochen beginnt, kommt **Lernen + Planung früher** a
 | Phase | Inhalt | Ergebnis zum Testen |
 |---|---|---|
 | 1 | Grundgerüst: Projekt, GitHub-Actions-APK, Theme, Navigation (Handy + Tablet), Room + SQLCipher, Hilt, App-Sperre (Fingerabdruck), Stundenplan A/B | App startet, zeigt Stundenplan, Fingerabdruck-Sperre |
-| 2 | Kalender & Aufgaben (+ Job-Schichten): eigener Kalender, Systemkalender lesen/schreiben, To-dos mit Bereichen | Termine und Aufgaben eintragen, im Samsung-Kalender sichtbar |
+| 2 | Kalender, Aufgaben & **Hausaufgabenplaner** (+ Job-Schichten): eigener Kalender, Systemkalender lesen/schreiben, To-dos mit Bereichen | Termine und Aufgaben eintragen, im Samsung-Kalender sichtbar |
 | 3 | Lernen & Klausuren: Fächer, Klausuren, Themen, Lernplan rückwärts + Wiederholungen, Fokus-Timer, Noten (Punkte) | Klausuren eintragen → automatischer Lernplan |
 | 4 | Heute + Tagesplan-Engine: Zeitstrahl, Vorschläge annehmen/verschieben/ablehnen, Neuplanung, Morgen-Benachrichtigung | Täglicher Plan für die Klausurphase |
 | 5 | Sport + Ziele & Habits: Floorball, Workout-Log, Diagramme, Health Connect, Ironman-Stufen, Streaks | Training loggen, Schritte/Schlaf sehen |
 | 6 | Finanzen: Konten, manuelle Umsätze, DKB-CSV-Import, Kategorien lernen, Budgets, Abos, Prognose | Ausgaben vs. Budget |
 | 7 | Etsy: Motiv-Pipeline, To-dos, Verkäufe, Gebühren/Netto, Trends; danach Etsy-API mit Registrierungs-Anleitung | Etsy-Karte auf „Heute“ |
-| 8 | KI-Assistent | „Trag … ein“ funktioniert |
+| 8 | Offline-Schnelleingabe (KI-Assistent später, wenn gewünscht) | „Mi 17 Uhr Zahnarzt“ wird erkannt |
 | 9 | Benachrichtigungen komplett, Wochenrückblick, Planer lernt aus Feedback | Sonntags-Rückblick |
 | 10 | Widgets (Glance): Heute-Plan, nächste Klausur, Fokus-Timer | Widgets auf dem Homescreen |
-| 11 | Verschlüsseltes Backup/Export + Sync Handy ↔ Tablet | Gleiche Daten auf beiden Geräten |
+| 11 | Verschlüsseltes Backup + Export/Import zwischen Handy und Tablet | Daten aufs Tablet übertragen |
 
 Jede Phase endet mit: App kompiliert, Unit-Tests grün, APK per GitHub Actions, Test-Anleitung.
 
