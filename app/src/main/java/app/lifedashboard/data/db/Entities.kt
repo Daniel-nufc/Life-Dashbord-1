@@ -74,3 +74,45 @@ data class RoutineBlockEntity(
         .map { DayOfWeek.of(it) }
         .toSet()
 }
+
+/** Eigener Termin im Kalender. Ohne Uhrzeit = ganztägig. */
+@Entity(tableName = "events", indices = [Index("dateEpochDay")])
+data class EventEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val dateEpochDay: Long,
+    val startMinute: Int?,
+    val endMinute: Int?,
+    val area: LifeArea,
+    val location: String?,
+    val note: String?,
+)
+
+enum class TaskKind { HOMEWORK, TODO }
+
+/** Hausaufgabe oder To-do. Hausaufgaben gehören zu einem Fach. */
+@Entity(tableName = "tasks", indices = [Index("dueEpochDay"), Index("done")])
+data class TaskEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val area: LifeArea,
+    val kind: TaskKind,
+    val subjectId: Long?,
+    val dueEpochDay: Long?,
+    val estimatedMinutes: Int,
+    val done: Boolean,
+    val doneAtMillis: Long?,
+    val note: String?,
+    val createdAtMillis: Long,
+)
+
+/** Schicht im Minijob. */
+@Entity(tableName = "job_shifts", indices = [Index("dateEpochDay")])
+data class JobShiftEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val dateEpochDay: Long,
+    val startMinute: Int,
+    val endMinute: Int,
+    val note: String?,
+    val hourlyWageCents: Int?,
+)

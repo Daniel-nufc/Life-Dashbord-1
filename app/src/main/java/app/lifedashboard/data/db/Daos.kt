@@ -51,3 +51,45 @@ interface RoutineDao {
     @Upsert
     suspend fun upsert(block: RoutineBlockEntity)
 }
+
+@Dao
+interface EventDao {
+    @Query("SELECT * FROM events WHERE dateEpochDay BETWEEN :fromDay AND :toDay ORDER BY dateEpochDay, startMinute")
+    fun observeBetween(fromDay: Long, toDay: Long): Flow<List<EventEntity>>
+
+    @Upsert
+    suspend fun upsert(event: EventEntity)
+
+    @Query("DELETE FROM events WHERE id = :id")
+    suspend fun delete(id: Long)
+}
+
+@Dao
+interface TaskDao {
+    @Query("SELECT * FROM tasks ORDER BY done, dueEpochDay IS NULL, dueEpochDay, createdAtMillis")
+    fun observeAll(): Flow<List<TaskEntity>>
+
+    @Upsert
+    suspend fun upsert(task: TaskEntity)
+
+    @Insert
+    suspend fun insertAll(tasks: List<TaskEntity>)
+
+    @Query("UPDATE tasks SET done = :done, doneAtMillis = :doneAt WHERE id = :id")
+    suspend fun setDone(id: Long, done: Boolean, doneAt: Long?)
+
+    @Query("DELETE FROM tasks WHERE id = :id")
+    suspend fun delete(id: Long)
+}
+
+@Dao
+interface JobShiftDao {
+    @Query("SELECT * FROM job_shifts WHERE dateEpochDay BETWEEN :fromDay AND :toDay ORDER BY dateEpochDay, startMinute")
+    fun observeBetween(fromDay: Long, toDay: Long): Flow<List<JobShiftEntity>>
+
+    @Upsert
+    suspend fun upsert(shift: JobShiftEntity)
+
+    @Query("DELETE FROM job_shifts WHERE id = :id")
+    suspend fun delete(id: Long)
+}

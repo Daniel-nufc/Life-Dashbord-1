@@ -12,6 +12,7 @@ import app.lifedashboard.planner.WeekType
 import app.lifedashboard.planner.minuteToTime
 import app.lifedashboard.planner.mondayOfWeek
 import java.io.IOException
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 import javax.inject.Inject
@@ -28,8 +29,15 @@ data class AppSettings(
     val dayStart: LocalTime,
     val dayEnd: LocalTime,
     val schoolCommuteMinutes: Int,
+    val userName: String,
+    val weekendDayStart: LocalTime,
+    val seedVersion: Int,
 ) {
     fun weekCalculator() = SchoolWeekCalculator(abReferenceMonday, abReferenceType)
+
+    /** Am Wochenende beginnt der Tag später. */
+    fun dayStartFor(date: LocalDate): LocalTime =
+        if (date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY) weekendDayStart else dayStart
 }
 
 /** Einfache Einstellungen (kein sensibler Inhalt) – gespeichert mit Jetpack DataStore. */
@@ -47,7 +55,10 @@ class SettingsRepository @Inject constructor(
                 abReferenceType = p[AB_TYPE]?.let(WeekType::valueOf) ?: WeekType.A,
                 dayStart = minuteToTime(p[DAY_START] ?: 6 * 60),
                 dayEnd = minuteToTime(p[DAY_END] ?: 22 * 60),
-                schoolCommuteMinutes = p[COMMUTE] ?: 45,
+                schoolCommuteMinutes = p[COMMUTE] ?: 25,
+                userName = p[USER_NAME] ?: "Daniel",
+                weekendDayStart = minuteToTime(p[WEEKEND_START] ?: (9 * 60 + 30)),
+                seedVersion = p[SEED_VERSION] ?: 0,
             )
         }
 
@@ -67,6 +78,18 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[COMMUTE] = minutes.coerceIn(0, 180) }
     }
 
+    suspend fun setUserName(name: String) {
+        dataStore.edit { it[USER_NAME] = name.trim().ifBlank { "Daniel" } }
+    }
+
+    suspend fun setWeekendDayStart(minuteOfDay: Int) {
+        dataStore.edit { it[WEEKEND_START] = minuteOfDay.coerceIn(0, 23 * 60) }
+    }
+
+    suspend fun setSeedVersion(version: Int) {
+        dataStore.edit { it[SEED_VERSION] = version }
+    }
+
     private companion object {
         val APP_LOCK = booleanPreferencesKey("app_lock_enabled")
         val LOCK_TIMEOUT = intPreferencesKey("lock_timeout_minutes")
@@ -75,6 +98,9 @@ class SettingsRepository @Inject constructor(
         val DAY_START = intPreferencesKey("day_start_minute")
         val DAY_END = intPreferencesKey("day_end_minute")
         val COMMUTE = intPreferencesKey("school_commute_minutes")
+        val USER_NAME = stringPreferencesKey("user_name")
+        val WEEKEND_START = intPreferencesKey("weekend_day_start_minute")
+        val SEED_VERSION = intPreferencesKey("seed_version")
 
         /** KW 46/2026 (ab Mo 9.11.) ist Woche A. */
         val DEFAULT_AB_REFERENCE: LocalDate = LocalDate.of(2026, 11, 9)

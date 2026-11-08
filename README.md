@@ -12,7 +12,8 @@ Zeigt alle Lebensbereiche auf einen Blick und **plant Tag und Woche aktiv**: Sch
 | Phase | Inhalt | Status |
 |---|---|---|
 | 1 | Grundgerüst, Stundenplan A/B, App-Sperre, automatischer APK-Build | ✅ |
-| 2 | Kalender, Aufgaben, Hausaufgabenplaner, Job-Schichten | ⏳ |
+| 2a | Buntes Design, Kalender (Woche), Termine, Hausaufgaben, Aufgaben, Job-Schichten, Training bearbeiten | ✅ |
+| 2b | Samsung-/Google-Kalender, Abgaben aus Lernraum/IServ (iCal) | ⏳ |
 | 3 | Lernen & Klausuren, Lernplan | ⏳ |
 | 4 | Heute + Tagesplanung | ⏳ |
 | 5–11 | Sport, Finanzen, Etsy, Schnelleingabe, Benachrichtigungen, Widgets, Backup | ⏳ |

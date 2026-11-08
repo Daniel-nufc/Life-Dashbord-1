@@ -8,7 +8,10 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
 import app.lifedashboard.core.security.DatabaseKeyProvider
 import app.lifedashboard.data.db.AppDatabase
+import app.lifedashboard.data.db.EventDao
+import app.lifedashboard.data.db.JobShiftDao
 import app.lifedashboard.data.db.RoutineDao
+import app.lifedashboard.data.db.TaskDao
 import app.lifedashboard.data.db.TimetableDao
 import dagger.Module
 import dagger.Provides
@@ -52,6 +55,7 @@ object AppModule {
         val factory = SupportOpenHelperFactory(keyProvider.getOrCreatePassphrase())
         return Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.NAME)
             .openHelperFactory(factory)
+            .addMigrations(AppDatabase.MIGRATION_1_2)
             .build()
     }
 
@@ -60,4 +64,13 @@ object AppModule {
 
     @Provides
     fun provideRoutineDao(db: AppDatabase): RoutineDao = db.routineDao()
+
+    @Provides
+    fun provideEventDao(db: AppDatabase): EventDao = db.eventDao()
+
+    @Provides
+    fun provideTaskDao(db: AppDatabase): TaskDao = db.taskDao()
+
+    @Provides
+    fun provideJobShiftDao(db: AppDatabase): JobShiftDao = db.jobShiftDao()
 }

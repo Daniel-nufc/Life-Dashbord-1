@@ -2,7 +2,7 @@ package app.lifedashboard.ui.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.FitnessCenter
+import androidx.compose.material.icons.rounded.ChecklistRtl
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Today
@@ -12,24 +12,41 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import app.lifedashboard.ui.calendar.CalendarScreen
 import app.lifedashboard.ui.more.MoreScreen
 import app.lifedashboard.ui.placeholder.ComingSoonScreen
 import app.lifedashboard.ui.sport.SportScreen
-import app.lifedashboard.ui.timetable.TimetableScreen
+import app.lifedashboard.ui.tasks.TasksScreen
 import app.lifedashboard.ui.today.TodayScreen
 
 enum class TopLevelDestination(val route: String, val label: String, val icon: ImageVector) {
     TODAY("today", "Heute", Icons.Rounded.Today),
     CALENDAR("calendar", "Kalender", Icons.Rounded.CalendarMonth),
+    TASKS("tasks", "Aufgaben", Icons.Rounded.ChecklistRtl),
     LEARN("learn", "Lernen", Icons.Rounded.School),
-    SPORT("sport", "Sport", Icons.Rounded.FitnessCenter),
     MORE("more", "Mehr", Icons.Rounded.MoreHoriz),
+}
+
+private const val SPORT_ROUTE = "sport"
+
+/** Unterseiten gehören optisch zu einem Tab (z. B. Sport → Mehr). */
+private fun topLevelFor(route: String?): String? = when (route) {
+    SPORT_ROUTE -> TopLevelDestination.MORE.route
+    else -> route
+}
+
+private fun NavHostController.openTab(route: String) {
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
 }
 
 /**
@@ -40,21 +57,14 @@ enum class TopLevelDestination(val route: String, val label: String, val icon: I
 fun LifeDashboardRoot() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentDestination = backStackEntry?.destination
+    val currentTab = topLevelFor(backStackEntry?.destination?.route)
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
             TopLevelDestination.entries.forEach { destination ->
-                val selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true
                 item(
-                    selected = selected,
-                    onClick = {
-                        navController.navigate(destination.route) {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
+                    selected = currentTab == destination.route,
+                    onClick = { navController.openTab(destination.route) },
                     icon = { Icon(destination.icon, contentDescription = destination.label) },
                     label = { Text(destination.label) },
                 )
@@ -62,8 +72,11 @@ fun LifeDashboardRoot() {
         },
     ) {
         NavHost(navController = navController, startDestination = TopLevelDestination.TODAY.route) {
-            composable(TopLevelDestination.TODAY.route) { TodayScreen() }
-            composable(TopLevelDestination.CALENDAR.route) { TimetableScreen() }
+            composable(TopLevelDestination.TODAY.route) {
+                TodayScreen(onOpenTasks = { navController.openTab(TopLevelDestination.TASKS.route) })
+            }
+            composable(TopLevelDestination.CALENDAR.route) { CalendarScreen() }
+            composable(TopLevelDestination.TASKS.route) { TasksScreen() }
             composable(TopLevelDestination.LEARN.route) {
                 ComingSoonScreen(
                     title = "Lernen",
@@ -72,15 +85,16 @@ fun LifeDashboardRoot() {
                     features = listOf(
                         "Klausuren mit Countdown und Themenlisten",
                         "Automatischer Lernplan rückwärts von der Klausur",
-                        "Wiederholungen nach Spaced Repetition",
-                        "Fokus-Timer (Pomodoro) mit Statistik",
-                        "Noten in Punkten (0–15) und Durchschnitt",
-                        "Hausaufgabenplaner (Phase 2) – fällig zur nächsten Stunde des Fachs",
+                        "Wiederholungen nach Spaced Repetition (auch für den Schulweg)",
+                        "Fokus-Timer 25/5 mit Statistik",
+                        "Notenpunkte (0–15), Schnitt und Ziel 1,7",
                     ),
                 )
             }
-            composable(TopLevelDestination.SPORT.route) { SportScreen() }
-            composable(TopLevelDestination.MORE.route) { MoreScreen() }
+            composable(TopLevelDestination.MORE.route) {
+                MoreScreen(onOpenSport = { navController.navigate(SPORT_ROUTE) })
+            }
+            composable(SPORT_ROUTE) { SportScreen(onBack = { navController.popBackStack() }) }
         }
     }
 }

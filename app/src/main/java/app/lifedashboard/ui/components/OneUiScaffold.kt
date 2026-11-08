@@ -28,6 +28,7 @@ import app.lifedashboard.ui.theme.LocalAppColors
 fun OneUiScaffold(
     title: String,
     modifier: Modifier = Modifier,
+    navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
     floatingActionButton: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
@@ -50,6 +51,7 @@ fun OneUiScaffold(
                         overflow = TextOverflow.Ellipsis,
                     )
                 },
+                navigationIcon = navigationIcon,
                 actions = actions,
                 expandedHeight = 200.dp,
                 scrollBehavior = scrollBehavior,

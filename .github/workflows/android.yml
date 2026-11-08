@@ -47,6 +47,9 @@ jobs:
       - name: APK bauen
         run: ./gradlew --no-daemon :app:assembleRelease
 
+      - name: Datenbank-Schema anzeigen (Kontrolle der Migrationen)
+        run: find app/schemas -name '*.json' -print -exec grep -h '"createSql"' {} \; || true
+
       - name: APK umbenennen
         run: |
           mkdir -p dist

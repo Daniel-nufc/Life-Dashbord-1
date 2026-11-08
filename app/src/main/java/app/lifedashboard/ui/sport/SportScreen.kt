@@ -9,10 +9,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.DirectionsRun
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -24,28 +33,41 @@ import app.lifedashboard.data.db.LifeArea
 import app.lifedashboard.data.db.RoutineBlockEntity
 import app.lifedashboard.data.repository.RoutineRepository
 import app.lifedashboard.ui.components.OneUiScaffold
+import app.lifedashboard.ui.components.Pill
 import app.lifedashboard.ui.components.SectionCard
+import app.lifedashboard.ui.components.TileHeader
+import app.lifedashboard.ui.components.color
+import app.lifedashboard.ui.components.icon
 import app.lifedashboard.ui.components.listPadding
 import app.lifedashboard.ui.components.minutesToTimeText
 import app.lifedashboard.ui.components.shortName
+import app.lifedashboard.ui.editors.AddFab
+import app.lifedashboard.ui.editors.EditRequest
+import app.lifedashboard.ui.editors.EditorHost
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 @HiltViewModel
 class SportViewModel @Inject constructor(routines: RoutineRepository) : ViewModel() {
-    val trainings: StateFlow<List<RoutineBlockEntity>> = routines.routines
-        .map { list -> list.filter { it.area == LifeArea.SPORT } }
+    val routines: StateFlow<List<RoutineBlockEntity>> = routines.routines
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 }
 
 @Composable
-fun SportScreen(viewModel: SportViewModel = hiltViewModel()) {
-    val trainings by viewModel.trainings.collectAsStateWithLifecycle()
-    OneUiScaffold(title = "Sport") { padding ->
+fun SportScreen(onBack: () -> Unit, viewModel: SportViewModel = hiltViewModel()) {
+    val routines by viewModel.routines.collectAsStateWithLifecycle()
+    var editing by remember { mutableStateOf<EditRequest?>(null) }
+
+    OneUiScaffold(
+        title = "Training",
+        navigationIcon = {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Zurück") }
+        },
+        floatingActionButton = { AddFab { editing = EditRequest.Routine(null) } },
+    ) { padding ->
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             LazyColumn(
                 modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth(),
@@ -54,40 +76,53 @@ fun SportScreen(viewModel: SportViewModel = hiltViewModel()) {
             ) {
                 item {
                     Text(
-                        "Wöchentliches Training",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(start = 8.dp),
+                        "Wöchentlich wiederkehrend – blockiert die Zeit im Tagesplan. Antippen zum Ändern (z. B. neue Floorball-Zeiten).",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 8.dp),
                     )
                 }
-                items(trainings, key = { it.id }) { training ->
-                    SectionCard {
-                        Text(training.title, style = MaterialTheme.typography.titleLarge)
+                items(routines, key = { it.id }) { routine ->
+                    SectionCard(onClick = { editing = EditRequest.Routine(routine) }) {
+                        TileHeader(routine.area.icon, routine.title, routine.area.color) {
+                            if (!routine.active) Pill("pausiert", MaterialTheme.colorScheme.outline)
+                            Icon(Icons.Rounded.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         Text(
-                            training.days().sorted().joinToString(" & ") { it.shortName() } +
-                                " · ${minutesToTimeText(training.startMinute)}–${minutesToTimeText(training.endMinute)}",
-                            style = MaterialTheme.typography.bodyLarge,
+                            routine.days().sorted().joinToString(" & ") { it.shortName() } +
+                                " · ${minutesToTimeText(routine.startMinute)}–${minutesToTimeText(routine.endMinute)}",
+                            style = MaterialTheme.typography.titleMedium,
                         )
-                        listOfNotNull(training.location, training.note).forEach {
+                        listOfNotNull(routine.location, routine.note).forEach {
                             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
                 item {
-                    SectionCard(title = "Kommt in Phase 5") {
+                    SectionCard {
+                        TileHeader(Icons.Rounded.DirectionsRun, "Ironman-Weg · nächstes Ziel: 10 km", LifeArea.SPORT.color)
                         Column {
                             listOf(
-                                "Training bearbeiten (neue Floorball-Zeiten)",
-                                "Workout-Log mit Übungen, Sätzen und Gewicht",
-                                "Fortschritts-Diagramme",
-                                "Schritte & Schlaf über Health Connect (Samsung Health)",
-                                "Ironman-Weg: 5 km → Sprint → Olympisch → Mitteldistanz → Ironman",
+                                "✅ 5 km laufen – geschafft",
+                                "➡️ 10 km laufen",
+                                "Sprint-Triathlon (0,75 / 20 / 5)",
+                                "Olympisch (1,5 / 40 / 10)",
+                                "Mitteldistanz (1,9 / 90 / 21,1)",
+                                "Ironman (3,8 / 180 / 42,2)",
                             ).forEach {
-                                Text("•  $it", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 3.dp))
+                                Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 2.dp))
                             }
+                            Text(
+                                "Workout-Log, Diagramme, Health Connect und Habits kommen in Phase 5.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
                         }
                     }
                 }
             }
         }
     }
+    EditorHost(editing, onDismiss = { editing = null })
 }

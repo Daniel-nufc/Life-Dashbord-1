@@ -1,5 +1,7 @@
 package app.lifedashboard.ui.today
 
+import app.lifedashboard.data.db.EventEntity
+import app.lifedashboard.data.db.JobShiftEntity
 import app.lifedashboard.data.db.LifeArea
 import app.lifedashboard.data.db.RoutineBlockEntity
 import app.lifedashboard.data.db.SchoolPeriodEntity
@@ -48,6 +50,29 @@ class DayTimelineBuilderTest {
         )
         assertEquals(EntryKind.COMMUTE, entries[1].kind)
         assertEquals("Schulweg", entries[1].title)
+    }
+
+    @Test
+    fun termineUndJobBlockierenZeitGanztaegigeNicht() {
+        val entries = DayTimelineBuilder.build(
+            lessons = emptyList(),
+            routines = emptyList(),
+            dayStart = LocalTime.of(9, 30),
+            dayEnd = LocalTime.of(22, 0),
+            commuteMinutes = 25,
+            events = listOf(
+                EventEntity(id = 1, title = "Zahnarzt", dateEpochDay = 0, startMinute = 17 * 60, endMinute = 18 * 60, area = LifeArea.PRIVATE, location = null, note = null),
+                EventEntity(id = 2, title = "Geburtstag Oma", dateEpochDay = 0, startMinute = null, endMinute = null, area = LifeArea.PRIVATE, location = null, note = null),
+            ),
+            shifts = listOf(JobShiftEntity(id = 1, dateEpochDay = 0, startMinute = 10 * 60, endMinute = 14 * 60, note = "Baustelle", hourlyWageCents = null)),
+        )
+        val free = entries.filter { it.kind == EntryKind.FREE }.map { it.range }
+        assertEquals(
+            listOf(TimeRange.of(9, 30, 10, 0), TimeRange.of(14, 0, 17, 0), TimeRange.of(18, 0, 22, 0)),
+            free,
+        )
+        assertEquals(1, entries.count { it.kind == EntryKind.EVENT })
+        assertEquals(1, entries.count { it.kind == EntryKind.JOB })
     }
 
     @Test

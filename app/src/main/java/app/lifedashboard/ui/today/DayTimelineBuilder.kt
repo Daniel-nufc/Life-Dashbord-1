@@ -1,5 +1,8 @@
 package app.lifedashboard.ui.today
 
+import app.lifedashboard.data.db.EventEntity
+import app.lifedashboard.data.db.JobShiftEntity
+import app.lifedashboard.data.db.LifeArea
 import app.lifedashboard.data.db.RoutineBlockEntity
 import app.lifedashboard.data.repository.LessonItem
 import app.lifedashboard.planner.TimeRange
@@ -7,7 +10,7 @@ import app.lifedashboard.planner.freeSlots
 import java.time.Duration
 import java.time.LocalTime
 
-enum class EntryKind { LESSON, ROUTINE, COMMUTE, FREE }
+enum class EntryKind { LESSON, ROUTINE, COMMUTE, EVENT, JOB, FREE }
 
 data class TimelineEntry(
     val range: TimeRange,
@@ -15,11 +18,14 @@ data class TimelineEntry(
     val subtitle: String?,
     val kind: EntryKind,
     val colorArgb: Long? = null,
+    val area: LifeArea? = null,
+    /** ID des Termins/der Schicht, damit man ihn antippen und bearbeiten kann. */
+    val refId: Long? = null,
 )
 
 /**
- * Baut den Tagesablauf aus festen Blöcken (Unterricht, Schulweg, Training) und berechnet
- * daraus die freien Zeitfenster. In Phase 4 füllt der Planer diese Fenster mit Vorschlägen.
+ * Baut den Tagesablauf aus festen Blöcken (Unterricht, Wege, Training, Termine, Job) und
+ * berechnet daraus die freien Zeitfenster. In Phase 4 füllt der Planer diese Fenster.
  */
 object DayTimelineBuilder {
 
@@ -29,6 +35,8 @@ object DayTimelineBuilder {
         dayStart: LocalTime,
         dayEnd: LocalTime,
         commuteMinutes: Int,
+        events: List<EventEntity> = emptyList(),
+        shifts: List<JobShiftEntity> = emptyList(),
         minFreeMinutes: Long = 30,
     ): List<TimelineEntry> {
         val fixed = mutableListOf<TimelineEntry>()
@@ -41,6 +49,7 @@ object DayTimelineBuilder {
                 subtitle = listOf(item.subject.code, item.lesson.room).filter { it.isNotBlank() }.joinToString(" · "),
                 kind = EntryKind.LESSON,
                 colorArgb = item.subject.colorArgb,
+                area = LifeArea.SCHOOL,
             )
         }
 
@@ -63,9 +72,36 @@ object DayTimelineBuilder {
                 title = block.title,
                 subtitle = listOfNotNull(block.location, block.note).joinToString(" · ").ifBlank { null },
                 kind = EntryKind.ROUTINE,
+                area = block.area,
+                refId = block.id,
             )
         }
 
+        events.forEach { event ->
+            val start = event.startMinute ?: return@forEach // ganztägige Termine blockieren keine Zeit
+            val end = (event.endMinute ?: (start + 60)).coerceAtLeast(start)
+            fixed += TimelineEntry(
+                range = TimeRange.ofMinutes(start, end),
+                title = event.title,
+                subtitle = listOfNotNull(event.location, event.note).joinToString(" · ").ifBlank { null },
+                kind = EntryKind.EVENT,
+                area = event.area,
+                refId = event.id,
+            )
+        }
+
+        shifts.forEach { shift ->
+            fixed += TimelineEntry(
+                range = TimeRange.ofMinutes(shift.startMinute, shift.endMinute.coerceAtLeast(shift.startMinute)),
+                title = "Job",
+                subtitle = shift.note,
+                kind = EntryKind.JOB,
+                area = LifeArea.JOB,
+                refId = shift.id,
+            )
+        }
+
+        if (!dayEnd.isAfter(dayStart)) return fixed.sortedBy { it.range.start }
         val window = TimeRange(dayStart, dayEnd)
         val free = freeSlots(window, fixed.map { it.range }, Duration.ofMinutes(minFreeMinutes)).map {
             TimelineEntry(it, "Freie Zeit", null, EntryKind.FREE)

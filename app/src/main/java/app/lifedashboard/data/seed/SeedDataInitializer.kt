@@ -7,7 +7,11 @@ import app.lifedashboard.data.db.RoutineBlockEntity
 import app.lifedashboard.data.db.SchoolPeriodEntity
 import app.lifedashboard.data.db.SubjectEntity
 import app.lifedashboard.data.db.TimetableLessonEntity
+import app.lifedashboard.data.db.TaskEntity
+import app.lifedashboard.data.db.TaskKind
 import app.lifedashboard.data.db.WeekPattern
+import app.lifedashboard.data.settings.SettingsRepository
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,8 +23,48 @@ import javax.inject.Singleton
 @Singleton
 class SeedDataInitializer @Inject constructor(
     private val db: AppDatabase,
+    private val settings: SettingsRepository,
 ) {
     suspend fun seedIfNeeded() {
+        val version = settings.settings.first().seedVersion
+        if (version < 1) {
+            seedTimetable()
+            settings.setSeedVersion(1)
+        }
+        if (version < 2) {
+            seedEtsyTasks()
+            settings.setSeedVersion(2)
+        }
+    }
+
+    /** Offene Punkte aus der Etsy-Zusammenfassung vom 08.11.2026. */
+    private suspend fun seedEtsyTasks() {
+        val now = System.currentTimeMillis()
+        fun etsy(title: String, minutes: Int, note: String? = null) = TaskEntity(
+            title = title,
+            area = LifeArea.ETSY,
+            kind = TaskKind.TODO,
+            subjectId = null,
+            dueEpochDay = null,
+            estimatedMinutes = minutes,
+            done = false,
+            doneAtMillis = null,
+            note = note,
+            createdAtMillis = now,
+        )
+        db.taskDao().insertAll(
+            listOf(
+                etsy("Probedruck bei Oma: Größe, Farben, Schärfe prüfen", 60, "Winter-Set: Rotkehlchen, Hütte, Fuchs"),
+                etsy("Google-Lens-Bildersuche + Vergleich mit Konkurrenz-Set", 30),
+                etsy("Mockups (Motiv auf Tasse) + Titelbild fürs Paket", 90),
+                etsy("15-oz-Datei erstellen", 45, "„15oz“ erst im Titel nennen, wenn die Datei da ist"),
+                etsy("Entscheiden: Tagesaufgabe bis zu Omas Feedback pausieren?", 10),
+                etsy("Etsy-Account erstellen", 30),
+            ),
+        )
+    }
+
+    private suspend fun seedTimetable() {
         val dao = db.timetableDao()
         if (dao.countSubjects() > 0) return
 

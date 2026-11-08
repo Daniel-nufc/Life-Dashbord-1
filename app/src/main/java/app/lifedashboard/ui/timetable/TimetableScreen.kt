@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -36,24 +37,28 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.lifedashboard.planner.WeekType
 import app.lifedashboard.ui.components.LoadingState
-import app.lifedashboard.ui.components.OneUiScaffold
 import app.lifedashboard.ui.components.SectionCard
 import app.lifedashboard.ui.components.listPadding
 import app.lifedashboard.ui.components.longName
 import app.lifedashboard.ui.components.minutesToTimeText
 import java.time.DayOfWeek
 
+/** Stundenplan als Inhalt (wird im Kalender-Tab angezeigt). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TimetableScreen(viewModel: TimetableViewModel = hiltViewModel()) {
+fun TimetableContent(
+    padding: PaddingValues,
+    topContent: @Composable () -> Unit,
+    viewModel: TimetableViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf<Pair<DayOfWeek, PeriodSlot>?>(null) }
 
-    OneUiScaffold(title = "Stundenplan") { padding ->
-        if (state.loading) {
-            LoadingState()
-            return@OneUiScaffold
-        }
+    if (state.loading) {
+        LoadingState()
+        return
+    }
+    run {
         // Handy: eine Spalte. Tablet: mehrere Tage nebeneinander.
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 300.dp),
@@ -61,6 +66,7 @@ fun TimetableScreen(viewModel: TimetableViewModel = hiltViewModel()) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item(span = { GridItemSpan(maxLineSpan) }) { topContent() }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column {
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
