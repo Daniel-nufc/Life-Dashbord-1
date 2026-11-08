@@ -22,8 +22,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TaskEntity::class,
         JobShiftEntity::class,
         IcalSourceEntity::class,
+        ExamEntity::class,
+        TopicEntity::class,
+        GradeEntity::class,
+        StudySessionEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -33,6 +37,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
     abstract fun jobShiftDao(): JobShiftDao
     abstract fun icalSourceDao(): IcalSourceDao
+    abstract fun studyDao(): StudyDao
 
     companion object {
         const val NAME = "lifedashboard.db"
@@ -80,6 +85,37 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+        /** Phase 3: Klausuren, Themen, Noten, Fokus-Einheiten. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `exams` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`subjectId` INTEGER NOT NULL, `dateEpochDay` INTEGER NOT NULL, `title` TEXT NOT NULL, " +
+                        "`kind` TEXT NOT NULL, `note` TEXT)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_exams_dateEpochDay` ON `exams` (`dateEpochDay`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `topics` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`examId` INTEGER NOT NULL, `title` TEXT NOT NULL, `effortMinutes` INTEGER NOT NULL, " +
+                        "`progress` INTEGER NOT NULL, `intervalDays` INTEGER NOT NULL, `nextReviewEpochDay` INTEGER, " +
+                        "`lastReviewedEpochDay` INTEGER)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_topics_examId` ON `topics` (`examId`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `grades` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`subjectId` INTEGER NOT NULL, `points` INTEGER NOT NULL, `kind` TEXT NOT NULL, " +
+                        "`weight` REAL NOT NULL, `dateEpochDay` INTEGER NOT NULL, `note` TEXT)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_grades_subjectId` ON `grades` (`subjectId`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `study_sessions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`subjectId` INTEGER, `examId` INTEGER, `topicId` INTEGER, `startedAtMillis` INTEGER NOT NULL, " +
+                        "`minutes` INTEGER NOT NULL)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_study_sessions_startedAtMillis` ON `study_sessions` (`startedAtMillis`)")
+            }
+        }
+
+        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
     }
 }

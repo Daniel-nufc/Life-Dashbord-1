@@ -38,6 +38,9 @@ interface TimetableDao {
 
     @Query("DELETE FROM timetable_lessons WHERE id = :id")
     suspend fun deleteLesson(id: Long)
+
+    @Upsert
+    suspend fun upsertSubject(subject: SubjectEntity)
 }
 
 @Dao
@@ -116,4 +119,43 @@ interface IcalSourceDao {
 
     @Query("DELETE FROM ical_sources WHERE id = :id")
     suspend fun delete(id: Long)
+}
+
+@Dao
+interface StudyDao {
+    @Query("SELECT * FROM exams ORDER BY dateEpochDay")
+    fun observeExams(): Flow<List<ExamEntity>>
+
+    @Query("SELECT * FROM topics ORDER BY id")
+    fun observeTopics(): Flow<List<TopicEntity>>
+
+    @Query("SELECT * FROM grades ORDER BY dateEpochDay DESC")
+    fun observeGrades(): Flow<List<GradeEntity>>
+
+    @Query("SELECT * FROM study_sessions WHERE startedAtMillis >= :fromMillis ORDER BY startedAtMillis")
+    fun observeSessionsSince(fromMillis: Long): Flow<List<StudySessionEntity>>
+
+    @Upsert
+    suspend fun upsertExam(exam: ExamEntity): Long
+
+    @Query("DELETE FROM exams WHERE id = :id")
+    suspend fun deleteExam(id: Long)
+
+    @Upsert
+    suspend fun upsertTopic(topic: TopicEntity)
+
+    @Query("DELETE FROM topics WHERE id = :id")
+    suspend fun deleteTopic(id: Long)
+
+    @Query("DELETE FROM topics WHERE examId = :examId")
+    suspend fun deleteTopicsOfExam(examId: Long)
+
+    @Upsert
+    suspend fun upsertGrade(grade: GradeEntity)
+
+    @Query("DELETE FROM grades WHERE id = :id")
+    suspend fun deleteGrade(id: Long)
+
+    @Insert
+    suspend fun insertSession(session: StudySessionEntity)
 }

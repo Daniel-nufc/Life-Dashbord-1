@@ -132,3 +132,54 @@ data class IcalSourceEntity(
     val lastSyncMillis: Long?,
     val lastError: String?,
 )
+
+enum class ExamKind { KLAUSUR, TEST, REFERAT, PRAESENTATION }
+
+/** Klausur, Test oder Referat. */
+@Entity(tableName = "exams", indices = [Index("dateEpochDay")])
+data class ExamEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val subjectId: Long,
+    val dateEpochDay: Long,
+    val title: String,
+    val kind: ExamKind,
+    val note: String?,
+)
+
+/** Thema einer Klausur mit Lernfortschritt und Wiederholungs-Termin (Spaced Repetition). */
+@Entity(tableName = "topics", indices = [Index("examId")])
+data class TopicEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val examId: Long,
+    val title: String,
+    val effortMinutes: Int,
+    val progress: Int,
+    val intervalDays: Int,
+    val nextReviewEpochDay: Long?,
+    val lastReviewedEpochDay: Long?,
+)
+
+enum class GradeKind { KLAUSUR, MUENDLICH, TEST, SONSTIGES }
+
+/** Note in Punkten (0–15). */
+@Entity(tableName = "grades", indices = [Index("subjectId")])
+data class GradeEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val subjectId: Long,
+    val points: Int,
+    val kind: GradeKind,
+    val weight: Double,
+    val dateEpochDay: Long,
+    val note: String?,
+)
+
+/** Eine abgeschlossene Fokus-Einheit (Pomodoro). */
+@Entity(tableName = "study_sessions", indices = [Index("startedAtMillis")])
+data class StudySessionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val subjectId: Long?,
+    val examId: Long?,
+    val topicId: Long?,
+    val startedAtMillis: Long,
+    val minutes: Int,
+)

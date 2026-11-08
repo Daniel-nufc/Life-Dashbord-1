@@ -21,7 +21,7 @@ import androidx.navigation.compose.rememberNavController
 import app.lifedashboard.ui.calendar.CalendarScreen
 import app.lifedashboard.ui.connections.ConnectionsScreen
 import app.lifedashboard.ui.more.MoreScreen
-import app.lifedashboard.ui.placeholder.ComingSoonScreen
+import app.lifedashboard.ui.learn.LearnScreen
 import app.lifedashboard.ui.sport.SportScreen
 import app.lifedashboard.ui.tasks.TasksScreen
 import app.lifedashboard.ui.today.TodayScreen
@@ -79,20 +79,7 @@ fun LifeDashboardRoot() {
             }
             composable(TopLevelDestination.CALENDAR.route) { CalendarScreen() }
             composable(TopLevelDestination.TASKS.route) { TasksScreen() }
-            composable(TopLevelDestination.LEARN.route) {
-                ComingSoonScreen(
-                    title = "Lernen",
-                    icon = Icons.Rounded.School,
-                    phase = "Phase 3",
-                    features = listOf(
-                        "Klausuren mit Countdown und Themenlisten",
-                        "Automatischer Lernplan rückwärts von der Klausur",
-                        "Wiederholungen nach Spaced Repetition (auch für den Schulweg)",
-                        "Fokus-Timer 25/5 mit Statistik",
-                        "Notenpunkte (0–15), Schnitt und Ziel 1,7",
-                    ),
-                )
-            }
+            composable(TopLevelDestination.LEARN.route) { LearnScreen() }
             composable(TopLevelDestination.MORE.route) {
                 MoreScreen(
                     onOpenSport = { navController.navigate(SPORT_ROUTE) },

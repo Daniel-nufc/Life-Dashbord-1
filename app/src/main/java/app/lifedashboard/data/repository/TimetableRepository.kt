@@ -85,6 +85,8 @@ class TimetableRepository @Inject constructor(
         dao.upsertLesson(updated)
     }
 
+    suspend fun saveSubject(subject: SubjectEntity) = dao.upsertSubject(subject)
+
     /** Löscht eine Stunde nur für die gewählte Woche – die andere Woche bleibt erhalten. */
     suspend fun deleteLessonForWeek(lesson: TimetableLessonEntity, week: WeekType) {
         if (lesson.weekPattern == WeekPattern.EVERY) {
