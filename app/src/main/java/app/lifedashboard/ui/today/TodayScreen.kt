@@ -71,6 +71,7 @@ private val HeroColors = listOf(Color(0xFF3D7BF7), Color(0xFF7B5CF0), Color(0xFF
 @Composable
 fun TodayScreen(
     onOpenTasks: () -> Unit,
+    onOpenGoals: () -> Unit,
     viewModel: TodayViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -143,6 +144,9 @@ fun TodayScreen(
                     }
                 }
                 item { ExamTile(s) }
+                if (s.habits.isNotEmpty()) {
+                    item { HabitsTile(s, onToggle = viewModel::toggleHabit, onOpen = onOpenGoals) }
+                }
             }
         }
     }
@@ -415,5 +419,23 @@ private fun ExamTile(s: TodayUiState.Ready) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HabitsTile(s: TodayUiState.Ready, onToggle: (Long, Boolean) -> Unit, onOpen: () -> Unit) {
+    SectionCard {
+        val done = s.habits.count { it.doneToday }
+        TileHeader(Icons.Rounded.AutoAwesome, "Gewohnheiten", LifeArea.ETSY.color) {
+            Pill("$done/${s.habits.size}", LifeArea.ETSY.color)
+        }
+        s.habits.forEach { h ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.Checkbox(checked = h.doneToday, onCheckedChange = { onToggle(h.habit.id, it) })
+                Text("${h.habit.emoji} ${h.habit.title}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                if (h.streak.current > 1) Text("🔥${h.streak.current}", style = MaterialTheme.typography.labelLarge)
+            }
+        }
+        TextButton(onClick = onOpen, modifier = Modifier.align(Alignment.End)) { Text("Ziele ansehen") }
     }
 }

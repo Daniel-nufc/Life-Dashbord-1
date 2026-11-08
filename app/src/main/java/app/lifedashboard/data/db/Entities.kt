@@ -213,3 +213,65 @@ data class PlanFeedbackEntity(
     val action: FeedbackAction,
     val atMillis: Long,
 )
+
+enum class WorkoutType { FLOORBALL, RUN, STRENGTH, SWIM, BIKE, OTHER }
+
+/** Ein Training im Log. */
+@Entity(tableName = "workouts", indices = [Index("dateEpochDay")])
+data class WorkoutEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val dateEpochDay: Long,
+    val type: WorkoutType,
+    val durationMinutes: Int,
+    val distanceMeters: Int?,
+    val note: String?,
+)
+
+/** Ein Satz beim Krafttraining. */
+@Entity(tableName = "workout_sets", indices = [Index("workoutId")])
+data class WorkoutSetEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val workoutId: Long,
+    val exercise: String,
+    val reps: Int,
+    val weightKg: Double,
+)
+
+/** Tägliche Gewohnheit. */
+@Entity(tableName = "habits")
+data class HabitEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val emoji: String,
+    val area: LifeArea,
+    val active: Boolean,
+    val sortOrder: Int,
+)
+
+@Entity(tableName = "habit_logs", indices = [Index(value = ["habitId", "dateEpochDay"], unique = true)])
+data class HabitLogEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val habitId: Long,
+    val dateEpochDay: Long,
+)
+
+/** Langfristiges Ziel mit Zwischenschritten. */
+@Entity(tableName = "goals")
+data class GoalEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val area: LifeArea,
+    val title: String,
+    val description: String?,
+    val deadlineEpochDay: Long?,
+    val done: Boolean,
+    val sortOrder: Int,
+)
+
+@Entity(tableName = "milestones", indices = [Index("goalId")])
+data class MilestoneEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val goalId: Long,
+    val title: String,
+    val sortOrder: Int,
+    val done: Boolean,
+)

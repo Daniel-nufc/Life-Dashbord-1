@@ -110,7 +110,7 @@ class MoreViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, viewModel: MoreViewModel = hiltViewModel()) {
+fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoals: () -> Unit, viewModel: MoreViewModel = hiltViewModel()) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var editName by remember { mutableStateOf(false) }
@@ -126,8 +126,8 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, viewModel
                 item {
                     SectionCard {
                         AreaItem(Icons.Rounded.CalendarMonth, LifeArea.SCHOOL.color, "Kalender & Abos", "Handy-Kalender, Lernraum, IServ, WebUntis", onOpenConnections)
-                        AreaItem(Icons.Rounded.SportsHockey, LifeArea.SPORT.color, "Training & Sport", "Floorball-Zeiten ändern, Ironman-Weg", onOpenSport)
-                        AreaItem(Icons.Rounded.Flag, LifeArea.PRIVATE.color, "Ziele & Gewohnheiten", "kommt in Phase 5", null)
+                        AreaItem(Icons.Rounded.SportsHockey, LifeArea.SPORT.color, "Sport", "Training-Log, Schritte & Schlaf, Floorball-Zeiten", onOpenSport)
+                        AreaItem(Icons.Rounded.Flag, LifeArea.PRIVATE.color, "Ziele & Gewohnheiten", "Ironman-Weg, Abi 1,7, Streaks", onOpenGoals)
                         AreaItem(Icons.Rounded.AttachMoney, LifeArea.JOB.color, "Finanzen", "kommt in Phase 6", null)
                         AreaItem(Icons.Rounded.Storefront, LifeArea.ETSY.color, "Etsy-Shop", "kommt in Phase 7 – To-dos schon unter „Aufgaben“", null)
                     }

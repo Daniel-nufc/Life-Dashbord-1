@@ -14,6 +14,8 @@ import app.lifedashboard.data.planning.PlanningEngine
 import app.lifedashboard.data.repository.AgendaRange
 import app.lifedashboard.data.repository.AgendaRepository
 import app.lifedashboard.data.repository.ExamWithTopics
+import app.lifedashboard.data.repository.GoalRepository
+import app.lifedashboard.data.repository.HabitStatus
 import app.lifedashboard.data.repository.StudyOverview
 import app.lifedashboard.data.repository.StudyRepository
 import app.lifedashboard.data.repository.TaskRepository
@@ -67,11 +69,12 @@ sealed interface TodayUiState {
         val doneBlocks: Int,
         val plannedBlocks: Int,
         val nextExam: ExamWithTopics?,
+        val habits: List<HabitStatus>,
         val now: LocalDateTime,
     ) : TodayUiState
 }
 
-private data class Inputs(val range: AgendaRange, val plan: List<PlanBlockEntity>, val study: StudyOverview)
+private data class Inputs(val range: AgendaRange, val plan: List<PlanBlockEntity>, val study: StudyOverview, val habits: List<HabitStatus>)
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
@@ -80,6 +83,7 @@ class TodayViewModel @Inject constructor(
     private val tasks: TaskRepository,
     private val engine: PlanningEngine,
     study: StudyRepository,
+    private val goals: GoalRepository,
 ) : ViewModel() {
 
     /** Tickt jede Minute, damit „Jetzt“ und „Als Nächstes“ aktuell bleiben. */
@@ -94,7 +98,7 @@ class TodayViewModel @Inject constructor(
     private val date = clock.map { it.toLocalDate() }.distinctUntilChanged()
 
     private val inputs = date.flatMapLatest { d ->
-        combine(agenda.observe(d, 2), engine.observeDay(d), study.overview(d)) { r, p, s -> Inputs(r, p, s) }
+        combine(agenda.observe(d, 2), engine.observeDay(d), study.overview(d), goals.habits(d)) { r, p, s, h -> Inputs(r, p, s, h) }
     }
 
     val state: StateFlow<TodayUiState> = inputs
@@ -119,6 +123,7 @@ class TodayViewModel @Inject constructor(
     fun decline(block: PlanBlockEntity) = launch { engine.decline(block) }
     fun later(block: PlanBlockEntity) = launch { engine.later(block) }
     fun replanNow() = launch { engine.replan(LocalDate.now()) }
+    fun toggleHabit(id: Long, done: Boolean) = launch { goals.toggleHabit(id, LocalDate.now(), done) }
 
     private fun launch(block: suspend () -> Unit) {
         viewModelScope.launch { runCatching { block() } }
@@ -194,6 +199,7 @@ class TodayViewModel @Inject constructor(
             doneBlocks = input.plan.count { it.status == PlanStatus.DONE },
             plannedBlocks = input.plan.count { it.status != PlanStatus.DECLINED && it.status != PlanStatus.MOVED },
             nextExam = nextExam,
+            habits = input.habits,
             now = now,
         )
     }

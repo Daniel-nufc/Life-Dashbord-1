@@ -7,6 +7,9 @@ import app.lifedashboard.data.db.RoutineBlockEntity
 import app.lifedashboard.data.db.SchoolPeriodEntity
 import app.lifedashboard.data.db.SubjectEntity
 import app.lifedashboard.data.db.TimetableLessonEntity
+import app.lifedashboard.data.db.GoalEntity
+import app.lifedashboard.data.db.HabitEntity
+import app.lifedashboard.data.db.MilestoneEntity
 import app.lifedashboard.data.db.TaskEntity
 import app.lifedashboard.data.db.TaskKind
 import app.lifedashboard.data.db.WeekPattern
@@ -35,6 +38,62 @@ class SeedDataInitializer @Inject constructor(
             seedEtsyTasks()
             settings.setSeedVersion(2)
         }
+        if (version < 3) {
+            seedGoalsAndHabits()
+            settings.setSeedVersion(3)
+        }
+    }
+
+    /** Deine Gewohnheiten und Ziele aus dem Fragebogen (08.11.2026). */
+    private suspend fun seedGoalsAndHabits() {
+        val dao = db.goalDao()
+        dao.insertHabits(
+            listOf(
+                HabitEntity(title = "Pünktlich schlafen (22 Uhr, Handy weg)", emoji = "😴", area = LifeArea.PRIVATE, active = true, sortOrder = 0),
+                HabitEntity(title = "Handyzeit unter 2 Std", emoji = "📵", area = LifeArea.PRIVATE, active = true, sortOrder = 1),
+                HabitEntity(title = "10 Min Bewegung", emoji = "🏃", area = LifeArea.SPORT, active = true, sortOrder = 2),
+                HabitEntity(title = "Lesen / Vokabeln 10 Min", emoji = "📖", area = LifeArea.SCHOOL, active = true, sortOrder = 3),
+            ),
+        )
+        suspend fun goal(area: LifeArea, title: String, description: String?, order: Int, steps: List<Pair<String, Boolean>>) {
+            val id = dao.insertGoal(GoalEntity(area = area, title = title, description = description, deadlineEpochDay = null, done = false, sortOrder = order))
+            dao.insertMilestones(steps.mapIndexed { i, (t, d) -> MilestoneEntity(goalId = id, title = t, sortOrder = i, done = d) })
+        }
+        goal(
+            LifeArea.SPORT, "Ironman", "Immer nur der nächste Schritt – nicht das ganze Ziel auf einmal.", 0,
+            listOf(
+                "5 km laufen" to true,
+                "10 km laufen" to false,
+                "Sprint-Triathlon (0,75 km / 20 km / 5 km)" to false,
+                "Olympische Distanz (1,5 / 40 / 10)" to false,
+                "Mitteldistanz (1,9 / 90 / 21,1)" to false,
+                "Ironman (3,8 / 180 / 42,2)" to false,
+            ),
+        )
+        goal(
+            LifeArea.SCHOOL, "Abi mit 1,7", "≈ 12 Punkte im Schnitt. Abi voraussichtlich 2029.", 1,
+            listOf(
+                "11. Klasse (Einführungsphase) gut abschließen" to false,
+                "Leistungskurse / Prüfungsfächer wählen" to false,
+                "Q1 & Q2 (12. Klasse)" to false,
+                "Q3 & Q4 (13. Klasse)" to false,
+                "Abiturprüfungen" to false,
+            ),
+        )
+        goal(
+            LifeArea.ETSY, "Etsy-Shop starten", null, 2,
+            listOf(
+                "Etsy-Account erstellen" to false,
+                "Probedruck bei Oma + Feedback" to false,
+                "Erstes Listing online (Winter-Set)" to false,
+                "Erste Bestellung" to false,
+            ),
+        )
+        goal(
+            LifeArea.PRIVATE, "Führerschein", "Über die Fahrschule vom Onkel.", 3,
+            listOf("Anmelden" to false, "Theorieprüfung" to false, "Fahrstunden" to false, "Praktische Prüfung" to false),
+        )
+        goal(LifeArea.PRIVATE, "Feriencamp", null, 4, listOf("Camp aussuchen" to false, "Anmelden & bezahlen" to false))
     }
 
     /** Offene Punkte aus der Etsy-Zusammenfassung vom 08.11.2026. */

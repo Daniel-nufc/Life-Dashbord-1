@@ -36,10 +36,11 @@ enum class TopLevelDestination(val route: String, val label: String, val icon: I
 
 private const val SPORT_ROUTE = "sport"
 private const val CONNECTIONS_ROUTE = "connections"
+private const val GOALS_ROUTE = "goals"
 
 /** Unterseiten gehören optisch zu einem Tab (z. B. Sport → Mehr). */
 private fun topLevelFor(route: String?): String? = when (route) {
-    SPORT_ROUTE, CONNECTIONS_ROUTE -> TopLevelDestination.MORE.route
+    SPORT_ROUTE, CONNECTIONS_ROUTE, GOALS_ROUTE -> TopLevelDestination.MORE.route
     else -> route
 }
 
@@ -75,7 +76,10 @@ fun LifeDashboardRoot() {
     ) {
         NavHost(navController = navController, startDestination = TopLevelDestination.TODAY.route) {
             composable(TopLevelDestination.TODAY.route) {
-                TodayScreen(onOpenTasks = { navController.openTab(TopLevelDestination.TASKS.route) })
+                TodayScreen(
+                    onOpenTasks = { navController.openTab(TopLevelDestination.TASKS.route) },
+                    onOpenGoals = { navController.navigate(GOALS_ROUTE) },
+                )
             }
             composable(TopLevelDestination.CALENDAR.route) { CalendarScreen() }
             composable(TopLevelDestination.TASKS.route) { TasksScreen() }
@@ -84,9 +88,11 @@ fun LifeDashboardRoot() {
                 MoreScreen(
                     onOpenSport = { navController.navigate(SPORT_ROUTE) },
                     onOpenConnections = { navController.navigate(CONNECTIONS_ROUTE) },
+                    onOpenGoals = { navController.navigate(GOALS_ROUTE) },
                 )
             }
             composable(SPORT_ROUTE) { SportScreen(onBack = { navController.popBackStack() }) }
+            composable(GOALS_ROUTE) { app.lifedashboard.ui.goals.GoalsScreen(onBack = { navController.popBackStack() }) }
             composable(CONNECTIONS_ROUTE) { ConnectionsScreen(onBack = { navController.popBackStack() }) }
         }
     }

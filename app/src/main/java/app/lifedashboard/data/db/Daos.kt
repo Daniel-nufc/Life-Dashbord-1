@@ -189,3 +189,75 @@ interface PlanDao {
     @Query("SELECT * FROM plan_feedback WHERE atMillis >= :sinceMillis")
     suspend fun feedbackSince(sinceMillis: Long): List<PlanFeedbackEntity>
 }
+
+@Dao
+interface SportDao {
+    @Query("SELECT * FROM workouts ORDER BY dateEpochDay DESC, id DESC")
+    fun observeWorkouts(): Flow<List<WorkoutEntity>>
+
+    @Query("SELECT * FROM workout_sets")
+    fun observeSets(): Flow<List<WorkoutSetEntity>>
+
+    @Upsert
+    suspend fun upsertWorkout(workout: WorkoutEntity): Long
+
+    @Query("DELETE FROM workouts WHERE id = :id")
+    suspend fun deleteWorkout(id: Long)
+
+    @Query("DELETE FROM workout_sets WHERE workoutId = :workoutId")
+    suspend fun deleteSetsOf(workoutId: Long)
+
+    @Insert
+    suspend fun insertSets(sets: List<WorkoutSetEntity>)
+}
+
+@Dao
+interface GoalDao {
+    @Query("SELECT * FROM habits ORDER BY sortOrder, id")
+    fun observeHabits(): Flow<List<HabitEntity>>
+
+    @Query("SELECT * FROM habit_logs WHERE dateEpochDay >= :fromDay")
+    fun observeHabitLogs(fromDay: Long): Flow<List<HabitLogEntity>>
+
+    @Upsert
+    suspend fun upsertHabit(habit: HabitEntity)
+
+    @Query("DELETE FROM habits WHERE id = :id")
+    suspend fun deleteHabit(id: Long)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertHabitLog(log: HabitLogEntity)
+
+    @Query("DELETE FROM habit_logs WHERE habitId = :habitId AND dateEpochDay = :day")
+    suspend fun deleteHabitLog(habitId: Long, day: Long)
+
+    @Query("SELECT * FROM goals ORDER BY done, sortOrder, id")
+    fun observeGoals(): Flow<List<GoalEntity>>
+
+    @Query("SELECT * FROM milestones ORDER BY sortOrder, id")
+    fun observeMilestones(): Flow<List<MilestoneEntity>>
+
+    @Upsert
+    suspend fun upsertGoal(goal: GoalEntity): Long
+
+    @Query("DELETE FROM goals WHERE id = :id")
+    suspend fun deleteGoal(id: Long)
+
+    @Upsert
+    suspend fun upsertMilestone(milestone: MilestoneEntity)
+
+    @Query("DELETE FROM milestones WHERE id = :id")
+    suspend fun deleteMilestone(id: Long)
+
+    @Query("DELETE FROM milestones WHERE goalId = :goalId")
+    suspend fun deleteMilestonesOf(goalId: Long)
+
+    @Insert
+    suspend fun insertHabits(habits: List<HabitEntity>)
+
+    @Insert
+    suspend fun insertGoal(goal: GoalEntity): Long
+
+    @Insert
+    suspend fun insertMilestones(milestones: List<MilestoneEntity>)
+}

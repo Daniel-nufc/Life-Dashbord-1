@@ -28,8 +28,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         StudySessionEntity::class,
         PlanBlockEntity::class,
         PlanFeedbackEntity::class,
+        WorkoutEntity::class,
+        WorkoutSetEntity::class,
+        HabitEntity::class,
+        HabitLogEntity::class,
+        GoalEntity::class,
+        MilestoneEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -41,6 +47,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun icalSourceDao(): IcalSourceDao
     abstract fun studyDao(): StudyDao
     abstract fun planDao(): PlanDao
+    abstract fun sportDao(): SportDao
+    abstract fun goalDao(): GoalDao
 
     companion object {
         const val NAME = "lifedashboard.db"
@@ -137,6 +145,43 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+        /** Phase 5: Training-Log, Gewohnheiten, Ziele. */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `workouts` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`dateEpochDay` INTEGER NOT NULL, `type` TEXT NOT NULL, `durationMinutes` INTEGER NOT NULL, " +
+                        "`distanceMeters` INTEGER, `note` TEXT)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_workouts_dateEpochDay` ON `workouts` (`dateEpochDay`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `workout_sets` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`workoutId` INTEGER NOT NULL, `exercise` TEXT NOT NULL, `reps` INTEGER NOT NULL, `weightKg` REAL NOT NULL)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_workout_sets_workoutId` ON `workout_sets` (`workoutId`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `habits` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`title` TEXT NOT NULL, `emoji` TEXT NOT NULL, `area` TEXT NOT NULL, `active` INTEGER NOT NULL, " +
+                        "`sortOrder` INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `habit_logs` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`habitId` INTEGER NOT NULL, `dateEpochDay` INTEGER NOT NULL)",
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_habit_logs_habitId_dateEpochDay` ON `habit_logs` (`habitId`, `dateEpochDay`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `goals` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`area` TEXT NOT NULL, `title` TEXT NOT NULL, `description` TEXT, `deadlineEpochDay` INTEGER, " +
+                        "`done` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `milestones` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`goalId` INTEGER NOT NULL, `title` TEXT NOT NULL, `sortOrder` INTEGER NOT NULL, `done` INTEGER NOT NULL)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_milestones_goalId` ON `milestones` (`goalId`)")
+            }
+        }
+
+        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
     }
 }
