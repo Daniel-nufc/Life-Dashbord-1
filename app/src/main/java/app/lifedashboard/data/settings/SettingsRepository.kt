@@ -34,6 +34,8 @@ data class AppSettings(
     val seedVersion: Int,
     /** IDs der Handy-Kalender, die angezeigt werden sollen (leer = aus). */
     val systemCalendarIds: Set<Long>,
+    /** Reihenfolge der Bereiche bei Konflikten, Standard: Schule > Sport > Etsy. */
+    val priorityOrder: List<String>,
 ) {
     fun weekCalculator() = SchoolWeekCalculator(abReferenceMonday, abReferenceType)
 
@@ -61,6 +63,7 @@ class SettingsRepository @Inject constructor(
                 userName = p[USER_NAME] ?: "Daniel",
                 weekendDayStart = minuteToTime(p[WEEKEND_START] ?: (9 * 60 + 30)),
                 seedVersion = p[SEED_VERSION] ?: 0,
+                priorityOrder = (p[PRIORITY_ORDER] ?: "SCHOOL,SPORT,ETSY").split(',').filter { it.isNotBlank() },
                 systemCalendarIds = p[SYSTEM_CALENDARS].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
             )
         }
@@ -93,6 +96,10 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[SYSTEM_CALENDARS] = ids.sorted().joinToString(",") }
     }
 
+    suspend fun setPriorityOrder(order: List<String>) {
+        dataStore.edit { it[PRIORITY_ORDER] = order.joinToString(",") }
+    }
+
     suspend fun setSeedVersion(version: Int) {
         dataStore.edit { it[SEED_VERSION] = version }
     }
@@ -109,6 +116,7 @@ class SettingsRepository @Inject constructor(
         val WEEKEND_START = intPreferencesKey("weekend_day_start_minute")
         val SEED_VERSION = intPreferencesKey("seed_version")
         val SYSTEM_CALENDARS = stringPreferencesKey("system_calendar_ids")
+        val PRIORITY_ORDER = stringPreferencesKey("priority_order")
 
         /** KW 46/2026 (ab Mo 9.11.) ist Woche A. */
         val DEFAULT_AB_REFERENCE: LocalDate = LocalDate.of(2026, 11, 9)

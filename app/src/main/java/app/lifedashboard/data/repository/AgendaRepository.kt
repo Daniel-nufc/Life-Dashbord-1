@@ -35,12 +35,13 @@ data class DayAgenda(
 ) {
     val isWeekend: Boolean get() = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
 
-    fun timeline(): List<TimelineEntry> = DayTimelineBuilder.build(
+    fun timeline(planBlocks: List<app.lifedashboard.data.db.PlanBlockEntity> = emptyList()): List<TimelineEntry> = DayTimelineBuilder.build(
         lessons = lessons,
         routines = routines,
         events = events,
         shifts = shifts,
         externalEvents = externalEvents,
+        planBlocks = planBlocks,
         dayStart = settings.dayStartFor(date),
         dayEnd = settings.dayEnd,
         commuteMinutes = settings.schoolCommuteMinutes,

@@ -48,7 +48,10 @@ jobs:
         run: ./gradlew --no-daemon :app:assembleRelease
 
       - name: Datenbank-Schema anzeigen (Kontrolle der Migrationen)
-        run: find app/schemas -name '*.json' -print -exec grep -h '"createSql"' {} \; || true
+        run: |
+          latest=$(ls app/schemas/*/*.json | sort -V | tail -1)
+          echo "Neuestes Schema: $latest"
+          grep -h '"createSql"' "$latest" | sed 's/^ *"createSql": //' || true
 
       - name: APK umbenennen
         run: |

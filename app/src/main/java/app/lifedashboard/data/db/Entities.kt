@@ -183,3 +183,33 @@ data class StudySessionEntity(
     val startedAtMillis: Long,
     val minutes: Int,
 )
+
+enum class PlanStatus { PROPOSED, ACCEPTED, DONE, DECLINED, MOVED, MISSED }
+
+/** Ein Vorschlag bzw. geplanter Block im Tagesplan. */
+@Entity(tableName = "plan_blocks", indices = [Index("dateEpochDay")])
+data class PlanBlockEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val dateEpochDay: Long,
+    val startMinute: Int,
+    val endMinute: Int,
+    val type: app.lifedashboard.planner.DemandType,
+    val demandKey: String,
+    val title: String,
+    val refId: Long?,
+    val status: PlanStatus,
+    val createdAtMillis: Long,
+)
+
+enum class FeedbackAction { ACCEPTED, DONE, DECLINED, MOVED, MISSED }
+
+/** Woraus die App lernt: Wie hast du auf Vorschläge reagiert? */
+@Entity(tableName = "plan_feedback")
+data class PlanFeedbackEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val type: app.lifedashboard.planner.DemandType,
+    val weekend: Boolean,
+    val bucket: Int,
+    val action: FeedbackAction,
+    val atMillis: Long,
+)

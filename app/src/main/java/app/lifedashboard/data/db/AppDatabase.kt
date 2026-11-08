@@ -26,8 +26,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TopicEntity::class,
         GradeEntity::class,
         StudySessionEntity::class,
+        PlanBlockEntity::class,
+        PlanFeedbackEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -38,6 +40,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun jobShiftDao(): JobShiftDao
     abstract fun icalSourceDao(): IcalSourceDao
     abstract fun studyDao(): StudyDao
+    abstract fun planDao(): PlanDao
 
     companion object {
         const val NAME = "lifedashboard.db"
@@ -116,6 +119,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+        /** Phase 4: Tagesplan-Vorschläge und Feedback zum Lernen. */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `plan_blocks` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`dateEpochDay` INTEGER NOT NULL, `startMinute` INTEGER NOT NULL, `endMinute` INTEGER NOT NULL, " +
+                        "`type` TEXT NOT NULL, `demandKey` TEXT NOT NULL, `title` TEXT NOT NULL, `refId` INTEGER, " +
+                        "`status` TEXT NOT NULL, `createdAtMillis` INTEGER NOT NULL)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_plan_blocks_dateEpochDay` ON `plan_blocks` (`dateEpochDay`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `plan_feedback` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`type` TEXT NOT NULL, `weekend` INTEGER NOT NULL, `bucket` INTEGER NOT NULL, " +
+                        "`action` TEXT NOT NULL, `atMillis` INTEGER NOT NULL)",
+                )
+            }
+        }
+
+        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
     }
 }

@@ -159,3 +159,33 @@ interface StudyDao {
     @Insert
     suspend fun insertSession(session: StudySessionEntity)
 }
+
+@Dao
+interface PlanDao {
+    @Query("SELECT * FROM plan_blocks WHERE dateEpochDay = :day ORDER BY startMinute")
+    fun observeDay(day: Long): Flow<List<PlanBlockEntity>>
+
+    @Query("SELECT * FROM plan_blocks WHERE dateEpochDay = :day ORDER BY startMinute")
+    suspend fun forDay(day: Long): List<PlanBlockEntity>
+
+    @Query("SELECT * FROM plan_blocks WHERE dateEpochDay BETWEEN :fromDay AND :toDay")
+    suspend fun between(fromDay: Long, toDay: Long): List<PlanBlockEntity>
+
+    @Query("SELECT * FROM plan_blocks WHERE id = :id")
+    suspend fun byId(id: Long): PlanBlockEntity?
+
+    @Insert
+    suspend fun insertAll(blocks: List<PlanBlockEntity>)
+
+    @Query("DELETE FROM plan_blocks WHERE id IN (:ids)")
+    suspend fun delete(ids: List<Long>)
+
+    @Query("UPDATE plan_blocks SET status = :status WHERE id = :id")
+    suspend fun setStatus(id: Long, status: PlanStatus)
+
+    @Insert
+    suspend fun insertFeedback(feedback: PlanFeedbackEntity)
+
+    @Query("SELECT * FROM plan_feedback WHERE atMillis >= :sinceMillis")
+    suspend fun feedbackSince(sinceMillis: Long): List<PlanFeedbackEntity>
+}

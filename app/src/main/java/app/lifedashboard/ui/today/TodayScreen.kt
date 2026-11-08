@@ -23,8 +23,12 @@ import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.ChecklistRtl
 import androidx.compose.material.icons.rounded.DirectionsBus
 import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -120,7 +124,16 @@ fun TodayScreen(
                     }
                 }
                 item(span = StaggeredGridItemSpan.FullLine) {
-                    TimelineCard(s) { entry ->
+                    TimelineCard(
+                        s,
+                        actions = PlanActions(
+                            accept = viewModel::accept,
+                            done = viewModel::done,
+                            decline = viewModel::decline,
+                            later = viewModel::later,
+                            replan = viewModel::replanNow,
+                        ),
+                    ) { entry ->
                         editing = when (entry.kind) {
                             EntryKind.EVENT -> s.events.firstOrNull { it.id == entry.refId }?.let { EditRequest.Event(it, LocalDate.now()) }
                             EntryKind.JOB -> s.shifts.firstOrNull { it.id == entry.refId }?.let { EditRequest.Shift(it, LocalDate.now()) }
@@ -129,7 +142,7 @@ fun TodayScreen(
                         }
                     }
                 }
-                item { ComingSoonTile() }
+                item { ExamTile(s) }
             }
         }
     }
@@ -252,10 +265,29 @@ private fun entryColor(entry: TimelineEntry): Color = when (entry.kind) {
     else -> entry.area?.color ?: MaterialTheme.colorScheme.primary
 }
 
+private class PlanActions(
+    val accept: (app.lifedashboard.data.db.PlanBlockEntity) -> Unit,
+    val done: (app.lifedashboard.data.db.PlanBlockEntity) -> Unit,
+    val decline: (app.lifedashboard.data.db.PlanBlockEntity) -> Unit,
+    val later: (app.lifedashboard.data.db.PlanBlockEntity) -> Unit,
+    val replan: () -> Unit,
+)
+
 @Composable
-private fun TimelineCard(s: TodayUiState.Ready, onEntryClick: (TimelineEntry) -> Unit) {
+private fun TimelineCard(s: TodayUiState.Ready, actions: PlanActions, onEntryClick: (TimelineEntry) -> Unit) {
     SectionCard {
-        TileHeader(Icons.Rounded.Schedule, "Tagesablauf", MaterialTheme.colorScheme.primary)
+        TileHeader(Icons.Rounded.Schedule, "Tagesplan", MaterialTheme.colorScheme.primary) {
+            if (s.proposals > 0) Pill("${s.proposals} Vorschläge", LifeArea.ETSY.color)
+            IconButton(onClick = actions.replan) { Icon(Icons.Rounded.Refresh, contentDescription = "Neu planen") }
+        }
+        if (s.plannedBlocks > 0) {
+            Text(
+                "Vorschläge annehmen ✓, verschieben ⏭ oder ablehnen ✕ – die App lernt, was zu dir passt.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+        }
         if (s.entries.isEmpty()) {
             Text("Keine Einträge", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -265,8 +297,9 @@ private fun TimelineCard(s: TodayUiState.Ready, onEntryClick: (TimelineEntry) ->
                 entry = entry,
                 isNow = time in entry.range,
                 isPast = !entry.range.end.isAfter(time),
-                onClick = if (entry.refId != null) ({ onEntryClick(entry) }) else null,
+                onClick = if (entry.refId != null && entry.plan == null) ({ onEntryClick(entry) }) else null,
             )
+            entry.plan?.let { block -> PlanButtons(block, actions) }
         }
     }
 }
@@ -304,7 +337,7 @@ private fun TimelineRow(entry: TimelineEntry, isNow: Boolean, isPast: Boolean, o
                 .background(accent.copy(alpha = alpha)),
         )
         when (entry.kind) {
-            EntryKind.EVENT, EntryKind.JOB, EntryKind.ROUTINE -> {
+            EntryKind.EVENT, EntryKind.JOB, EntryKind.ROUTINE, EntryKind.PLAN -> {
                 IconBadge(entry.area?.icon ?: Icons.Rounded.Event, accent.copy(alpha = alpha), size = 30.dp)
                 Spacer(Modifier.width(10.dp))
             }
@@ -338,13 +371,49 @@ private fun TimelineRow(entry: TimelineEntry, isNow: Boolean, isPast: Boolean, o
 }
 
 @Composable
-private fun ComingSoonTile() {
+private fun PlanButtons(block: app.lifedashboard.data.db.PlanBlockEntity, actions: PlanActions) {
+    val status = block.status
+    if (status == app.lifedashboard.data.db.PlanStatus.DONE) return
+    Row(
+        Modifier.fillMaxWidth().padding(start = 66.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (status == app.lifedashboard.data.db.PlanStatus.PROPOSED) {
+            FilledTonalButton(onClick = { actions.accept(block) }) { Text("✓ Passt") }
+        } else {
+            FilledTonalButton(onClick = { actions.done(block) }) { Text("✓ Erledigt") }
+        }
+        OutlinedButton(onClick = { actions.later(block) }) { Text("⏭ Später") }
+        TextButton(onClick = { actions.decline(block) }) { Text("✕") }
+    }
+}
+
+@Composable
+private fun ExamTile(s: TodayUiState.Ready) {
     SectionCard {
-        TileHeader(Icons.Rounded.AutoAwesome, "Bald hier", LifeArea.ETSY.color)
-        Text(
-            "Klausur-Countdown, Lernplan, Fokus-Timer und automatische Vorschläge für deine freie Zeit kommen in Phase 3 & 4.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        val exam = s.nextExam
+        TileHeader(Icons.Rounded.AutoAwesome, "Nächste Klausur", Color(0xFFE53935))
+        if (exam == null) {
+            Text("Keine Klausur eingetragen.", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Unter „Lernen“ eintragen – dann plant die App deine Lernzeit automatisch.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            val days = exam.daysLeft()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(exam.subject?.name ?: exam.exam.title, style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        if (days == 0) "Heute!" else if (days == 1) "Morgen" else "in $days Tagen",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                ProgressRing(exam.progress / 100f, Color(0xFFE53935), size = 60.dp, stroke = 7.dp) {
+                    Text("${exam.progress}%", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
     }
 }

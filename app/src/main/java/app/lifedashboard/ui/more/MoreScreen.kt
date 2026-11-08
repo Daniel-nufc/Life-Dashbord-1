@@ -3,6 +3,7 @@ package app.lifedashboard.ui.more
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +15,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AttachMoney
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.SportsHockey
 import androidx.compose.material.icons.rounded.Storefront
@@ -91,6 +93,16 @@ class MoreViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setUserName(name) }
     }
 
+    fun movePriorityUp(area: String) {
+        val order = settings.value?.priorityOrder?.toMutableList() ?: return
+        val i = order.indexOf(area)
+        if (i > 0) {
+            order[i] = order[i - 1]
+            order[i - 1] = area
+            viewModelScope.launch { settingsRepository.setPriorityOrder(order) }
+        }
+    }
+
     fun setWeekendStart(minuteOfDay: Int) {
         viewModelScope.launch { settingsRepository.setWeekendDayStart(minuteOfDay) }
     }
@@ -129,6 +141,25 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, viewModel
                             headlineContent = { Text("Dein Name") },
                             supportingContent = { Text(s.userName) },
                             modifier = Modifier.clickable { editName = true },
+                            colors = transparentItem(),
+                        )
+                        ListItem(
+                            headlineContent = { Text("Prioritäten bei wenig Zeit") },
+                            supportingContent = {
+                                Column {
+                                    Text("Was die Planung zuerst bekommt. Tippe ↑, um etwas nach vorne zu holen.")
+                                    s.priorityOrder.forEachIndexed { index, area ->
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("${index + 1}. ${areaName(area)}", modifier = Modifier.weight(1f))
+                                            if (index > 0) {
+                                                IconButton(onClick = { viewModel.movePriorityUp(area) }) {
+                                                    Icon(Icons.Rounded.KeyboardArrowUp, "nach oben")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
                             colors = transparentItem(),
                         )
                         ListItem(
@@ -209,6 +240,13 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, viewModel
             dismissButton = { TextButton(onClick = { editName = false }) { Text("Abbrechen") } },
         )
     }
+}
+
+private fun areaName(key: String) = when (key) {
+    "SCHOOL" -> "Schule & Klausuren"
+    "SPORT" -> "Sport"
+    "ETSY" -> "Etsy"
+    else -> key
 }
 
 @Composable

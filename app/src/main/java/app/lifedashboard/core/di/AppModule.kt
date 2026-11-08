@@ -75,6 +75,9 @@ object AppModule {
     fun provideJobShiftDao(db: AppDatabase): JobShiftDao = db.jobShiftDao()
 
     @Provides
+    fun providePlanDao(db: AppDatabase): app.lifedashboard.data.db.PlanDao = db.planDao()
+
+    @Provides
     fun provideStudyDao(db: AppDatabase): app.lifedashboard.data.db.StudyDao = db.studyDao()
 
     @Provides
