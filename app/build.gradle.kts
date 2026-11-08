@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.room)
 }
 
 // Signatur: Der Schlüssel kommt NIE aus Git, sondern aus Umgebungsvariablen
@@ -67,8 +68,9 @@ kotlin {
     }
 }
 
-ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
+// Datenbank-Schema wird versioniert gespeichert – Grundlage für sichere Migrationen bei Updates.
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 dependencies {

@@ -42,7 +42,7 @@ jobs:
           fi
 
       - name: Unit-Tests
-        run: ./gradlew --no-daemon test
+        run: ./gradlew --no-daemon :planner:test :app:testDebugUnitTest
 
       - name: APK bauen
         run: ./gradlew --no-daemon :app:assembleRelease
