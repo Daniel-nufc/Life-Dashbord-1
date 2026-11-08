@@ -44,8 +44,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         EtsySaleEntity::class,
         EtsyStatsEntity::class,
         SchoolHolidayEntity::class,
+        TrainingResultEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -264,8 +265,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Update 2 / Teil 2A: Trainingsplan-Ergebnisse, Trainings aus Health Connect. */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `workouts` ADD COLUMN `externalId` TEXT")
+                db.execSQL("ALTER TABLE `workouts` ADD COLUMN `avgHeartRate` INTEGER")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_workouts_externalId` ON `workouts` (`externalId`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `training_results` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`dateEpochDay` INTEGER NOT NULL, `type` TEXT NOT NULL, `done` INTEGER NOT NULL, `skipped` INTEGER NOT NULL, " +
+                        "`effort` TEXT, `distanceMeters` INTEGER, `reduced` INTEGER NOT NULL, `workoutId` INTEGER)",
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_training_results_dateEpochDay_type` ON `training_results` (`dateEpochDay`, `type`)")
+            }
+        }
+
         val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+            MIGRATION_9_10,
         )
     }
 }

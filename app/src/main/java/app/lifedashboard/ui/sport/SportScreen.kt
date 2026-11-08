@@ -95,7 +95,39 @@ class SportViewModel @Inject constructor(
     routines: RoutineRepository,
     private val sport: SportRepository,
     private val health: HealthRepository,
+    private val training: app.lifedashboard.data.repository.TrainingRepository,
+    private val settingsRepository: app.lifedashboard.data.settings.SettingsRepository,
+    private val engine: app.lifedashboard.data.planning.PlanningEngine,
 ) : ViewModel() {
+    private val _overview = MutableStateFlow<app.lifedashboard.data.repository.TrainingOverview?>(null)
+    val overview: StateFlow<app.lifedashboard.data.repository.TrainingOverview?> = _overview.asStateFlow()
+    private val _syncMessage = MutableStateFlow<String?>(null)
+    val syncMessage: StateFlow<String?> = _syncMessage.asStateFlow()
+
+    fun refreshTraining() {
+        viewModelScope.launch { _overview.value = runCatching { training.overview() }.getOrNull() }
+    }
+
+    private fun trainingAction(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            runCatching { block() }
+            _overview.value = runCatching { training.overview() }.getOrNull()
+            runCatching { engine.replan(LocalDate.now()) }
+        }
+    }
+
+    fun done(t: app.lifedashboard.data.repository.PlannedTraining) = trainingAction { training.markDone(t.session) }
+    fun skip(t: app.lifedashboard.data.repository.PlannedTraining) = trainingAction { training.skip(t.session) }
+    fun rate(t: app.lifedashboard.data.repository.PlannedTraining, e: app.lifedashboard.planner.Effort) = trainingAction { training.rate(t.session, e) }
+    fun reduce(t: app.lifedashboard.data.repository.PlannedTraining) = trainingAction { training.reduce(t.session) }
+    fun saveTrainingSettings(t: app.lifedashboard.data.settings.TrainingSettings) = trainingAction { settingsRepository.setTraining(t) }
+    fun syncHealth() {
+        viewModelScope.launch {
+            val n = runCatching { training.syncFromHealth() }.getOrDefault(0)
+            _syncMessage.value = if (n > 0) "$n Training(s) aus Health Connect übernommen ✓" else "Keine neuen Trainings in Health Connect gefunden."
+            _overview.value = runCatching { training.overview() }.getOrNull()
+        }
+    }
     val routines: StateFlow<List<RoutineBlockEntity>> = routines.routines
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val workouts: StateFlow<List<WorkoutWithSets>> = sport.workouts
@@ -111,7 +143,9 @@ class SportViewModel @Inject constructor(
     val healthPermissions get() = health.permissions
 
     fun refreshHealth() {
+        refreshTraining()
         viewModelScope.launch {
+            runCatching { training.syncFromHealth() }
             _healthState.value = try {
                 when {
                     !health.isAvailable() -> HealthState.NOT_AVAILABLE
@@ -128,7 +162,7 @@ class SportViewModel @Inject constructor(
     }
 
     fun save(workout: WorkoutEntity, sets: List<WorkoutSetEntity>) {
-        viewModelScope.launch { sport.save(workout, sets) }
+        viewModelScope.launch { sport.save(workout, sets); refreshTraining() }
     }
 
     fun delete(id: Long) {
@@ -153,6 +187,9 @@ fun SportScreen(onBack: () -> Unit, viewModel: SportViewModel = hiltViewModel())
     val workouts by viewModel.workouts.collectAsStateWithLifecycle()
     val healthDays by viewModel.healthDays.collectAsStateWithLifecycle()
     val healthState by viewModel.healthState.collectAsStateWithLifecycle()
+    val training by viewModel.overview.collectAsStateWithLifecycle()
+    val syncMessage by viewModel.syncMessage.collectAsStateWithLifecycle()
+    var trainingSettings by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<EditRequest?>(null) }
     var workoutDialog by remember { mutableStateOf<WorkoutWithSets?>(null) }
     var newWorkout by remember { mutableStateOf(false) }
@@ -173,6 +210,18 @@ fun SportScreen(onBack: () -> Unit, viewModel: SportViewModel = hiltViewModel())
                 contentPadding = padding.listPadding(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                training?.let { o ->
+                    item { TrainingGoalCard(o, onSettings = { trainingSettings = true }) }
+                    item {
+                        TrainingWeekCard(
+                            o,
+                            TrainingActions(done = viewModel::done, skip = viewModel::skip, rate = viewModel::rate, reduce = viewModel::reduce),
+                        )
+                    }
+                    item { StrengthCard(o) }
+                    item { SafetyCard() }
+                }
+                syncMessage?.let { msg -> item { SectionCard { Text(msg) } } }
                 // Wochenminuten der letzten 8 Wochen
                 item {
                     val thisMonday = LocalDate.now().mondayOfWeek()
@@ -216,6 +265,7 @@ fun SportScreen(onBack: () -> Unit, viewModel: SportViewModel = hiltViewModel())
                             SportViewModel.HealthState.ERROR -> Text("Daten konnten nicht geladen werden.", color = MaterialTheme.colorScheme.error)
                             SportViewModel.HealthState.UNKNOWN -> Text("Lädt …")
                             SportViewModel.HealthState.READY -> {
+                                TextButton(onClick = viewModel::syncHealth) { Text("↻ Trainings aus Health Connect holen") }
                                 val today = healthDays.lastOrNull()
                                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                     Column {
@@ -301,6 +351,15 @@ fun SportScreen(onBack: () -> Unit, viewModel: SportViewModel = hiltViewModel())
         }
     }
     EditorHost(editing, onDismiss = { editing = null })
+    if (trainingSettings) {
+        training?.let { o ->
+            val current = app.lifedashboard.data.settings.TrainingSettings(
+                startLongestKm = o.profile.startLongestKm, easyPace = o.profile.easyPaceMinPerKm, runsPerWeek = o.profile.runsPerWeek,
+                strengthPerWeek = o.profile.strengthPerWeek, hasBike = o.profile.hasBike, canSwim = o.profile.canSwim, planStart = o.profile.planStart,
+            )
+            TrainingSettingsDialog(current, onSave = { viewModel.saveTrainingSettings(it); trainingSettings = false }, onDismiss = { trainingSettings = false })
+        }
+    }
     if (newWorkout || workoutDialog != null) {
         WorkoutDialog(
             original = workoutDialog,

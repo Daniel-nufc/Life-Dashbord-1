@@ -133,6 +133,7 @@ private fun WeekContent(
     val week by viewModel.week.collectAsStateWithLifecycle()
     val weekStart by viewModel.weekStart.collectAsStateWithLifecycle()
     val plan by viewModel.plan.collectAsStateWithLifecycle()
+    val trainingWeek by viewModel.trainingWeek.collectAsStateWithLifecycle()
     val range = week
     if (range == null) {
         LoadingState()
@@ -177,7 +178,10 @@ private fun WeekContent(
             }
         }
         items(range.days, key = { it.date.toEpochDay() }) { day ->
-            DayCard(day, range, plan.filter { it.dateEpochDay == day.date.toEpochDay() }, viewModel, onAdd, onEdit, onOpenTimetable)
+            DayCard(
+                day, range, plan.filter { it.dateEpochDay == day.date.toEpochDay() },
+                trainingWeek.filter { it.session.date == day.date }, viewModel, onAdd, onEdit, onOpenTimetable,
+            )
         }
     }
 }
@@ -187,6 +191,7 @@ private fun DayCard(
     day: DayAgenda,
     range: AgendaRange,
     plan: List<app.lifedashboard.data.db.PlanBlockEntity>,
+    trainings: List<app.lifedashboard.data.repository.PlannedTraining>,
     viewModel: CalendarViewModel,
     onAdd: (LocalDate) -> Unit,
     onEdit: (EditRequest) -> Unit,
@@ -291,6 +296,22 @@ private fun DayCard(
                         IconButton(onClick = { viewModel.decline(block) }) { Text("✕") }
                     }
                 }
+            }
+        // Trainingsplan (Ironman-Weg) – auch für Wochen ohne Tagesplan-Vorschläge
+        trainings.filter { t -> plan.none { it.demandKey == t.session.key && it.status != app.lifedashboard.data.db.PlanStatus.DECLINED } }
+            .forEach { t ->
+                empty = false
+                AgendaLine(
+                    time = "🏃",
+                    icon = LifeArea.SPORT.icon,
+                    color = LifeArea.SPORT.color,
+                    title = t.session.title,
+                    subtitle = when {
+                        t.done -> "Erledigt ✓"
+                        t.skipped -> "Ausgefallen"
+                        else -> "${t.session.minutes} Min · Trainingsplan – Uhrzeit kommt mit dem Tagesplan"
+                    },
+                ) {}
             }
         if (day.tasksDue.isNotEmpty()) {
             empty = false

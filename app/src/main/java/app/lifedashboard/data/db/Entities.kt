@@ -217,7 +217,7 @@ data class PlanFeedbackEntity(
 enum class WorkoutType { FLOORBALL, RUN, STRENGTH, SWIM, BIKE, OTHER }
 
 /** Ein Training im Log. */
-@Entity(tableName = "workouts", indices = [Index("dateEpochDay")])
+@Entity(tableName = "workouts", indices = [Index("dateEpochDay"), Index("externalId")])
 data class WorkoutEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val dateEpochDay: Long,
@@ -225,6 +225,9 @@ data class WorkoutEntity(
     val durationMinutes: Int,
     val distanceMeters: Int?,
     val note: String?,
+    /** Gesetzt, wenn das Training automatisch aus Health Connect kam */
+    val externalId: String? = null,
+    val avgHeartRate: Int? = null,
 )
 
 /** Ein Satz beim Krafttraining. */
@@ -384,4 +387,18 @@ data class SchoolHolidayEntity(
     val startEpochDay: Long,
     val endEpochDay: Long,
     val kind: HolidayKind,
+)
+
+/** Ergebnis einer geplanten Trainingseinheit (erledigt, ausgelassen, Bewertung). Der Plan selbst wird berechnet. */
+@Entity(tableName = "training_results", indices = [Index(value = ["dateEpochDay", "type"], unique = true)])
+data class TrainingResultEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val dateEpochDay: Long,
+    val type: app.lifedashboard.planner.SessionType,
+    val done: Boolean,
+    val skipped: Boolean,
+    val effort: app.lifedashboard.planner.Effort?,
+    val distanceMeters: Int?,
+    val reduced: Boolean,
+    val workoutId: Long?,
 )

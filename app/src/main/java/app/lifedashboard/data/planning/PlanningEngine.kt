@@ -48,6 +48,7 @@ class PlanningEngine @Inject constructor(
     private val agenda: AgendaRepository,
     private val study: StudyRepository,
     private val tasks: TaskRepository,
+    private val training: app.lifedashboard.data.repository.TrainingRepository,
 ) {
     private val mutex = Mutex()
 
@@ -113,7 +114,18 @@ class PlanningEngine @Inject constructor(
         val alreadyPlanned = (windowBlocks.filter { it.dateEpochDay != epoch } + kept)
             .groupBy { it.demandKey }.mapValues { (_, l) -> l.sumOf { it.endMinute - it.startMinute } }
 
-        val demands = buildDemands(date, day, range.allTasks, overview, settings)
+        val trainings = runCatching { training.sessionsFor(date) }.getOrDefault(emptyList()).filter { !it.done && !it.skipped }
+        val demands = (buildDemands(date, day, range.allTasks, overview, settings) + trainings.map { t ->
+            Demand(
+                key = t.session.key,
+                type = DemandType.SPORT,
+                title = "🏃 " + t.session.title,
+                minutes = t.session.minutes,
+                priority = if (t.session.type.hard) 0.95 else 0.85,
+                minChunk = t.session.minutes,
+                maxChunk = t.session.minutes,
+            )
+        })
             .filter { it.key !in declinedKeys }
             .map { it.copy(minutes = it.minutes - (alreadyPlanned[it.key] ?: 0)) }
             .filter { it.minutes >= 10 }
@@ -162,13 +174,19 @@ class PlanningEngine @Inject constructor(
                 }
             }
             DemandType.STUDY, DemandType.REVIEW -> study.recordSession(null, minutes, System.currentTimeMillis() - minutes * 60_000L)
+            DemandType.SPORT -> trainingFor(block)?.let { training.markDone(it.session) }
             else -> Unit
         }
     }
 
+    private suspend fun trainingFor(block: PlanBlockEntity) =
+        if (block.demandKey.startsWith("train:")) training.sessionsFor(LocalDate.ofEpochDay(block.dateEpochDay)).firstOrNull { it.session.key == block.demandKey } else null
+
     suspend fun decline(block: PlanBlockEntity) {
         dao.setStatus(block.id, PlanStatus.DECLINED)
         feedback(block, FeedbackAction.DECLINED)
+        // Training heute nicht → fällt aus, wird nicht nachgeholt (Plan rutscht sinnvoll nach)
+        trainingFor(block)?.let { training.skip(it.session) }
         replan(LocalDate.ofEpochDay(block.dateEpochDay))
     }
 
@@ -313,20 +331,6 @@ class PlanningEngine @Inject constructor(
             refId = nextEtsy?.id,
         )
 
-        // 5) Sport: Lauftraining Richtung 10 km an Tagen ohne Floorball und ohne Job
-        val hasTraining = day.routines.any { it.area == LifeArea.SPORT }
-        val hasJob = day.shifts.isNotEmpty()
-        if (!hasTraining && !hasJob && date.dayOfWeek in setOf(DayOfWeek.TUESDAY, DayOfWeek.THURSDAY, DayOfWeek.SATURDAY)) {
-            demands += Demand(
-                key = "sport:run:$epoch",
-                type = DemandType.SPORT,
-                title = "Laufen (Ziel 10 km) – locker, 30 Min",
-                minutes = if (examPhase) 25 else 35,
-                priority = 0.8,
-                minChunk = 25,
-                maxChunk = 45,
-            )
-        }
         return demands
     }
 }

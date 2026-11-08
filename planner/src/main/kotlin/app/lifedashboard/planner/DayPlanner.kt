@@ -103,7 +103,7 @@ object DayPlanner {
                 val candidates = segments.filter { it.duration.toMinutes() >= minNeeded }
                 if (candidates.isEmpty()) break
                 val best = candidates.maxByOrNull { seg ->
-                    timeFit(demand.type, seg.start) * config.preferences.weight(demand.type, date, seg.start) -
+                    timeFit(demand.type, seg.start, date) * config.preferences.weight(demand.type, date, seg.start) -
                         seg.start.toSecondOfDay() / 86_400.0 * 0.05 // bei Gleichstand früher
                 } ?: break
                 val chunk = minOf(remaining, demand.maxChunk, best.duration.toMinutes().toInt())
@@ -134,8 +134,10 @@ object DayPlanner {
     }
 
     /** Lieblings-Tageszeiten je Art (Daniel lernt am besten nachmittags). */
-    fun timeFit(type: DemandType, time: LocalTime): Double {
+    fun timeFit(type: DemandType, time: LocalTime, date: LocalDate? = null): Double {
         val h = time.hour
+        val weekend = date != null && (date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY)
+        if (type == DemandType.SPORT && weekend && h in 9..11) return 1.4
         return when (type) {
             DemandType.HOMEWORK, DemandType.STUDY -> when (h) {
                 in 15..17 -> 1.4

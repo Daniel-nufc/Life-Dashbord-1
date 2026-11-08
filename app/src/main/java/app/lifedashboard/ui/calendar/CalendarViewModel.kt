@@ -38,6 +38,7 @@ class CalendarViewModel @Inject constructor(
     agenda: AgendaRepository,
     private val tasks: TaskRepository,
     private val engine: app.lifedashboard.data.planning.PlanningEngine,
+    private val training: app.lifedashboard.data.repository.TrainingRepository,
 ) : ViewModel() {
 
     private val _weekStart = MutableStateFlow(planningMonday())
@@ -66,6 +67,11 @@ class CalendarViewModel @Inject constructor(
                 }
         }
     }
+
+    /** Trainingsplan der angezeigten Woche – für jede Woche berechnet, auch weit in der Zukunft */
+    val trainingWeek: StateFlow<List<app.lifedashboard.data.repository.PlannedTraining>> = _weekStart
+        .flatMapLatest { start -> agenda.observe(start, 7).map { runCatching { training.week(start) }.getOrDefault(emptyList()) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun accept(block: PlanBlockEntity) { viewModelScope.launch { engine.accept(block) } }
     fun decline(block: PlanBlockEntity) { viewModelScope.launch { engine.decline(block) } }

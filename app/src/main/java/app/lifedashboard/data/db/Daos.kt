@@ -213,6 +213,21 @@ interface SportDao {
     @Query("DELETE FROM workout_sets WHERE workoutId = :workoutId")
     suspend fun deleteSetsOf(workoutId: Long)
 
+    @Query("SELECT COUNT(*) FROM workouts WHERE externalId = :externalId")
+    suspend fun countExternal(externalId: String): Int
+
+    @Query("SELECT * FROM training_results ORDER BY dateEpochDay")
+    fun observeTrainingResults(): Flow<List<TrainingResultEntity>>
+
+    @Query("SELECT * FROM training_results")
+    suspend fun trainingResults(): List<TrainingResultEntity>
+
+    @Query("SELECT * FROM training_results WHERE dateEpochDay = :day AND type = :type")
+    suspend fun trainingResult(day: Long, type: app.lifedashboard.planner.SessionType): TrainingResultEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putTrainingResult(result: TrainingResultEntity)
+
     @Insert
     suspend fun insertSets(sets: List<WorkoutSetEntity>)
 }
