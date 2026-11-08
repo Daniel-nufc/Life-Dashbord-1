@@ -76,7 +76,7 @@ data class RoutineBlockEntity(
 }
 
 /** Eigener Termin im Kalender. Ohne Uhrzeit = ganztägig. */
-@Entity(tableName = "events", indices = [Index("dateEpochDay")])
+@Entity(tableName = "events", indices = [Index("dateEpochDay"), Index("externalUid")])
 data class EventEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
@@ -86,12 +86,14 @@ data class EventEntity(
     val area: LifeArea,
     val location: String?,
     val note: String?,
+    /** Gesetzt bei Terminen aus einem Kalender-Abo (iCal) – verhindert Doppelungen. */
+    val externalUid: String? = null,
 )
 
 enum class TaskKind { HOMEWORK, TODO }
 
 /** Hausaufgabe oder To-do. Hausaufgaben gehören zu einem Fach. */
-@Entity(tableName = "tasks", indices = [Index("dueEpochDay"), Index("done")])
+@Entity(tableName = "tasks", indices = [Index("dueEpochDay"), Index("done"), Index("externalUid")])
 data class TaskEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
@@ -104,6 +106,8 @@ data class TaskEntity(
     val doneAtMillis: Long?,
     val note: String?,
     val createdAtMillis: Long,
+    /** Gesetzt bei Abgaben aus einem Kalender-Abo (z. B. Lernraum). */
+    val externalUid: String? = null,
 )
 
 /** Schicht im Minijob. */
@@ -115,4 +119,16 @@ data class JobShiftEntity(
     val endMinute: Int,
     val note: String?,
     val hourlyWageCents: Int?,
+)
+
+/** Kalender-Abo per Link (iCal), z. B. Lernraum Berlin, IServ oder WebUntis. */
+@Entity(tableName = "ical_sources")
+data class IcalSourceEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val url: String,
+    /** true = Einträge werden Aufgaben (Abgaben), false = Termine im Kalender */
+    val importAsTasks: Boolean,
+    val lastSyncMillis: Long?,
+    val lastError: String?,
 )

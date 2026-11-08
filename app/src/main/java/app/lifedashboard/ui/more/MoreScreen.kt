@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AttachMoney
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.SportsHockey
@@ -97,7 +98,7 @@ class MoreViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreScreen(onOpenSport: () -> Unit, viewModel: MoreViewModel = hiltViewModel()) {
+fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, viewModel: MoreViewModel = hiltViewModel()) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var editName by remember { mutableStateOf(false) }
@@ -112,6 +113,7 @@ fun MoreScreen(onOpenSport: () -> Unit, viewModel: MoreViewModel = hiltViewModel
                 item { SectionTitle("Bereiche") }
                 item {
                     SectionCard {
+                        AreaItem(Icons.Rounded.CalendarMonth, LifeArea.SCHOOL.color, "Kalender & Abos", "Handy-Kalender, Lernraum, IServ, WebUntis", onOpenConnections)
                         AreaItem(Icons.Rounded.SportsHockey, LifeArea.SPORT.color, "Training & Sport", "Floorball-Zeiten ändern, Ironman-Weg", onOpenSport)
                         AreaItem(Icons.Rounded.Flag, LifeArea.PRIVATE.color, "Ziele & Gewohnheiten", "kommt in Phase 5", null)
                         AreaItem(Icons.Rounded.AttachMoney, LifeArea.JOB.color, "Finanzen", "kommt in Phase 6", null)

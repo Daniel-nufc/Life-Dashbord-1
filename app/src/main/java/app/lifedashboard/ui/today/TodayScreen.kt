@@ -99,7 +99,7 @@ fun TodayScreen(
                         onOpenTasks = onOpenTasks,
                     )
                 }
-                if (s.allDayEvents.isNotEmpty()) {
+                if (s.allDayEvents.isNotEmpty() || s.externalAllDay.isNotEmpty()) {
                     item {
                         SectionCard {
                             TileHeader(Icons.Rounded.Event, "Heute ganztägig", LifeArea.PRIVATE.color)
@@ -112,6 +112,9 @@ fun TodayScreen(
                                         .clickable { editing = EditRequest.Event(event, LocalDate.now()) }
                                         .padding(vertical = 4.dp),
                                 )
+                            }
+                            s.externalAllDay.forEach { title ->
+                                Text("• $title", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(vertical = 4.dp))
                             }
                         }
                     }
@@ -245,6 +248,7 @@ private fun entryColor(entry: TimelineEntry): Color = when (entry.kind) {
     EntryKind.LESSON -> entry.colorArgb?.let { Color(it) } ?: LifeArea.SCHOOL.color
     EntryKind.COMMUTE -> MaterialTheme.colorScheme.outline
     EntryKind.FREE -> MaterialTheme.colorScheme.outlineVariant
+    EntryKind.EVENT -> entry.colorArgb?.let { Color(it) } ?: entry.area?.color ?: MaterialTheme.colorScheme.primary
     else -> entry.area?.color ?: MaterialTheme.colorScheme.primary
 }
 

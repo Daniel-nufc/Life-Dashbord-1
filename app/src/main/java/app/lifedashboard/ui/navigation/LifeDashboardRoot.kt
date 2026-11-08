@@ -19,6 +19,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import app.lifedashboard.ui.calendar.CalendarScreen
+import app.lifedashboard.ui.connections.ConnectionsScreen
 import app.lifedashboard.ui.more.MoreScreen
 import app.lifedashboard.ui.placeholder.ComingSoonScreen
 import app.lifedashboard.ui.sport.SportScreen
@@ -34,10 +35,11 @@ enum class TopLevelDestination(val route: String, val label: String, val icon: I
 }
 
 private const val SPORT_ROUTE = "sport"
+private const val CONNECTIONS_ROUTE = "connections"
 
 /** Unterseiten gehören optisch zu einem Tab (z. B. Sport → Mehr). */
 private fun topLevelFor(route: String?): String? = when (route) {
-    SPORT_ROUTE -> TopLevelDestination.MORE.route
+    SPORT_ROUTE, CONNECTIONS_ROUTE -> TopLevelDestination.MORE.route
     else -> route
 }
 
@@ -92,9 +94,13 @@ fun LifeDashboardRoot() {
                 )
             }
             composable(TopLevelDestination.MORE.route) {
-                MoreScreen(onOpenSport = { navController.navigate(SPORT_ROUTE) })
+                MoreScreen(
+                    onOpenSport = { navController.navigate(SPORT_ROUTE) },
+                    onOpenConnections = { navController.navigate(CONNECTIONS_ROUTE) },
+                )
             }
             composable(SPORT_ROUTE) { SportScreen(onBack = { navController.popBackStack() }) }
+            composable(CONNECTIONS_ROUTE) { ConnectionsScreen(onBack = { navController.popBackStack() }) }
         }
     }
 }

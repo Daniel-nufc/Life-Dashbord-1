@@ -15,6 +15,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import app.lifedashboard.data.sync.ExternalEvent
+import app.lifedashboard.data.sync.SystemCalendarRepository
 
 /** Alles, was an einem Tag passiert – aus allen Bereichen zusammengeführt. */
 data class DayAgenda(
@@ -26,6 +31,7 @@ data class DayAgenda(
     val shifts: List<JobShiftEntity>,
     val tasksDue: List<TaskEntity>,
     val settings: AppSettings,
+    val externalEvents: List<ExternalEvent> = emptyList(),
 ) {
     val isWeekend: Boolean get() = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
 
@@ -34,6 +40,7 @@ data class DayAgenda(
         routines = routines,
         events = events,
         shifts = shifts,
+        externalEvents = externalEvents,
         dayStart = settings.dayStartFor(date),
         dayEnd = settings.dayEnd,
         commuteMinutes = settings.schoolCommuteMinutes,
@@ -51,6 +58,7 @@ data class AgendaRange(
  * Führt Stundenplan, Training, Termine, Schichten und Aufgaben zusammen.
  * Heute und Kalender lesen beide hier – eine Änderung erscheint daher überall gleichzeitig.
  */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @Singleton
 class AgendaRepository @Inject constructor(
     private val timetable: TimetableRepository,
@@ -59,16 +67,24 @@ class AgendaRepository @Inject constructor(
     private val jobs: JobRepository,
     private val tasks: TaskRepository,
     private val settingsRepository: app.lifedashboard.data.settings.SettingsRepository,
+    private val systemCalendar: SystemCalendarRepository,
 ) {
+    private fun externalEvents(from: LocalDate, to: LocalDate): Flow<List<ExternalEvent>> =
+        combine(settingsRepository.settings.map { it.systemCalendarIds }.distinctUntilChanged(), systemCalendar.changes()) { ids, _ -> ids }
+            .mapLatest { ids -> runCatching { systemCalendar.events(from, to, ids) }.getOrDefault(emptyList()) }
+
     fun observe(from: LocalDate, days: Int): Flow<AgendaRange> {
         val to = from.plusDays((days - 1).toLong())
         val base = combine(timetable.lessons, timetable.subjects, routines.routines, settingsRepository.settings) { l, s, r, st ->
             BaseData(l, s, r, st)
         }
-        val dynamic = combine(events.between(from, to), jobs.between(from, to), tasks.tasks) { e, j, t ->
-            Triple(e, j, t)
+        val dynamic = combine(events.between(from, to), jobs.between(from, to), tasks.tasks, externalEvents(from, to)) { e, j, t, x ->
+            DynamicData(e, j, t, x)
         }
-        return combine(base, dynamic) { b, (eventList, shiftList, taskList) ->
+        return combine(base, dynamic) { b, d ->
+            val eventList = d.events
+            val shiftList = d.shifts
+            val taskList = d.tasks
             val calculator = b.settings.weekCalculator()
             val dayList = (0 until days).map { offset ->
                 val date = from.plusDays(offset.toLong())
@@ -84,11 +100,19 @@ class AgendaRepository @Inject constructor(
                     shifts = shiftList.filter { it.dateEpochDay == epoch },
                     tasksDue = taskList.filter { !it.done && it.dueEpochDay == epoch },
                     settings = b.settings,
+                    externalEvents = d.external.filter { it.date == date },
                 )
             }
             AgendaRange(dayList, taskList, b.subjects.associateBy { it.id }, b.settings)
         }
     }
+
+    private data class DynamicData(
+        val events: List<EventEntity>,
+        val shifts: List<JobShiftEntity>,
+        val tasks: List<TaskEntity>,
+        val external: List<ExternalEvent>,
+    )
 
     private data class BaseData(
         val lessons: List<LessonItem>,

@@ -5,6 +5,7 @@ import app.lifedashboard.data.db.JobShiftEntity
 import app.lifedashboard.data.db.LifeArea
 import app.lifedashboard.data.db.RoutineBlockEntity
 import app.lifedashboard.data.repository.LessonItem
+import app.lifedashboard.data.sync.ExternalEvent
 import app.lifedashboard.planner.TimeRange
 import app.lifedashboard.planner.freeSlots
 import java.time.Duration
@@ -37,6 +38,7 @@ object DayTimelineBuilder {
         commuteMinutes: Int,
         events: List<EventEntity> = emptyList(),
         shifts: List<JobShiftEntity> = emptyList(),
+        externalEvents: List<ExternalEvent> = emptyList(),
         minFreeMinutes: Long = 30,
     ): List<TimelineEntry> {
         val fixed = mutableListOf<TimelineEntry>()
@@ -87,6 +89,18 @@ object DayTimelineBuilder {
                 kind = EntryKind.EVENT,
                 area = event.area,
                 refId = event.id,
+            )
+        }
+
+        externalEvents.forEach { event ->
+            val start = event.startMinute ?: return@forEach
+            fixed += TimelineEntry(
+                range = TimeRange.ofMinutes(start, (event.endMinute ?: (start + 60)).coerceAtLeast(start)),
+                title = event.title,
+                subtitle = event.calendarName.ifBlank { null },
+                kind = EntryKind.EVENT,
+                colorArgb = event.color.toLong() and 0xFFFFFFFFL,
+                area = LifeArea.PRIVATE,
             )
         }
 

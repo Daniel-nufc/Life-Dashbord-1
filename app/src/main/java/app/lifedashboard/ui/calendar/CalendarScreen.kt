@@ -218,11 +218,15 @@ private fun DayCard(
                 onEdit(EditRequest.Event(event, day.date))
             }
         }
+        day.externalEvents.filter { it.startMinute == null }.forEach { event ->
+            empty = false
+            AgendaLine("ganzt.", Icons.Rounded.Event, androidx.compose.ui.graphics.Color(event.color), event.title, event.calendarName) {}
+        }
         day.timeline()
             .filter { it.kind == EntryKind.EVENT || it.kind == EntryKind.JOB || it.kind == EntryKind.ROUTINE }
             .forEach { entry ->
                 empty = false
-                val color = entry.area?.color ?: MaterialTheme.colorScheme.primary
+                val color = entry.colorArgb?.let { androidx.compose.ui.graphics.Color(it) } ?: entry.area?.color ?: MaterialTheme.colorScheme.primary
                 AgendaLine(
                     time = entry.range.start.hhmm(),
                     icon = entry.area?.icon ?: Icons.Rounded.Event,

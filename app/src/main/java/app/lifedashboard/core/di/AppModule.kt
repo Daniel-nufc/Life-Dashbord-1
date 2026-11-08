@@ -55,7 +55,7 @@ object AppModule {
         val factory = SupportOpenHelperFactory(keyProvider.getOrCreatePassphrase())
         return Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.NAME)
             .openHelperFactory(factory)
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(*AppDatabase.ALL_MIGRATIONS)
             .build()
     }
 
@@ -73,4 +73,7 @@ object AppModule {
 
     @Provides
     fun provideJobShiftDao(db: AppDatabase): JobShiftDao = db.jobShiftDao()
+
+    @Provides
+    fun provideIcalSourceDao(db: AppDatabase): app.lifedashboard.data.db.IcalSourceDao = db.icalSourceDao()
 }

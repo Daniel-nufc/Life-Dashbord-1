@@ -62,6 +62,9 @@ interface EventDao {
 
     @Query("DELETE FROM events WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM events WHERE externalUid LIKE :prefix || '%'")
+    suspend fun byExternalPrefix(prefix: String): List<EventEntity>
 }
 
 @Dao
@@ -80,6 +83,9 @@ interface TaskDao {
 
     @Query("DELETE FROM tasks WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM tasks WHERE externalUid LIKE :prefix || '%'")
+    suspend fun byExternalPrefix(prefix: String): List<TaskEntity>
 }
 
 @Dao
@@ -91,5 +97,23 @@ interface JobShiftDao {
     suspend fun upsert(shift: JobShiftEntity)
 
     @Query("DELETE FROM job_shifts WHERE id = :id")
+    suspend fun delete(id: Long)
+}
+
+@Dao
+interface IcalSourceDao {
+    @Query("SELECT * FROM ical_sources ORDER BY name")
+    fun observeAll(): Flow<List<IcalSourceEntity>>
+
+    @Query("SELECT * FROM ical_sources")
+    suspend fun all(): List<IcalSourceEntity>
+
+    @Upsert
+    suspend fun upsert(source: IcalSourceEntity): Long
+
+    @Query("UPDATE ical_sources SET lastSyncMillis = :at, lastError = :error WHERE id = :id")
+    suspend fun setResult(id: Long, at: Long, error: String?)
+
+    @Query("DELETE FROM ical_sources WHERE id = :id")
     suspend fun delete(id: Long)
 }

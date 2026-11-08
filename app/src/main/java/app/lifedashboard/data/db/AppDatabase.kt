@@ -21,8 +21,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         EventEntity::class,
         TaskEntity::class,
         JobShiftEntity::class,
+        IcalSourceEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -31,6 +32,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun eventDao(): EventDao
     abstract fun taskDao(): TaskDao
     abstract fun jobShiftDao(): JobShiftDao
+    abstract fun icalSourceDao(): IcalSourceDao
 
     companion object {
         const val NAME = "lifedashboard.db"
@@ -62,5 +64,22 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_job_shifts_dateEpochDay` ON `job_shifts` (`dateEpochDay`)")
             }
         }
+
+        /** Phase 2b: Kalender-Abos (iCal) und Kennung für importierte Einträge. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `events` ADD COLUMN `externalUid` TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_events_externalUid` ON `events` (`externalUid`)")
+                db.execSQL("ALTER TABLE `tasks` ADD COLUMN `externalUid` TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_tasks_externalUid` ON `tasks` (`externalUid`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `ical_sources` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `url` TEXT NOT NULL, `importAsTasks` INTEGER NOT NULL, " +
+                        "`lastSyncMillis` INTEGER, `lastError` TEXT)",
+                )
+            }
+        }
+
+        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
     }
 }
