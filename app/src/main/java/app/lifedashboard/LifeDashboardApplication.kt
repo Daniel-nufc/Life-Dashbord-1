@@ -31,5 +31,6 @@ class LifeDashboardApplication : Application(), Configuration.Provider {
         IcalSyncWorker.schedule(this)
         notifier.createChannels()
         app.lifedashboard.data.notify.ReminderWorker.schedule(this)
+        app.lifedashboard.data.devicesync.SyncWorker.schedule(this)
     }
 }

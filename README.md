@@ -22,6 +22,7 @@ Zeigt alle Lebensbereiche auf einen Blick und **plant Tag und Woche aktiv**: Sch
 | 9 | Benachrichtigungen (Ruhezeit, max. 5/Tag, Coach-Ton) + Wochenrückblick | ✅ |
 | 10 | Homescreen-Widgets: Heute & Klausur-Countdown | ✅ |
 | 11 | Verschlüsseltes Backup, Auto-Backup, Übertragung Handy ↔ Tablet | ✅ |
+| Update 21 | Automatischer Abgleich Handy ↔ Tablet (Cloud-Ordner + WLAN, verschlüsselt, zusammenführen statt überschreiben) | ✅ |
 | Update 2 | Kalender ganzjährig (A/B mit Ferien), Automatik überall, Sport-Zeitfenster, Fitness-Bereich, freie Klausur-Themen, Gesamtprüfung mit Screenshot-Tests | ✅ |
 
 ---
@@ -94,6 +95,16 @@ Der Schlüssel liegt **nicht** im Code, sondern als Secret bei GitHub:
 5. *Mehr → Kalender & Abos:* Handy-Kalender erlauben, optional den Lernraum-Link eintragen.
 6. *Mehr → Fitness:* Health Connect verbinden. Danach in **Samsung Health** (Einstellungen → Health Connect) und **MyFitnessPal** (Apps & Geräte → Health Connect) das Teilen erlauben.
 
+### Handy ↔ Tablet abgleichen
+*Mehr → Handy ↔ Tablet*
+1. Auf **beiden** Geräten dasselbe **Abgleich-Passwort** eintragen (mind. 8 Zeichen).
+2. **Cloud-Ordner (auch unterwegs):** Auf dem ersten Gerät „Neue Abgleich-Datei anlegen“ und in Google Drive speichern. Auf dem zweiten Gerät „Vorhandene Abgleich-Datei wählen“ und dieselbe Datei auswählen.
+   Abgleich danach automatisch beim Öffnen, beim Verlassen und alle 30 Min.
+3. **WLAN (ohne Cloud):** Ist standardmäßig an. Sind beide Geräte im selben WLAN und die App ist offen, gleichen sie sich direkt ab.
+
+Einträge werden **zusammengeführt**, nicht überschrieben. Ändern beide Geräte denselben Eintrag, gewinnt die neuere Änderung. Löschen wird übertragen.
+Einstellungen bleiben pro Gerät. Alles ist mit dem Abgleich-Passwort verschlüsselt (AES-256), Google sieht nur unlesbare Daten.
+
 ### Sport-Zeitfenster
 Die App schreibt dir **keinen Sport vor**. Sie hält pro Woche freie Zeitfenster frei (Standard: 3 × 60 Min zusätzlich zu Floorball, nie an Floorball-Tagen, sonntags frei, in der Klausurphase etwas weniger).
 Was du darin machst, entscheidest du. Beim Abhaken kannst du optional eintragen, was es war. Trainings aus Samsung Health, Strava & Co. haken das Zeitfenster automatisch ab.
@@ -126,6 +137,7 @@ Getestet werden: Planer (freie Zeiten, A/B-Woche über ein ganzes Schuljahr inkl
 
 Dazu kommen Tests mit der echten App (Robolectric, ohne Gerät):
 - **Planung** mit echter Datenbank: leere Datenbank, Klausur morgen, Klausur ohne Themen, gelöschte Klausur, Ferien, voller Tag
+- **Abgleich Handy ↔ Tablet:** Startdaten nicht doppelt, neue/geänderte/gelöschte Einträge, Verweise (Klausur → Themen), Konflikte, falsches Passwort, echter WLAN-Austausch
 - **Hintergrund-Jobs:** Erinnerungen, Kalender-Abo und Backup laufen ohne Absturz und sind genau einmal geplant
 - **Screenshot-Tests:** alle Hauptbildschirme auf Handy- und Tablet-Größe, die Bilder landen unter `app/build/screenshots/`
 Die Tests laufen auch bei jedem Push auf GitHub.

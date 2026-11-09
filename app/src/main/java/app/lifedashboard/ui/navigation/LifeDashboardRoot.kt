@@ -43,10 +43,11 @@ private const val ETSY_ROUTE = "etsy"
 private const val REVIEW_ROUTE = "review"
 private const val BACKUP_ROUTE = "backup"
 private const val HOLIDAYS_ROUTE = "holidays"
+private const val SYNC_ROUTE = "sync"
 
 /** Unterseiten gehören optisch zu einem Tab (z. B. Sport → Mehr). */
 private fun topLevelFor(route: String?): String? = when (route) {
-    SPORT_ROUTE, CONNECTIONS_ROUTE, GOALS_ROUTE, FINANCE_ROUTE, ETSY_ROUTE, REVIEW_ROUTE, BACKUP_ROUTE, HOLIDAYS_ROUTE -> TopLevelDestination.MORE.route
+    SPORT_ROUTE, CONNECTIONS_ROUTE, GOALS_ROUTE, FINANCE_ROUTE, ETSY_ROUTE, REVIEW_ROUTE, BACKUP_ROUTE, HOLIDAYS_ROUTE, SYNC_ROUTE -> TopLevelDestination.MORE.route
     else -> route
 }
 
@@ -115,8 +116,10 @@ fun LifeDashboardRoot() {
                     onOpenReview = { navController.navigate(REVIEW_ROUTE) },
                     onOpenBackup = { navController.navigate(BACKUP_ROUTE) },
                     onOpenHolidays = { navController.navigate(HOLIDAYS_ROUTE) },
+                    onOpenSync = { navController.navigate(SYNC_ROUTE) },
                 )
             }
+            composable(SYNC_ROUTE) { app.lifedashboard.ui.sync.SyncScreen(onBack = { navController.popBackStack() }) }
             composable(HOLIDAYS_ROUTE) { app.lifedashboard.ui.holidays.HolidaysScreen(onBack = { navController.popBackStack() }) }
             composable(BACKUP_ROUTE) { app.lifedashboard.ui.backup.BackupScreen(onBack = { navController.popBackStack() }) }
             composable(REVIEW_ROUTE) { app.lifedashboard.ui.review.ReviewScreen(onBack = { navController.popBackStack() }) }

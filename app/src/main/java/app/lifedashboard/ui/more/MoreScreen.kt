@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.SportsHockey
 import androidx.compose.material.icons.rounded.Storefront
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -133,7 +134,7 @@ class MoreViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoals: () -> Unit, onOpenFinance: () -> Unit, onOpenEtsy: () -> Unit, onOpenReview: () -> Unit, onOpenBackup: () -> Unit, onOpenHolidays: () -> Unit, viewModel: MoreViewModel = hiltViewModel()) {
+fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoals: () -> Unit, onOpenFinance: () -> Unit, onOpenEtsy: () -> Unit, onOpenReview: () -> Unit, onOpenBackup: () -> Unit, onOpenHolidays: () -> Unit, onOpenSync: () -> Unit = {}, viewModel: MoreViewModel = hiltViewModel()) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val freeRanges by viewModel.freeRanges.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -149,6 +150,7 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoa
                 item { SectionTitle("Bereiche") }
                 item {
                     SectionCard {
+                        AreaItem(Icons.Rounded.Sync, LifeArea.SCHOOL.color, "Handy ↔ Tablet", "Automatischer Abgleich über Cloud-Ordner oder WLAN", onOpenSync)
                         AreaItem(Icons.Rounded.Insights, LifeArea.SCHOOL.color, "Wochenrückblick", "Was lief gut, was nicht, Vorschläge", onOpenReview)
                         AreaItem(Icons.Rounded.BeachAccess, LifeArea.SPORT.color, "Ferien & freie Tage", "Berliner Ferien 2026/27, eigene Studientage", onOpenHolidays)
                         AreaItem(Icons.Rounded.CalendarMonth, LifeArea.SCHOOL.color, "Kalender & Abos", "Handy-Kalender, Lernraum, IServ, WebUntis", onOpenConnections)
@@ -256,7 +258,7 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoa
                 item { SectionTitle("Daten") }
                 item {
                     SectionCard {
-                        AreaItem(Icons.Rounded.Backup, LifeArea.SCHOOL.color, "Backup & Übertragen", "Verschlüsselt sichern, aufs Tablet übertragen", onOpenBackup)
+                        AreaItem(Icons.Rounded.Backup, LifeArea.SCHOOL.color, "Backup & Übertragen", "Verschlüsselt sichern (für den Alltag: „Handy ↔ Tablet“)", onOpenBackup)
                     }
                 }
                 item { SectionTitle("Info") }

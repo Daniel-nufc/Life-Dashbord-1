@@ -45,8 +45,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         EtsyStatsEntity::class,
         SchoolHolidayEntity::class,
         TrainingResultEntity::class,
+        SyncMetaEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -287,9 +288,25 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Update 21: Geräte-Abgleich Handy ↔ Tablet (Kennungen + Änderungszeitpunkte). */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `sync_meta` (`tbl` TEXT NOT NULL, `localId` INTEGER NOT NULL, `gid` TEXT, `updatedAt` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`tbl`, `localId`))")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_sync_meta_tbl_gid` ON `sync_meta` (`tbl`, `gid`)")
+                app.lifedashboard.data.devicesync.SyncSchema.backfill(db)
+            }
+        }
+
         val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-            MIGRATION_9_10, MIGRATION_10_11,
+            MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
         )
+
+        /** Legt beim Öffnen die Abgleich-Trigger an (neue Installation und nach Updates). */
+        val SYNC_CALLBACK = object : RoomDatabase.Callback() {
+            override fun onOpen(db: SupportSQLiteDatabase) {
+                app.lifedashboard.data.devicesync.SyncSchema.createTriggers(db)
+            }
+        }
     }
 }

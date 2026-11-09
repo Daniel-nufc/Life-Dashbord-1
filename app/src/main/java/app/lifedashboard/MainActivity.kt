@@ -23,6 +23,8 @@ class MainActivity : FragmentActivity() {
 
     @Inject lateinit var appLock: AppLockManager
 
+    @Inject lateinit var lanSync: app.lifedashboard.data.devicesync.LanSyncManager
+
     private var promptShowing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,11 +45,17 @@ class MainActivity : FragmentActivity() {
     override fun onStart() {
         super.onStart()
         appLock.onAppForeground()
+        // Abgleich Handy ↔ Tablet: beim Öffnen holen, im WLAN direkt verbinden
+        app.lifedashboard.data.devicesync.SyncWorker.runNow(this)
+        lanSync.start()
     }
 
     override fun onStop() {
         super.onStop()
         appLock.onAppBackground()
+        lanSync.stop()
+        // Beim Verlassen die eigenen Änderungen hochladen
+        app.lifedashboard.data.devicesync.SyncWorker.runNow(this, delaySeconds = 3)
     }
 
     /** Fingerabdruck/Gesicht, ersatzweise Geräte-PIN. Ohne eingerichtete Sperre: direkt öffnen. */

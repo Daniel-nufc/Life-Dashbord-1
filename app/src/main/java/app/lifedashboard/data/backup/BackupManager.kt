@@ -49,7 +49,8 @@ class BackupManager @Inject constructor(
     class VersionMismatchException(val fileVersion: Int, val appVersion: Int) :
         Exception("Backup ist von Datenbank-Version $fileVersion, die App hat Version $appVersion. Bitte beide Geräte auf die gleiche App-Version bringen.")
 
-    private val skippedTables = setOf("room_master_table", "android_metadata", "sqlite_sequence")
+    // sync_meta gehört zum Geräte-Abgleich und wird nach einem Restore automatisch neu aufgebaut
+    private val skippedTables = setOf("room_master_table", "android_metadata", "sqlite_sequence", "sync_meta")
     private val skippedPrefs = setOf("sent_notifications")
 
     suspend fun export(uri: Uri, password: String) = withContext(Dispatchers.IO) {
@@ -98,7 +99,8 @@ class BackupManager @Inject constructor(
         }
         val prefs = JSONObject()
         dataStore.data.first().asMap().forEach { (key, value) ->
-            if (key.name in skippedPrefs) return@forEach
+            // Abgleich-Einstellungen (Geräte-ID!) gehören nur zu diesem Gerät
+            if (key.name in skippedPrefs || key.name.startsWith("sync_")) return@forEach
             val type = when (value) {
                 is Boolean -> "b"
                 is Int -> "i"
@@ -152,6 +154,7 @@ class BackupManager @Inject constructor(
     private suspend fun restorePrefs(prefs: JSONObject) {
         dataStore.edit { store ->
             prefs.keys().forEach { name ->
+                if (name.startsWith("sync_")) return@forEach
                 val entry = prefs.getJSONObject(name)
                 when (entry.getString("t")) {
                     "b" -> store[booleanPreferencesKey(name)] = entry.getBoolean("v")
@@ -163,40 +166,11 @@ class BackupManager @Inject constructor(
         }
     }
 
-    // ------------------------------------------------------------------ Verschlüsselung
+    private fun encrypt(plain: ByteArray, password: String) = app.lifedashboard.core.security.PasswordCrypto.encrypt(plain, password)
 
-    private fun deriveKey(password: String, salt: ByteArray): SecretKeySpec {
-        val spec = PBEKeySpec(password.toCharArray(), salt, 210_000, 256)
-        val bytes = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
-        return SecretKeySpec(bytes, "AES")
-    }
-
-    private fun encrypt(plain: ByteArray, password: String): ByteArray {
-        val zipped = ByteArrayOutputStream().also { out -> GZIPOutputStream(out).use { it.write(plain) } }.toByteArray()
-        val random = SecureRandom()
-        val salt = ByteArray(16).also(random::nextBytes)
-        val iv = ByteArray(12).also(random::nextBytes)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, deriveKey(password, salt), GCMParameterSpec(128, iv))
-        return MAGIC + salt + iv + cipher.doFinal(zipped)
-    }
-
-    private fun decrypt(data: ByteArray, password: String): ByteArray {
-        if (data.size < 32 || !data.copyOfRange(0, 4).contentEquals(MAGIC)) throw WrongPasswordException()
-        val salt = data.copyOfRange(4, 20)
-        val iv = data.copyOfRange(20, 32)
-        val zipped = try {
-            Cipher.getInstance("AES/GCM/NoPadding").run {
-                init(Cipher.DECRYPT_MODE, deriveKey(password, salt), GCMParameterSpec(128, iv))
-                doFinal(data.copyOfRange(32, data.size))
-            }
-        } catch (e: Exception) {
-            throw WrongPasswordException()
-        }
-        return GZIPInputStream(ByteArrayInputStream(zipped)).use { it.readBytes() }
-    }
-
-    private companion object {
-        val MAGIC = "LDB1".toByteArray()
+    private fun decrypt(data: ByteArray, password: String): ByteArray = try {
+        app.lifedashboard.core.security.PasswordCrypto.decrypt(data, password)
+    } catch (e: app.lifedashboard.core.security.PasswordCrypto.WrongPasswordException) {
+        throw WrongPasswordException()
     }
 }

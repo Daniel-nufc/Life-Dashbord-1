@@ -104,6 +104,7 @@ object StorageModule {
         return Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.NAME)
             .openHelperFactory(factory)
             .addMigrations(*AppDatabase.ALL_MIGRATIONS)
+            .addCallback(AppDatabase.SYNC_CALLBACK)
             .build()
     }
 }

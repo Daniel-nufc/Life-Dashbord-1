@@ -68,7 +68,7 @@ object TestStorageModule {
     @Provides
     @Singleton
     fun db(@ApplicationContext context: Context): AppDatabase =
-        Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
+        Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).addCallback(AppDatabase.SYNC_CALLBACK).allowMainThreadQueries().build()
 
     @Provides
     @Singleton
@@ -161,6 +161,7 @@ class ScreenshotTest {
         open("Finanzen"); shot(device, "09_finanzen"); back()
         open("Etsy-Shop"); assertText("Motiv-Pipeline"); shot(device, "10_etsy"); back()
         open("Ziele & Gewohnheiten"); shot(device, "11_ziele"); back()
+        open("Handy ↔ Tablet"); assertText("Abgleich-Passwort"); shot(device, "12_abgleich"); back()
     }
 
     // ------------------------------------------------------------------ Helfer

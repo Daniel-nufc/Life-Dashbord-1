@@ -404,3 +404,20 @@ data class TrainingResultEntity(
     val reduced: Boolean,
     val workoutId: Long?,
 )
+
+/**
+ * Geräte-Abgleich: pro Eintrag die geräteübergreifende Kennung, letzte Änderung und
+ * Lösch-Markierung. Wird automatisch per Trigger gepflegt (siehe SyncSchema).
+ */
+@Entity(
+    tableName = "sync_meta",
+    primaryKeys = ["tbl", "localId"],
+    indices = [Index(value = ["tbl", "gid"], unique = true)],
+)
+data class SyncMetaEntity(
+    val tbl: String,
+    val localId: Long,
+    val gid: String?,
+    val updatedAt: Long,
+    val deleted: Boolean,
+)
