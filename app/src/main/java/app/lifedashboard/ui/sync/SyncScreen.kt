@@ -165,8 +165,8 @@ fun SyncScreen(onBack: () -> Unit, viewModel: SyncViewModel = hiltViewModel()) {
                             Pill(if (s.fileUri != null) "aktiv" else "aus", if (s.fileUri != null) SYNC else MaterialTheme.colorScheme.outline)
                         }
                         Text(
-                            "Beide Geräte nutzen dieselbe verschlüsselte Datei, z. B. in Google Drive. Abgleich automatisch beim Öffnen, beim Verlassen " +
-                                "und alle 30 Minuten. Google sieht nur unlesbaren Datensalat.",
+                            "Beide Geräte nutzen dieselbe verschlüsselte Datei, z. B. in Google Drive. Abgleich automatisch ca. 10 Sekunden nach jeder Änderung, " +
+                                "beim Öffnen, beim Verlassen und alle 30 Minuten. Google sieht nur unlesbaren Datensalat.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -189,7 +189,7 @@ fun SyncScreen(onBack: () -> Unit, viewModel: SyncViewModel = hiltViewModel()) {
                             Switch(s.lanEnabled, viewModel::setLan)
                         }
                         Text(
-                            "Sind beide Geräte im selben WLAN und die App ist auf beiden offen, gleichen sie sich direkt ab – sofort und danach alle 2 Minuten.",
+                            "Sind beide Geräte im selben WLAN und die App ist auf beiden offen, gleichen sie sich direkt ab – wenige Sekunden nach jeder Änderung.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

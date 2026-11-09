@@ -93,6 +93,10 @@ class DeviceSyncRepository @Inject constructor(
 
     @Volatile private var cachedDeviceId: String? = null
 
+    /** Zeitpunkt des letzten Einarbeitens fremder Daten (damit sie nicht sofort zurückgeschickt werden) */
+    @Volatile var lastMergeAt: Long = 0L
+        private set
+
     private val engine = SyncEngine(db) { deviceIdBlocking() }
 
     val settings: Flow<DeviceSyncSettings> = dataStore.data.map { p ->
@@ -159,6 +163,7 @@ class DeviceSyncRepository @Inject constructor(
         deviceId()
         val json = JSONObject(String(PasswordCrypto.decrypt(bytes, pw)))
         val result = mutex.withLock { engine.merge(json) }
+        if (result.changes > 0) lastMergeAt = System.currentTimeMillis()
         result to json.optString("deviceName", "anderes Gerät")
     }
 

@@ -208,4 +208,37 @@ class DeviceSyncTest {
             assertEquals(11, e.remote)
         }
     }
+
+    /** Zustand direkt nach dem Update auf Version 21: alte Einträge ohne Kennung und ohne Zeitstempel. */
+    private fun asIfMigrated(d: Device) {
+        d.db.openHelper.writableDatabase.execSQL("UPDATE sync_meta SET gid = NULL, updatedAt = 0")
+    }
+
+    @Test
+    fun `erster Abgleich - schon eingetragene Tablet-Daten bleiben erhalten und kommen aufs Handy`() = runBlocking {
+        phone.seed(); tablet.seed()
+        val bio = tablet.subjects().first { it.code == "BIO" }
+        tablet.db.taskDao().upsert(task("Tablet: Referat", bio.id))
+        tablet.db.taskDao().upsert(task("Tablet: Etsy-Motiv"))
+        val examId = tablet.db.studyDao().upsertExam(ExamEntity(subjectId = bio.id, dateEpochDay = 20_420, title = "Ökologie", kind = ExamKind.KLAUSUR, note = null))
+        tablet.db.studyDao().upsertTopic(TopicEntity(examId = examId, title = "Nahrungsnetze", effortMinutes = 60, progress = 40, intervalDays = 0, nextReviewEpochDay = null, lastReviewedEpochDay = null))
+        phone.db.taskDao().upsert(task("Handy: Zahnarzt"))
+        // Dasselbe Fach auf beiden Geräten unterschiedlich eingestellt (vor dem Update)
+        phone.db.timetableDao().upsertSubject(phone.subjects().first { it.code == "BIO" }.copy(difficulty = 5))
+        asIfMigrated(phone); asIfMigrated(tablet)
+
+        val tabletBefore = tablet.tasks().map { it.title }.toSet()
+        sync(tablet, phone)
+
+        // Nichts vom Tablet verloren
+        assertTrue(tablet.tasks().map { it.title }.toSet().containsAll(tabletBefore))
+        assertEquals(setOf("Tablet: Referat", "Tablet: Etsy-Motiv", "Handy: Zahnarzt"), phone.tasks().map { it.title }.toSet())
+        assertEquals(setOf("Tablet: Referat", "Tablet: Etsy-Motiv", "Handy: Zahnarzt"), tablet.tasks().map { it.title }.toSet())
+        assertEquals(40, phone.topics().single().progress)
+        assertEquals("BIO", phone.subjects().first { s -> s.id == phone.tasks().first { it.title == "Tablet: Referat" }.subjectId }.code)
+        // Unklar, welche Einstellung neuer ist → jedes Gerät behält seine (nichts wird überschrieben)
+        assertEquals(5, phone.subjects().first { it.code == "BIO" }.difficulty)
+        assertEquals(3, tablet.subjects().first { it.code == "BIO" }.difficulty)
+        assertEquals(2, phone.subjects().size)
+    }
 }

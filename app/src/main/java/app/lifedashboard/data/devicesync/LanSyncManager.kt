@@ -61,13 +61,14 @@ object LanProtocol {
 
 /**
  * WLAN-Direktabgleich: Solange die App offen ist, macht sich das Gerät im Heimnetz sichtbar
- * („_lifedash._tcp“) und sucht das andere. Gefunden → sofort abgleichen, danach alle 2 Minuten.
+ * („_lifedash._tcp“) und sucht das andere. Gefunden → sofort abgleichen, nach jeder Änderung binnen Sekunden, sonst alle 30 Sekunden.
  * Kein Internet, keine Cloud – nur im selben WLAN.
  */
 @Singleton
 class LanSyncManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val repo: DeviceSyncRepository,
+    private val db: app.lifedashboard.data.db.AppDatabase,
     private val engine: app.lifedashboard.data.planning.PlanningEngine,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
@@ -83,11 +84,32 @@ class LanSyncManager @Inject constructor(
     private var peer: Pair<InetAddress, Int>? = null
     private val exchangeLock = Mutex()
 
+    // ------------------------------------------------------------------ sofort nach jeder Änderung
+
+    private var changeJob: Job? = null
+    private val changeObserver = object : androidx.room.InvalidationTracker.Observer(SyncSchema.tables.map { it.name }.toTypedArray()) {
+        override fun onInvalidated(tables: Set<String>) {
+            // Änderungen, die gerade vom anderen Gerät kamen, nicht zurückschicken
+            if (System.currentTimeMillis() - repo.lastMergeAt < 4_000) return
+            changeJob?.cancel()
+            changeJob = scope.launch(Dispatchers.IO) {
+                delay(2_000) // kurz sammeln (z. B. Klausur + Themen)
+                exchangeNow()
+                if (repo.settings.first().fileUri != null) SyncWorker.runNow(context, delaySeconds = 8)
+            }
+        }
+    }
+    private var observing = false
+
     fun start() {
         if (_state.value.running) return
         scope.launch(Dispatchers.IO) {
             val s = repo.settings.first()
-            if (!s.lanEnabled || !s.hasPassword) return@launch
+            if (!s.hasPassword) return@launch
+            if (!observing) {
+                runCatching { db.invalidationTracker.addObserver(changeObserver) }.onSuccess { observing = true }
+            }
+            if (!s.lanEnabled) return@launch
             runCatching { startInternal(repo.deviceId()) }.onFailure { e ->
                 _state.value = LanState(message = "WLAN-Abgleich nicht möglich: ${e.message}")
             }
@@ -106,11 +128,9 @@ class LanSyncManager @Inject constructor(
             while (isActive && !socket.isClosed) {
                 val client = runCatching { socket.accept() }.getOrNull() ?: break
                 launch {
-                    exchangeLock.withLock {
-                        runCatching { LanProtocol.serve(client, repo) }
-                            .onSuccess { (r, from) -> done(r, from) }
-                            .onFailure { e -> report("Abgleich mit Gerät im WLAN fehlgeschlagen: ${friendly(e)}") }
-                    }
+                    runCatching { LanProtocol.serve(client, repo) }
+                        .onSuccess { (r, from) -> done(r, from) }
+                        .onFailure { e -> report("Abgleich mit Gerät im WLAN fehlgeschlagen: ${friendly(e)}") }
                 }
             }
         }
@@ -169,7 +189,7 @@ class LanSyncManager @Inject constructor(
         peerLoop = scope.launch(Dispatchers.IO) {
             while (isActive && _state.value.running) {
                 exchangeNow()
-                delay(120_000)
+                delay(30_000)
             }
         }.also { jobs += it }
     }
@@ -206,6 +226,11 @@ class LanSyncManager @Inject constructor(
     }
 
     fun stop() {
+        if (observing) {
+            runCatching { db.invalidationTracker.removeObserver(changeObserver) }
+            observing = false
+        }
+        changeJob = null
         if (!_state.value.running) return
         runCatching { registration?.let(nsd::unregisterService) }
         runCatching { discovery?.let(nsd::stopServiceDiscovery) }
