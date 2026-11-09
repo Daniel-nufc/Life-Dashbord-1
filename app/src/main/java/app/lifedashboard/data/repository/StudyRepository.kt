@@ -49,6 +49,10 @@ class StudyRepository @Inject constructor(
     private val dao: StudyDao,
     private val timetable: TimetableRepository,
 ) {
+    private companion object {
+        val LATE_EVENING: java.time.LocalTime = java.time.LocalTime.of(21, 0)
+    }
+
     fun overview(today: LocalDate = LocalDate.now()): Flow<StudyOverview> {
         val weekStart = today.minusDays((today.dayOfWeek.value - 1).toLong())
         val fromMillis = weekStart.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -72,7 +76,8 @@ class StudyRepository @Inject constructor(
                         topics = e.topics.map { StudyTopic(it.id, it.title, it.effortMinutes, it.progress) },
                     )
                 },
-                today = today,
+                // Ab 21 Uhr passt heute nichts mehr hinein → Lernplan startet morgen (sonst ginge die Zeit verloren)
+                today = if (today == LocalDate.now() && java.time.LocalTime.now().isAfter(LATE_EVENING)) today.plusDays(1) else today,
             )
             val todayEpoch = today.toEpochDay()
             val due = withTopics.filter { it.daysLeft(today) >= 0 }.flatMap { e ->
@@ -90,14 +95,9 @@ class StudyRepository @Inject constructor(
     }
 
     suspend fun saveExam(exam: ExamEntity, topicTitles: List<String>?, defaultEffort: Int = 60): Long {
-        val isNew = exam.id == 0L
         val id = dao.upsertExam(exam).let { if (exam.id != 0L) exam.id else it }
-        // Neue Klausur ohne Themen → typische Themen vorschlagen, damit der Lernplan sofort startet
-        val titles = if (isNew && topicTitles.isNullOrEmpty()) {
-            val subject = timetable.subjects.first().firstOrNull { it.id == exam.subjectId }
-            subject?.let { TopicSuggestions.forSubject(it.code, it.name) }.orEmpty()
-        } else topicTitles
-        titles?.filter { it.isNotBlank() }?.forEach { title ->
+        // Themen trägst du selbst ein – Vorschläge gibt es nur zum Antippen im Dialog
+        topicTitles?.filter { it.isNotBlank() }?.forEach { title ->
             dao.upsertTopic(TopicEntity(examId = id, title = title.trim(), effortMinutes = defaultEffort, progress = 0, intervalDays = 0, nextReviewEpochDay = null, lastReviewedEpochDay = null))
         }
         return id
@@ -110,6 +110,7 @@ class StudyRepository @Inject constructor(
 
     suspend fun saveTopic(topic: TopicEntity) = dao.upsertTopic(topic)
     suspend fun deleteTopic(id: Long) = dao.deleteTopic(id)
+    suspend fun renameTopic(topic: TopicEntity, title: String, effortMinutes: Int) = dao.upsertTopic(topic.copy(title = title, effortMinutes = effortMinutes))
 
     /** Fortschritt setzen. Ab 50 % beginnt automatisch die Wiederholung nach 1 Tag. */
     suspend fun setProgress(topic: TopicEntity, progress: Int) {

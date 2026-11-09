@@ -53,7 +53,12 @@ object StudyPlanner {
         else -> 1.4
     }
 
-    fun remainingMinutes(exam: StudyExam): Int = exam.topics.sumOf { topic ->
+    /** Ohne eingetragene Themen: pauschal 4 Std Lernzeit, damit der Plan trotzdem startet. */
+    const val DEFAULT_MINUTES_WITHOUT_TOPICS = 240
+
+    fun remainingMinutes(exam: StudyExam): Int = if (exam.topics.isEmpty()) {
+        (DEFAULT_MINUTES_WITHOUT_TOPICS * difficultyFactor(exam.difficulty)).roundToInt()
+    } else exam.topics.sumOf { topic ->
         topic.effortMinutes * (100 - topic.progress.coerceIn(0, 100)) / 100.0
     }.let { (it * difficultyFactor(exam.difficulty)).roundToInt() }
 
@@ -85,7 +90,16 @@ object StudyPlanner {
             val firstDay = maxOf(today, exam.date.minusDays(leadDays.toLong()))
             val lastDay = dayBefore.minusDays(1)
             if (lastDay.isBefore(firstDay)) {
-                // Zu knapp: alles auf heute/Vortag legen, so viel wie geht
+                // Zu knapp (Klausur morgen): heute = Vortag → so viel lernen wie das Tageslimit erlaubt
+                if (!dayBefore.isBefore(today)) {
+                    val left = roundDownToBlocks(dailyCapMinutes - (used[dayBefore] ?: 0), blockMinutes)
+                    val minutes = minOf(left, roundToBlocks(remainingMinutes(exam), blockMinutes))
+                    if (minutes > 0) {
+                        val topic = exam.topics.firstOrNull { it.progress < 100 }
+                        result += StudyAllocation(dayBefore, exam.id, topic?.id, "${exam.subjectName}: ${topic?.title ?: "lernen"}", minutes, isReview = false)
+                        used[dayBefore] = (used[dayBefore] ?: 0) + minutes
+                    }
+                }
                 continue
             }
             val days = ChronoUnit.DAYS.between(firstDay, lastDay).toInt() + 1

@@ -147,6 +147,7 @@ private fun WeekContent(
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) { topContent() }
         item(span = { GridItemSpan(maxLineSpan) }) {
+          Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = viewModel::previousWeek) {
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, contentDescription = "Vorherige Woche")
@@ -176,6 +177,7 @@ private fun WeekContent(
                 }
                 TextButton(onClick = viewModel::replanWeek) { Text("↻ Neu planen") }
             }
+          }
         }
         items(range.days, key = { it.date.toEpochDay() }) { day ->
             DayCard(
@@ -297,7 +299,7 @@ private fun DayCard(
                     }
                 }
             }
-        // Trainingsplan (Ironman-Weg) – auch für Wochen ohne Tagesplan-Vorschläge
+        // Sport-Zeitfenster – auch für Wochen ohne Tagesplan-Vorschläge
         trainings.filter { t -> plan.none { it.demandKey == t.session.key && it.status != app.lifedashboard.data.db.PlanStatus.DECLINED } }
             .forEach { t ->
                 empty = false
@@ -309,7 +311,7 @@ private fun DayCard(
                     subtitle = when {
                         t.done -> "Erledigt ✓"
                         t.skipped -> "Ausgefallen"
-                        else -> "${t.session.minutes} Min · Trainingsplan – Uhrzeit kommt mit dem Tagesplan"
+                        else -> "${t.session.minutes} Min · was du machst, entscheidest du – Uhrzeit kommt mit dem Tagesplan"
                     },
                 ) {}
             }

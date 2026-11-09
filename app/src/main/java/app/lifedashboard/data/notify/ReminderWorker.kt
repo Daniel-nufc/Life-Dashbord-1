@@ -147,7 +147,7 @@ class ReminderWorker @AssistedInject constructor(
     }
 
     companion object {
-        private const val NAME = "reminders"
+        const val NAME = "reminders"
 
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<ReminderWorker>(30, TimeUnit.MINUTES).build()

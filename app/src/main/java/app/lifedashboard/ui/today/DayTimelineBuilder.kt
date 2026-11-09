@@ -31,7 +31,7 @@ data class TimelineEntry(
 
 /**
  * Baut den Tagesablauf aus festen Blöcken (Unterricht, Wege, Training, Termine, Job) und
- * berechnet daraus die freien Zeitfenster. In Phase 4 füllt der Planer diese Fenster.
+ * berechnet daraus die freien Zeitfenster. Der PlanningEngine füllt diese Fenster mit Vorschlägen.
  */
 object DayTimelineBuilder {
 

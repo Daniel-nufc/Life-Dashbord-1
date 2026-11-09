@@ -47,7 +47,7 @@ class BackupWorker @AssistedInject constructor(
     companion object {
         const val FOLDER_KEY = "backup_folder"
         const val PASSWORD_KEY = "backup_password"
-        private const val NAME = "auto-backup"
+        const val NAME = "auto-backup"
 
         fun schedule(context: Context) {
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(

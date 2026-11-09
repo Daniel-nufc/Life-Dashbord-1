@@ -61,6 +61,11 @@ class SeedDataInitializer @Inject constructor(
             seedAutomation()
             settings.setSeedVersion(7)
         }
+        if (version < 8) {
+            // Update 20: Sport nur noch als freie Zeitfenster – alte Einheiten-Vorschläge (Intervalle, langer Lauf …) entfernen
+            db.planDao().deleteOldTrainingBlocks(java.time.LocalDate.now().toEpochDay())
+            settings.setSeedVersion(8)
+        }
     }
 
     /** Automatik: Gewohnheiten-Regeln, Führerschein-Schritte, Sparziele. */

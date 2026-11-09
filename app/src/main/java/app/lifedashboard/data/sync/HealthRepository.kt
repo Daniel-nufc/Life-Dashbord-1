@@ -9,6 +9,13 @@ import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.NutritionRecord
+import androidx.health.connect.client.records.RestingHeartRateRecord
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
+import androidx.health.connect.client.records.WeightRecord
+import androidx.health.connect.client.aggregate.AggregateMetric
 import androidx.health.connect.client.request.AggregateGroupByPeriodRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
@@ -21,6 +28,37 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 data class DailyHealth(val date: LocalDate, val steps: Long, val sleep: Duration?)
+
+/** Ein Tag im Fitness-Bereich. null = keine Daten/keine Freigabe. */
+data class FitnessDay(
+    val date: LocalDate,
+    val steps: Long?,
+    val sleep: Duration?,
+    val activeKcal: Int?,
+    val burnedKcal: Int?,
+    val eatenKcal: Int?,
+    val exerciseMinutes: Int?,
+)
+
+/** Alles aus Health Connect auf einen Blick. */
+data class FitnessSnapshot(
+    /** älteste zuerst, letzter Eintrag = heute */
+    val days: List<FitnessDay>,
+    val avgHeartRateToday: Int?,
+    val restingHeartRate: Int?,
+    val weightKg: Double?,
+    val weightDate: LocalDate?,
+    val proteinG: Int?,
+    val carbsG: Int?,
+    val fatG: Int?,
+    val waterMl: Int?,
+    /** Paketnamen der Apps, von denen Daten kamen (z. B. Samsung Health, MyFitnessPal) */
+    val sources: Set<String>,
+    /** Datenarten ohne Freigabe */
+    val missing: Set<String>,
+) {
+    val today: FitnessDay? get() = days.lastOrNull()
+}
 
 /** Training aus Health Connect (z. B. von Samsung Health aufgezeichnet). */
 data class HealthWorkout(
@@ -48,7 +86,146 @@ class HealthRepository @Inject constructor(
         HealthPermission.getReadPermission(ExerciseSessionRecord::class),
         HealthPermission.getReadPermission(DistanceRecord::class),
         HealthPermission.getReadPermission(HeartRateRecord::class),
+        HealthPermission.getReadPermission(NutritionRecord::class),
+        HealthPermission.getReadPermission(WeightRecord::class),
+        HealthPermission.getReadPermission(HydrationRecord::class),
+        HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
+        HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
+        HealthPermission.getReadPermission(RestingHeartRateRecord::class),
+        // Damit Schritte/Trainings auch im Hintergrund (Erinnerungen, Gewohnheiten) gelesen werden dürfen
+        BACKGROUND_READ,
     )
+
+    /** Freigaben, die noch fehlen (leer = alles erlaubt) */
+    suspend fun missingPermissions(): Set<String> =
+        if (!isAvailable()) permissions else permissions - client().permissionController.getGrantedPermissions()
+
+    /**
+     * Fitness-Übersicht der letzten [days] Tage. Liest nur, was freigegeben ist –
+     * fehlende Freigaben werden in [FitnessSnapshot.missing] gemeldet statt abzustürzen.
+     */
+    suspend fun snapshot(days: Int = 7): FitnessSnapshot? {
+        if (!isAvailable()) return null
+        val c = client()
+        val granted = c.permissionController.getGrantedPermissions()
+        fun ok(type: kotlin.reflect.KClass<out androidx.health.connect.client.records.Record>) = HealthPermission.getReadPermission(type) in granted
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now()
+        val start = today.minusDays((days - 1).toLong())
+        val sources = mutableSetOf<String>()
+
+        val metrics = buildSet<AggregateMetric<*>> {
+            if (ok(StepsRecord::class)) add(StepsRecord.COUNT_TOTAL)
+            if (ok(ActiveCaloriesBurnedRecord::class)) add(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL)
+            if (ok(TotalCaloriesBurnedRecord::class)) add(TotalCaloriesBurnedRecord.ENERGY_TOTAL)
+            if (ok(NutritionRecord::class)) add(NutritionRecord.ENERGY_TOTAL)
+            if (ok(ExerciseSessionRecord::class)) add(ExerciseSessionRecord.EXERCISE_DURATION_TOTAL)
+        }
+        val perDay = if (metrics.isEmpty()) emptyMap() else runCatching {
+            c.aggregateGroupByPeriod(
+                AggregateGroupByPeriodRequest(
+                    metrics = metrics,
+                    timeRangeFilter = TimeRangeFilter.between(start.atStartOfDay(), today.plusDays(1).atStartOfDay()),
+                    timeRangeSlicer = Period.ofDays(1),
+                ),
+            ).associate { g ->
+                g.result.dataOrigins.forEach { sources += it.packageName }
+                g.startTime.toLocalDate() to g.result
+            }
+        }.getOrDefault(emptyMap())
+
+        val sleepByDay = if (!ok(SleepSessionRecord::class)) emptyMap() else runCatching {
+            c.readRecords(
+                ReadRecordsRequest(
+                    SleepSessionRecord::class,
+                    TimeRangeFilter.between(start.minusDays(1).atStartOfDay(zone).toInstant(), today.plusDays(1).atStartOfDay(zone).toInstant()),
+                ),
+            ).records.onEach { sources += it.metadata.dataOrigin.packageName }
+                .groupBy { it.endTime.atZone(zone).toLocalDate() }
+                .mapValues { (_, l) -> l.fold(Duration.ZERO) { acc, r -> acc + Duration.between(r.startTime, r.endTime) } }
+        }.getOrDefault(emptyMap())
+
+        val list = (0 until days).map { i ->
+            val d = start.plusDays(i.toLong())
+            val r = perDay[d]
+            FitnessDay(
+                date = d,
+                steps = r?.get(StepsRecord.COUNT_TOTAL),
+                sleep = sleepByDay[d],
+                activeKcal = r?.get(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL)?.inKilocalories?.toInt(),
+                burnedKcal = r?.get(TotalCaloriesBurnedRecord.ENERGY_TOTAL)?.inKilocalories?.toInt(),
+                eatenKcal = r?.get(NutritionRecord.ENERGY_TOTAL)?.inKilocalories?.toInt(),
+                exerciseMinutes = r?.get(ExerciseSessionRecord.EXERCISE_DURATION_TOTAL)?.toMinutes()?.toInt(),
+            )
+        }
+
+        // Heute: Puls, Ernährung, Wasser
+        val todayFilter = TimeRangeFilter.between(today.atStartOfDay(zone).toInstant(), java.time.Instant.now())
+        val todayMetrics = buildSet<AggregateMetric<*>> {
+            if (ok(HeartRateRecord::class)) add(HeartRateRecord.BPM_AVG)
+            if (ok(NutritionRecord::class)) { add(NutritionRecord.PROTEIN_TOTAL); add(NutritionRecord.TOTAL_CARBOHYDRATE_TOTAL); add(NutritionRecord.TOTAL_FAT_TOTAL) }
+            if (ok(HydrationRecord::class)) add(HydrationRecord.VOLUME_TOTAL)
+        }
+        val t = if (todayMetrics.isEmpty()) null else runCatching { c.aggregate(AggregateRequest(todayMetrics, todayFilter)) }.getOrNull()
+        t?.dataOrigins?.forEach { sources += it.packageName }
+
+        // Ruhepuls: Durchschnitt der letzten 7 Tage
+        val resting = if (!ok(RestingHeartRateRecord::class)) null else runCatching {
+            c.aggregate(
+                AggregateRequest(setOf(RestingHeartRateRecord.BPM_AVG), TimeRangeFilter.between(start.atStartOfDay(zone).toInstant(), java.time.Instant.now())),
+            ).also { a -> a.dataOrigins.forEach { sources += it.packageName } }[RestingHeartRateRecord.BPM_AVG]
+        }.getOrNull()
+
+        // Gewicht: letzter Eintrag der letzten 60 Tage
+        val weight = if (!ok(WeightRecord::class)) null else runCatching {
+            c.readRecords(
+                ReadRecordsRequest(
+                    WeightRecord::class,
+                    TimeRangeFilter.between(today.minusDays(60).atStartOfDay(zone).toInstant(), java.time.Instant.now()),
+                    ascendingOrder = false,
+                    pageSize = 1,
+                ),
+            ).records.firstOrNull()?.also { sources += it.metadata.dataOrigin.packageName }
+        }.getOrNull()
+
+        return FitnessSnapshot(
+            days = list,
+            avgHeartRateToday = t?.get(HeartRateRecord.BPM_AVG)?.toInt(),
+            restingHeartRate = resting?.toInt(),
+            weightKg = weight?.weight?.inKilograms,
+            weightDate = weight?.time?.atZone(zone)?.toLocalDate(),
+            proteinG = t?.get(NutritionRecord.PROTEIN_TOTAL)?.inGrams?.toInt(),
+            carbsG = t?.get(NutritionRecord.TOTAL_CARBOHYDRATE_TOTAL)?.inGrams?.toInt(),
+            fatG = t?.get(NutritionRecord.TOTAL_FAT_TOTAL)?.inGrams?.toInt(),
+            waterMl = t?.get(HydrationRecord.VOLUME_TOTAL)?.inMilliliters?.toInt(),
+            sources = sources - context.packageName,
+            missing = permissions - granted,
+        )
+    }
+
+    companion object {
+        const val BACKGROUND_READ = "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
+
+        /** Bekannte Apps, die in Health Connect schreiben. */
+        val KNOWN_SOURCES = mapOf(
+            "com.sec.android.app.shealth" to "Samsung Health",
+            "com.myfitnesspal.android" to "MyFitnessPal",
+            "com.strava" to "Strava",
+            "com.garmin.android.apps.connectmobile" to "Garmin Connect",
+            "com.google.android.apps.fitness" to "Google Fit",
+            "com.fitbit.FitbitMobile" to "Fitbit",
+            "com.yazio.android" to "YAZIO",
+            "com.fatsecret.android" to "FatSecret",
+            "com.sillens.shapeupclub" to "Lifesum",
+            "com.runtastic.android" to "adidas Running",
+            "com.withings.wiscale2" to "Withings",
+            "com.huawei.health" to "Huawei Health",
+            "com.huami.watch.hmwatchmanager" to "Zepp",
+            "com.google.android.apps.healthdata" to "Health Connect",
+        )
+
+        fun sourceName(pkg: String) = KNOWN_SOURCES[pkg] ?: pkg.substringAfterLast('.').replaceFirstChar { it.uppercase() }
+    }
 
     /** Mindestens Schritte + Schlaf erlaubt (ältere Freigabe) */
     suspend fun hasBasicPermissions(): Boolean =

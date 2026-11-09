@@ -223,7 +223,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.examsTab(
                     }
                 }
                 Text(
-                    "In Phase 4 landen diese Einheiten automatisch in deinen freien Zeiten (nachmittags bevorzugt).",
+                    "Diese Einheiten landen automatisch als Vorschläge in deinen freien Zeiten (Kalender & Heute) – nachmittags bevorzugt.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
@@ -335,9 +335,14 @@ private fun ExamCard(exam: ExamWithTopics, viewModel: LearnViewModel, onEdit: (E
 @Composable
 private fun TopicRow(topic: TopicEntity, accent: Color, viewModel: LearnViewModel) {
     var value by remember(topic.id, topic.progress) { mutableStateOf(topic.progress.toFloat()) }
+    var editing by remember(topic.id) { mutableStateOf(false) }
     Column(Modifier.padding(vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(topic.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Text(
+                topic.title,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable { editing = true },
+            )
             Text("${value.toInt()} %", style = MaterialTheme.typography.labelLarge, color = accent)
         }
         Slider(
@@ -346,6 +351,34 @@ private fun TopicRow(topic: TopicEntity, accent: Color, viewModel: LearnViewMode
             onValueChangeFinished = { viewModel.setProgress(topic, value.toInt()) },
             valueRange = 0f..100f,
             steps = 9,
+        )
+    }
+    if (editing) {
+        var title by remember { mutableStateOf(topic.title) }
+        var minutes by remember { mutableStateOf((topic.effortMinutes / 15f).coerceIn(1f, 16f)) }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { editing = false },
+            title = { Text("Thema bearbeiten") },
+            text = {
+                Column {
+                    androidx.compose.material3.OutlinedTextField(title, { title = it }, singleLine = true, label = { Text("Thema") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(12.dp))
+                    Text("Geschätzter Aufwand: ${(minutes.toInt() * 15).let { if (it >= 60) "%d Std %02d Min".format(it / 60, it % 60) else "$it Min" }}")
+                    Slider(value = minutes, onValueChange = { minutes = it }, valueRange = 1f..16f, steps = 14)
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = title.isNotBlank(), onClick = {
+                    viewModel.renameTopic(topic, title.trim(), minutes.toInt() * 15)
+                    editing = false
+                }) { Text("Speichern") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { viewModel.deleteTopic(topic.id); editing = false }) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
+                    TextButton(onClick = { editing = false }) { Text("Abbrechen") }
+                }
+            },
         )
     }
 }

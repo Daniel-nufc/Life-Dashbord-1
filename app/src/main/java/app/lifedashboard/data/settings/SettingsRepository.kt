@@ -61,13 +61,14 @@ data class AppSettings(
 }
 
 data class TrainingSettings(
-    val startLongestKm: Double = 5.0,
-    val easyPace: Double = 6.5,
-    val runsPerWeek: Int = 3,
-    val strengthPerWeek: Int = 1,
-    val hasBike: Boolean = true,
-    val canSwim: Boolean = false,
-    val planStart: LocalDate? = null,
+    /** Freie Sport-Zeitfenster pro Woche (zusätzlich zu Floorball) */
+    val windowsPerWeek: Int = 3,
+    /** Länge eines Zeitfensters in Minuten */
+    val windowMinutes: Int = 60,
+    /** Sonntag frei von Sport-Vorschlägen */
+    val sundayRest: Boolean = true,
+    /** Schritte-Ziel pro Tag (Fitness-Ring) */
+    val stepGoal: Int = 8000,
     val askBattery: Boolean = true,
 )
 
@@ -111,13 +112,10 @@ class SettingsRepository @Inject constructor(
                 },
                 hiddenTodayCards = p[HIDDEN_CARDS]?.split(',')?.filter { it.isNotBlank() }?.toSet() ?: emptySet(),
                 training = TrainingSettings(
-                    startLongestKm = (p[T_LONGEST] ?: 50) / 10.0,
-                    easyPace = (p[T_PACE] ?: 65) / 10.0,
-                    runsPerWeek = p[T_RUNS] ?: 3,
-                    strengthPerWeek = p[T_STRENGTH] ?: 1,
-                    hasBike = p[T_BIKE] ?: true,
-                    canSwim = p[T_SWIM] ?: false,
-                    planStart = p[T_START]?.let(LocalDate::parse),
+                    windowsPerWeek = p[T_WINDOWS] ?: 3,
+                    windowMinutes = p[T_WINDOW_MIN] ?: 60,
+                    sundayRest = p[T_SUNDAY_REST] ?: true,
+                    stepGoal = p[T_STEP_GOAL] ?: 8000,
                     askBattery = p[ASK_BATTERY] ?: true,
                 ),
                 etsyFees = app.lifedashboard.planner.EtsyFees(
@@ -180,13 +178,10 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setTraining(t: TrainingSettings) {
         dataStore.edit {
-            it[T_LONGEST] = (t.startLongestKm * 10).toInt()
-            it[T_PACE] = (t.easyPace * 10).toInt()
-            it[T_RUNS] = t.runsPerWeek.coerceIn(2, 4)
-            it[T_STRENGTH] = t.strengthPerWeek.coerceIn(0, 2)
-            it[T_BIKE] = t.hasBike
-            it[T_SWIM] = t.canSwim
-            t.planStart?.let { d -> it[T_START] = d.toString() }
+            it[T_WINDOWS] = t.windowsPerWeek.coerceIn(0, 6)
+            it[T_WINDOW_MIN] = t.windowMinutes.coerceIn(15, 180)
+            it[T_SUNDAY_REST] = t.sundayRest
+            it[T_STEP_GOAL] = t.stepGoal.coerceIn(1000, 30000)
         }
     }
 
@@ -223,13 +218,10 @@ class SettingsRepository @Inject constructor(
         val BUFFER = androidx.datastore.preferences.core.longPreferencesKey("buffer_cents")
         val JOB_WAGE = androidx.datastore.preferences.core.longPreferencesKey("job_wage_cents")
         val TODAY_CARDS = stringPreferencesKey("today_cards")
-        val T_LONGEST = intPreferencesKey("training_longest_dkm")
-        val T_PACE = intPreferencesKey("training_pace_dmin")
-        val T_RUNS = intPreferencesKey("training_runs")
-        val T_STRENGTH = intPreferencesKey("training_strength")
-        val T_BIKE = booleanPreferencesKey("training_bike")
-        val T_SWIM = booleanPreferencesKey("training_swim")
-        val T_START = stringPreferencesKey("training_start")
+        val T_WINDOWS = intPreferencesKey("sport_windows_per_week")
+        val T_WINDOW_MIN = intPreferencesKey("sport_window_minutes")
+        val T_SUNDAY_REST = booleanPreferencesKey("sport_sunday_rest")
+        val T_STEP_GOAL = intPreferencesKey("fitness_step_goal")
         val ASK_BATTERY = booleanPreferencesKey("ask_battery")
         val HIDDEN_CARDS = stringPreferencesKey("hidden_today_cards")
         val ETSY_LISTING = androidx.datastore.preferences.core.longPreferencesKey("etsy_listing_cents")

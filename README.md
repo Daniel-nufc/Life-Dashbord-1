@@ -15,13 +15,14 @@ Zeigt alle Lebensbereiche auf einen Blick und **plant Tag und Woche aktiv**: Sch
 | 2 | Buntes Design, Kalender (Woche), Termine, Hausaufgaben, Aufgaben, Job-Schichten, Handy-Kalender, Lernraum/IServ-Abos (iCal) | ✅ |
 | 3 | Lernen: Klausuren, Themen, Lernplan rückwärts, Wiederholungen, Notenpunkte & Ziel 1,7, Fokus-Timer 25/5 | ✅ |
 | 4 | Intelligente Tagesplanung: Vorschläge annehmen/verschieben/ablehnen, Neuplanung, lernt aus Entscheidungen | ✅ |
-| 5 | Sport-Log, Health Connect (Schritte & Schlaf), Ziele, Gewohnheiten mit Streaks & Joker | ✅ |
+| 5 | Fitness (Health Connect: Samsung Health, MyFitnessPal & Co.), Sport-Zeitfenster, Ziele, Gewohnheiten mit Streaks & Joker | ✅ |
 | 6 | Finanzen: DKB + Bargeld, CSV-Import, Kategorien lernen, Budgets, Puffer, Abos, Sparziele, Prognose | ✅ |
 | 7 | Etsy: Umsatz/Netto, Motiv-Pipeline, Verkäufe, Statistik, Checkliste (API, sobald der Shop live ist) | ✅ / API ⏳ |
 | 8 | Offline-Schnelleingabe („Mi 17 Uhr Zahnarzt“, „HA Mathe S. 45“ …) | ✅ |
 | 9 | Benachrichtigungen (Ruhezeit, max. 5/Tag, Coach-Ton) + Wochenrückblick | ✅ |
 | 10 | Homescreen-Widgets: Heute & Klausur-Countdown | ✅ |
 | 11 | Verschlüsseltes Backup, Auto-Backup, Übertragung Handy ↔ Tablet | ✅ |
+| Update 2 | Kalender ganzjährig (A/B mit Ferien), Automatik überall, Sport-Zeitfenster, Fitness-Bereich, freie Klausur-Themen, Gesamtprüfung mit Screenshot-Tests | ✅ |
 
 ---
 
@@ -75,7 +76,7 @@ Der Schlüssel liegt **nicht** im Code, sondern als Secret bei GitHub:
 - **Aufgaben:** Hausaufgaben (automatisch fällig zur nächsten Stunde des Fachs) und To-dos mit Filtern.
 - **Lernen:** Klausuren mit Themen und Fortschritt, automatischer Lernplan, Wiederholungen, Notenpunkte mit Ziel 1,7, Fokus-Timer.
 - **Mehr:**
-  - Sport (Log, Schritte & Schlaf, Floorball-Zeiten)
+  - Fitness (Schritte, Schlaf, Puls, Kalorien, Ernährung, Gewicht, Wasser, Sport-Zeitfenster, Trainings-Log, Floorball-Zeiten)
   - Ziele & Gewohnheiten
   - Finanzen
   - Etsy
@@ -91,7 +92,15 @@ Der Schlüssel liegt **nicht** im Code, sondern als Secret bei GitHub:
 3. *Lernen → Noten:* Pro Fach einstellen, wie schwer es dir fällt (Antippen).
 4. *Mehr → Finanzen:* den Startstand von DKB und Bargeld eintragen und den **Puffer** festlegen.
 5. *Mehr → Kalender & Abos:* Handy-Kalender erlauben, optional den Lernraum-Link eintragen.
-6. *Mehr → Sport:* Health Connect verbinden.
+6. *Mehr → Fitness:* Health Connect verbinden. Danach in **Samsung Health** (Einstellungen → Health Connect) und **MyFitnessPal** (Apps & Geräte → Health Connect) das Teilen erlauben.
+
+### Sport-Zeitfenster
+Die App schreibt dir **keinen Sport vor**. Sie hält pro Woche freie Zeitfenster frei (Standard: 3 × 60 Min zusätzlich zu Floorball, nie an Floorball-Tagen, sonntags frei, in der Klausurphase etwas weniger).
+Was du darin machst, entscheidest du. Beim Abhaken kannst du optional eintragen, was es war. Trainings aus Samsung Health, Strava & Co. haken das Zeitfenster automatisch ab.
+Anzahl und Länge änderst du unter *Fitness → ⚙*.
+
+### Klausuren & Tests
+Themen trägst du **selbst frei** ein. Typische Themen des Fachs erscheinen nur als Vorschläge zum Antippen. Ohne Themen plant die App pauschal 4 Std Lernzeit. Themen antippen → umbenennen, Aufwand ändern, löschen.
 
 ---
 
@@ -113,7 +122,12 @@ docs/       Plan & Doku
 
 **Tests lokal ausführen:** `./gradlew :planner:test :app:testDebugUnitTest`
 
-Getestet werden: Planer (freie Zeiten, A/B-Woche, nächste Stunde, Tagesplanung), Lernplan & Spaced Repetition, Noten, Streaks, iCal-Leser, DKB-CSV, Kategorisierung, Abo-Erkennung, Monatsprognose, Etsy-Gebühren, Schnelleingabe und **alle Datenbank-Migrationen** (damit Updates nie Daten verlieren).
+Getestet werden: Planer (freie Zeiten, A/B-Woche über ein ganzes Schuljahr inkl. Ferien, Jahreswechsel und Zeitumstellung, Tagesplanung, Sport-Zeitfenster), Lernplan & Spaced Repetition, Noten, Streaks, iCal-Leser, DKB-CSV, Kategorisierung, Abo-Erkennung, Monatsprognose, Etsy-Gebühren, Schnelleingabe und **alle Datenbank-Migrationen** (damit Updates nie Daten verlieren).
+
+Dazu kommen Tests mit der echten App (Robolectric, ohne Gerät):
+- **Planung** mit echter Datenbank: leere Datenbank, Klausur morgen, Klausur ohne Themen, gelöschte Klausur, Ferien, voller Tag
+- **Hintergrund-Jobs:** Erinnerungen, Kalender-Abo und Backup laufen ohne Absturz und sind genau einmal geplant
+- **Screenshot-Tests:** alle Hauptbildschirme auf Handy- und Tablet-Größe, die Bilder landen unter `app/build/screenshots/`
 Die Tests laufen auch bei jedem Push auf GitHub.
 
 > Die Versionen sind bewusst bewährte Stände (AGP 8.13 / API 36). Die App läuft damit auf Android 17 (S25) und Android 16 (Tab S8+). Ein Upgrade auf AGP 9 / API 37 folgt in einer späteren Phase.

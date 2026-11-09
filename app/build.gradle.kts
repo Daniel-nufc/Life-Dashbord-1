@@ -13,6 +13,13 @@ val signingKeystorePath: String? = System.getenv("SIGNING_KEYSTORE_PATH")
 val signingPassword: String? = System.getenv("SIGNING_STORE_PASSWORD")
 val hasReleaseSigning = !signingKeystorePath.isNullOrBlank() && !signingPassword.isNullOrBlank()
 
+val robolectricRuntime: Configuration by configurations.creating { isTransitive = false }
+val robolectricJarsDir = layout.buildDirectory.dir("robolectric-jars")
+val copyRobolectricJars = tasks.register<Copy>("copyRobolectricJars") {
+    from(robolectricRuntime)
+    into(robolectricJarsDir)
+}
+
 android {
     namespace = "app.lifedashboard"
     compileSdk = 36
@@ -22,7 +29,7 @@ android {
         minSdk = 34
         targetSdk = 36
         versionCode = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1)
-        versionName = "0.1.${System.getenv("GITHUB_RUN_NUMBER") ?: "0"} (Phase 1)"
+        versionName = "1.0.${System.getenv("GITHUB_RUN_NUMBER") ?: "0"}"
     }
 
     signingConfigs {
@@ -59,6 +66,21 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    testOptions {
+        unitTests {
+            // Robolectric braucht die echten Ressourcen (Strings, Themes) für Screenshot-Tests
+            isIncludeAndroidResources = true
+            all {
+                it.maxHeapSize = "3g"
+                it.systemProperty("screenshots.dir", layout.buildDirectory.dir("screenshots").get().asFile.absolutePath)
+                // Android-Abbild für Robolectric lädt Gradle (mit Cache) – Robolectric selbst bleibt offline
+                it.dependsOn(copyRobolectricJars)
+                it.systemProperty("robolectric.offline", "true")
+                it.systemProperty("robolectric.dependency.dir", robolectricJarsDir.get().asFile.absolutePath)
+            }
+        }
     }
 }
 
@@ -115,4 +137,17 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.sqlite.jdbc)
+
+    // Screenshot-/Oberflächen-Tests ohne Gerät (Robolectric rendert die echten Compose-Bildschirme)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(libs.hilt.android.testing)
+    kspTest(libs.hilt.compiler)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.work.testing)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    // Android 15 (SDK 35) für Robolectric – passend zu Robolectric 4.15.1
+    robolectricRuntime("org.robolectric:android-all-instrumented:15-robolectric-12650502-i7")
 }

@@ -73,4 +73,20 @@ class StudyPlannerTest {
         assertEquals(11.9, Grades.pointsForGrade(1.7), 0.001)
         assertEquals(1.0, Grades.pointsToGrade(15.0), 0.001)
     }
+
+    @Test
+    fun `Klausur ohne Themen bekommt trotzdem Lernzeit`() {
+        val e = StudyExam(1, "Bio", today.plusDays(10), 3, emptyList())
+        assertEquals(240, StudyPlanner.remainingMinutes(e))
+        assertTrue(StudyPlanner.plan(listOf(e), today).any { !it.isReview })
+    }
+
+    @Test
+    fun `Klausur morgen - heute wird richtig gelernt, nicht nur wiederholt`() {
+        val e = StudyExam(1, "Mathe", today.plusDays(1), 3, listOf(StudyTopic(1, "Integrale", 90, 0)))
+        val plan = StudyPlanner.plan(listOf(e), today)
+        assertTrue(plan.all { it.date == today })
+        assertTrue(plan.any { !it.isReview && it.minutes >= 50 }, "Lernzeit erwartet: $plan")
+        assertTrue(plan.sumOf { it.minutes } <= 120, "Tageslimit")
+    }
 }

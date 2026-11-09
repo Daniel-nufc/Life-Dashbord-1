@@ -40,26 +40,6 @@ object AppModule {
     fun provideApplicationScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     @Provides
-    @Singleton
-    fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
-        PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("settings") }
-
-    @Provides
-    @Singleton
-    fun provideDatabase(
-        @ApplicationContext context: Context,
-        keyProvider: DatabaseKeyProvider,
-    ): AppDatabase {
-        // SQLCipher: native Bibliothek laden, dann die Datenbank mit dem Keystore-Passwort öffnen.
-        System.loadLibrary("sqlcipher")
-        val factory = SupportOpenHelperFactory(keyProvider.getOrCreatePassphrase())
-        return Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.NAME)
-            .openHelperFactory(factory)
-            .addMigrations(*AppDatabase.ALL_MIGRATIONS)
-            .build()
-    }
-
-    @Provides
     fun provideTimetableDao(db: AppDatabase): TimetableDao = db.timetableDao()
 
     @Provides
@@ -97,4 +77,33 @@ object AppModule {
 
     @Provides
     fun provideIcalSourceDao(db: AppDatabase): app.lifedashboard.data.db.IcalSourceDao = db.icalSourceDao()
+}
+
+/**
+ * Speicher (DataStore + verschlüsselte Datenbank) als eigenes Modul,
+ * damit Screenshot-Tests eine unverschlüsselte In-Memory-Datenbank einsetzen können.
+ */
+@Module
+@InstallIn(SingletonComponent::class)
+object StorageModule {
+
+    @Provides
+    @Singleton
+    fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+        PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("settings") }
+
+    @Provides
+    @Singleton
+    fun provideDatabase(
+        @ApplicationContext context: Context,
+        keyProvider: DatabaseKeyProvider,
+    ): AppDatabase {
+        // SQLCipher: native Bibliothek laden, dann die Datenbank mit dem Keystore-Passwort öffnen.
+        System.loadLibrary("sqlcipher")
+        val factory = SupportOpenHelperFactory(keyProvider.getOrCreatePassphrase())
+        return Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.NAME)
+            .openHelperFactory(factory)
+            .addMigrations(*AppDatabase.ALL_MIGRATIONS)
+            .build()
+    }
 }

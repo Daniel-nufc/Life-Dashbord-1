@@ -132,12 +132,28 @@ fun ExamDialog(
         OutlinedTextField(
             topics,
             { topics = it },
-            label = { Text(if (original == null) "Themen (eins pro Zeile oder mit Komma)" else "Weitere Themen hinzufügen") },
+            label = { Text(if (original == null) "Deine Themen (eins pro Zeile oder mit Komma)" else "Weitere Themen hinzufügen") },
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
+        val subject = subjects.firstOrNull { it.id == subjectId }
+        if (subject != null) {
+            val already = topics.split('\n', ',', ';').map { it.trim() }.toSet()
+            val ideas = app.lifedashboard.data.repository.TopicSuggestions.forSubject(subject.code, subject.name).filter { it !in already }
+            if (ideas.isNotEmpty()) {
+                FieldLabel("Ideen zum Antippen (optional)")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ideas.forEach { idea ->
+                        androidx.compose.material3.AssistChip(
+                            onClick = { topics = (topics.trimEnd() + if (topics.isBlank()) idea else "\n$idea") },
+                            label = { Text("+ $idea") },
+                        )
+                    }
+                }
+            }
+        }
         Text(
-            "Jedes Thema startet mit ca. 1 Std Aufwand. Schwere Fächer bekommen automatisch mehr Zeit.",
+            "Jedes Thema startet mit ca. 1 Std Aufwand (später änderbar). Ohne Themen plant die App pauschal 4 Std. Schwere Fächer bekommen automatisch mehr Zeit.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

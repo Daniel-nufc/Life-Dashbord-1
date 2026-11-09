@@ -123,9 +123,9 @@ class PlanningEngine @Inject constructor(
             Demand(
                 key = t.session.key,
                 type = DemandType.SPORT,
-                title = "🏃 " + t.session.title,
+                title = "🏃 Sport · ${t.session.minutes} Min (du entscheidest was)",
                 minutes = t.session.minutes,
-                priority = if (t.session.type.hard) 0.95 else 0.85,
+                priority = 0.9,
                 minChunk = t.session.minutes,
                 maxChunk = t.session.minutes,
             )

@@ -61,6 +61,7 @@ class LearnViewModel @Inject constructor(
     }
     fun saveTopic(topic: TopicEntity) = launch { study.saveTopic(topic) }
     fun deleteTopic(id: Long) = launch { study.deleteTopic(id) }
+    fun renameTopic(topic: TopicEntity, title: String, effortMinutes: Int) = launch { study.renameTopic(topic, title, effortMinutes) }
     fun setProgress(topic: TopicEntity, progress: Int) = launch { study.setProgress(topic, progress) }
     fun review(topic: TopicEntity, rating: ReviewRating) = launch { study.review(topic, rating) }
 

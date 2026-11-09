@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -22,7 +23,7 @@ import app.lifedashboard.ui.calendar.CalendarScreen
 import app.lifedashboard.ui.connections.ConnectionsScreen
 import app.lifedashboard.ui.more.MoreScreen
 import app.lifedashboard.ui.learn.LearnScreen
-import app.lifedashboard.ui.sport.SportScreen
+import app.lifedashboard.ui.sport.FitnessScreen
 import app.lifedashboard.ui.tasks.TasksScreen
 import app.lifedashboard.ui.today.TodayScreen
 
@@ -69,14 +70,17 @@ fun LifeDashboardRoot() {
 
     // Einmal nach Benachrichtigungen fragen (Android 13+)
     val context = androidx.compose.ui.platform.LocalContext.current
+    var permissionsAsked by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val notificationLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
-    ) { }
+    ) { permissionsAsked = true }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (!granted) notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        if (!granted) notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS) else permissionsAsked = true
     }
+    // Danach einmal nach der Akku-Ausnahme fragen (Samsung-Tiefschlaf)
+    BatteryPrompt(enabled = permissionsAsked)
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -123,7 +127,7 @@ fun LifeDashboardRoot() {
                 )
             }
             composable(FINANCE_ROUTE) { app.lifedashboard.ui.finance.FinanceScreen(onBack = { navController.popBackStack() }) }
-            composable(SPORT_ROUTE) { SportScreen(onBack = { navController.popBackStack() }) }
+            composable(SPORT_ROUTE) { FitnessScreen(onBack = { navController.popBackStack() }) }
             composable(GOALS_ROUTE) { app.lifedashboard.ui.goals.GoalsScreen(onBack = { navController.popBackStack() }) }
             composable(CONNECTIONS_ROUTE) { ConnectionsScreen(onBack = { navController.popBackStack() }) }
         }
