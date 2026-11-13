@@ -20,11 +20,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CloudSync
+import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.FamilyRestroom
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -51,6 +54,7 @@ import app.lifedashboard.data.db.IcalSourceEntity
 import app.lifedashboard.data.db.LifeArea
 import app.lifedashboard.data.settings.SettingsRepository
 import app.lifedashboard.data.sync.IcalSyncRepository
+import app.lifedashboard.data.sync.isFamilyWall
 import app.lifedashboard.data.sync.SystemCalendar
 import app.lifedashboard.data.sync.SystemCalendarRepository
 import app.lifedashboard.ui.components.OneUiScaffold
@@ -98,11 +102,28 @@ class ConnectionsViewModel @Inject constructor(
         }
     }
 
-    fun addSource(name: String, url: String, asTasks: Boolean) {
+    fun addSource(name: String, url: String, asTasks: Boolean, area: LifeArea = LifeArea.SCHOOL) {
         viewModelScope.launch {
-            val id = ical.save(IcalSourceEntity(name = name.trim(), url = url.trim(), importAsTasks = asTasks, lastSyncMillis = null, lastError = null))
+            val source = IcalSourceEntity(
+                name = name.trim(), url = url.trim(), importAsTasks = asTasks, lastSyncMillis = null, lastError = null,
+                area = if (asTasks) LifeArea.SCHOOL else area,
+            )
+            val id = ical.save(source)
             _syncing.value = true
-            ical.sync(IcalSourceEntity(id = id, name = name.trim(), url = url.trim(), importAsTasks = asTasks, lastSyncMillis = null, lastError = null))
+            ical.sync(source.copy(id = id))
+            _syncing.value = false
+        }
+    }
+
+    /** Neuen FamilyWall-Link übernehmen (ersetzt einen alten, z. B. nach „iCal neu generieren“). */
+    fun connectFamilyWall(url: String) {
+        viewModelScope.launch {
+            val old = sources.value.firstOrNull(::isFamilyWall)
+            val source = (old ?: IcalSourceEntity(name = "FamilyWall", url = "", importAsTasks = false, lastSyncMillis = null, lastError = null, area = LifeArea.PRIVATE))
+                .copy(url = url.trim(), lastError = null)
+            val id = ical.save(source)
+            _syncing.value = true
+            ical.sync(source.copy(id = if (old != null) old.id else id))
             _syncing.value = false
         }
     }
@@ -128,6 +149,8 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
     val syncing by viewModel.syncing.collectAsStateWithLifecycle()
     var permission by remember { mutableStateOf(viewModel.hasCalendarPermission()) }
     var showAdd by remember { mutableStateOf(false) }
+    var showFamilyWall by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         permission = granted
@@ -171,12 +194,45 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
                     }
                 }
                 item {
+                    val family = sources.firstOrNull(::isFamilyWall)
+                    SectionCard {
+                        TileHeader(Icons.Rounded.FamilyRestroom, "FamilyWall", LifeArea.PRIVATE.color) {
+                            if (family != null) IconButton(onClick = viewModel::syncAll, enabled = !syncing) { Icon(Icons.Rounded.Sync, "Jetzt aktualisieren") }
+                        }
+                        Text(
+                            "Alle Termine aus dem Familienkalender erscheinen automatisch in „Heute“ und im Kalender, auch Serien wie Geburtstage. Die App plant nichts in diese Zeiten. Sie liest nur, in FamilyWall ändert sich nichts.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (family == null) {
+                            Button(onClick = { showFamilyWall = true }, modifier = Modifier.padding(top = 12.dp)) { Text("FamilyWall verbinden") }
+                        } else {
+                            val status = when {
+                                syncing -> "Wird aktualisiert …"
+                                family.lastError != null -> "Fehler: ${family.lastError}"
+                                family.lastSyncMillis != null -> "Verbunden · zuletzt " + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(family.lastSyncMillis))
+                                else -> "Verbunden"
+                            }
+                            Text(
+                                status,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (family.lastError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 10.dp),
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                                OutlinedButton(onClick = { showFamilyWall = true }) { Text("Neuen Link eintragen") }
+                                TextButton(onClick = { viewModel.delete(family) }) { Text("Trennen") }
+                            }
+                        }
+                    }
+                }
+                item {
                     SectionCard {
                         TileHeader(Icons.Rounded.CloudSync, "Kalender-Abos (Lernraum, IServ, WebUntis)", LifeArea.SCHOOL.color) {
                             IconButton(onClick = viewModel::syncAll, enabled = !syncing) { Icon(Icons.Rounded.Sync, "Jetzt aktualisieren") }
                         }
                         Text(
-                            "Viele Schulplattformen bieten einen Kalender-Link (iCal) an. Damit landen Abgaben automatisch als Aufgaben in der App – alle 6 Stunden aktualisiert.",
+                            "Viele Schulplattformen bieten einen Kalender-Link (iCal) an. Damit landen Abgaben automatisch als Aufgaben in der App – alle 2 Stunden und beim Öffnen aktualisiert.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -184,13 +240,17 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
                         OutlinedButton(onClick = { showAdd = true }, modifier = Modifier.padding(top = 12.dp)) { Text("Abo hinzufügen") }
                     }
                 }
-                items(sources, key = { it.id }) { source ->
+                items(sources.filterNot(::isFamilyWall), key = { it.id }) { source ->
                     SectionCard {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(source.name, style = MaterialTheme.typography.titleMedium)
                                 Text(
-                                    if (source.importAsTasks) "→ als Aufgaben" else "→ als Termine",
+                                    when {
+                                        source.importAsTasks -> "→ als Aufgaben"
+                                        source.area == LifeArea.PRIVATE -> "→ als Termine · Privat"
+                                        else -> "→ als Termine · Schule"
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -229,6 +289,7 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
         var name by remember { mutableStateOf("Lernraum") }
         var url by remember { mutableStateOf("") }
         var asTasks by remember { mutableStateOf(true) }
+        var privateArea by remember { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = { showAdd = false },
             title = { Text("Kalender-Abo hinzufügen") },
@@ -240,13 +301,19 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
                         Text("Als Aufgaben (Abgaben) übernehmen", modifier = Modifier.weight(1f))
                         Switch(checked = asTasks, onCheckedChange = { asTasks = it })
                     }
+                    if (!asTasks) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = !privateArea, onClick = { privateArea = false }, label = { Text("Schule") })
+                            FilterChip(selected = privateArea, onClick = { privateArea = true }, label = { Text("Privat / Familie") })
+                        }
+                    }
                 }
             },
             confirmButton = {
                 TextButton(
                     enabled = name.isNotBlank() && (url.startsWith("http") || url.startsWith("webcal")),
                     onClick = {
-                        viewModel.addSource(name, url, asTasks)
+                        viewModel.addSource(name, url, asTasks, if (privateArea) LifeArea.PRIVATE else LifeArea.SCHOOL)
                         showAdd = false
                     },
                 ) { Text("Hinzufügen") }
@@ -254,4 +321,46 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
             dismissButton = { TextButton(onClick = { showAdd = false }) { Text("Abbrechen") } },
         )
     }
+
+    if (showFamilyWall) {
+        var url by remember { mutableStateOf("") }
+        val valid = url.trim().let { it.startsWith("http") || it.startsWith("webcal") }
+        AlertDialog(
+            onDismissRequest = { showFamilyWall = false },
+            title = { Text("FamilyWall verbinden") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    listOf(
+                        "1. FamilyWall öffnen und unten „Kalender“ wählen.",
+                        "2. Oben rechts auf das Zahnrad (Einstellungen) tippen.",
+                        "3. Den ersten Kalender antippen – er heißt wie euer Familien-Kreis.",
+                        "4. „iCal generieren“ antippen und den Link kopieren.",
+                        "5. Zurück hierher und „Link einfügen“ antippen.",
+                    ).forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                    OutlinedButton(onClick = { clipboard.getText()?.text?.let { url = it.trim() } }) {
+                        Icon(Icons.Rounded.ContentPaste, null, modifier = Modifier.size(18.dp))
+                        Text("Link einfügen", modifier = Modifier.padding(start = 8.dp))
+                    }
+                    OutlinedTextField(url, { url = it }, label = { Text("iCal-Link") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
+                    if (url.isNotBlank() && !valid) {
+                        Text("Das ist kein Link. Er beginnt mit https:// oder webcal://", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(
+                        "Der Link ist wie ein Passwort – teile ihn mit niemandem. Er bleibt nur auf diesem Gerät.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = valid, onClick = {
+                    viewModel.connectFamilyWall(url)
+                    showFamilyWall = false
+                }) { Text("Verbinden") }
+            },
+            dismissButton = { TextButton(onClick = { showFamilyWall = false }) { Text("Abbrechen") } },
+        )
+    }
 }
+
+private fun isFamilyWall(source: IcalSourceEntity) = source.isFamilyWall()

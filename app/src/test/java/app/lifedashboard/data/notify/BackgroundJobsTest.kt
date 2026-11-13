@@ -72,7 +72,7 @@ class BackgroundJobsTest {
             BackupWorker.schedule(context)
         }
         val wm = WorkManager.getInstance(context)
-        listOf(ReminderWorker.NAME to TimeUnit.MINUTES.toMillis(30), BackupWorker.NAME to TimeUnit.DAYS.toMillis(7)).forEach { (name, interval) ->
+        listOf(ReminderWorker.NAME to TimeUnit.MINUTES.toMillis(30), BackupWorker.NAME to TimeUnit.DAYS.toMillis(7), IcalSyncWorker.NAME to TimeUnit.HOURS.toMillis(2)).forEach { (name, interval) ->
             val infos = wm.getWorkInfosForUniqueWork(name).get().filter { it.state != WorkInfo.State.CANCELLED }
             assertEquals(name, 1, infos.size)
             assertEquals(name, interval, infos.single().periodicityInfo?.repeatIntervalMillis)

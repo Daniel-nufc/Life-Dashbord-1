@@ -141,6 +141,7 @@ private fun NavHostController.openTab(route: String) {
 class RootViewModel @Inject constructor(
     progressRepository: ProgressRepository,
     private val settings: SettingsRepository,
+    private val ical: app.lifedashboard.data.sync.IcalSyncRepository,
 ) : ViewModel() {
     val progress: StateFlow<ProgressState?> = progressRepository.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -156,6 +157,8 @@ class RootViewModel @Inject constructor(
     init {
         // Erster Start mit v28: Coach startet heute neu (alter Rückstand aus nie gesehenen Vorschlägen zählt nicht)
         viewModelScope.launch { settings.ensureCoachStart() }
+        // Beim Öffnen Kalender-Abos (FamilyWall, Lernraum) auffrischen, wenn sie älter als 30 Minuten sind
+        viewModelScope.launch { ical.syncStale(30 * 60_000L) }
     }
 
     fun restartCoach() {

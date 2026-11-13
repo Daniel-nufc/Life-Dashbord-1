@@ -1,5 +1,6 @@
 package app.lifedashboard.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -131,6 +132,8 @@ data class IcalSourceEntity(
     val importAsTasks: Boolean,
     val lastSyncMillis: Long?,
     val lastError: String?,
+    /** Bereich der übernommenen Termine: Schule (Lernraum …) oder Privat (FamilyWall, Familie). */
+    @ColumnInfo(defaultValue = "SCHOOL") val area: LifeArea = LifeArea.SCHOOL,
 )
 
 enum class ExamKind { KLAUSUR, TEST, REFERAT, PRAESENTATION }

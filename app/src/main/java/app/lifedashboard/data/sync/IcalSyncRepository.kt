@@ -64,7 +64,7 @@ class IcalSyncRepository @Inject constructor(
 
     suspend fun delete(source: IcalSourceEntity) {
         // Importierte, noch offene Einträge dieses Abos mit entfernen
-        val prefix = prefixOf(source.id)
+        val prefix = prefixOf(source)
         tasks.byExternalPrefix(prefix).filter { !it.done }.forEach { tasks.delete(it.id) }
         events.byExternalPrefix(prefix).forEach { events.delete(it.id) }
         sources.delete(source.id)
@@ -77,6 +77,12 @@ class IcalSyncRepository @Inject constructor(
         return failures
     }
 
+    /** Nur Abos holen, die länger als [maxAgeMillis] nicht aktualisiert wurden (beim Öffnen der App). */
+    suspend fun syncStale(maxAgeMillis: Long) {
+        val now = System.currentTimeMillis()
+        sources.all().filter { (it.lastSyncMillis ?: 0L) < now - maxAgeMillis }.forEach { sync(it) }
+    }
+
     suspend fun sync(source: IcalSourceEntity): Boolean {
         val now = System.currentTimeMillis()
         return try {
@@ -84,12 +90,13 @@ class IcalSyncRepository @Inject constructor(
             if (!text.contains("BEGIN:VCALENDAR", ignoreCase = true)) {
                 error("Der Link liefert keinen Kalender. Ist es der richtige Export-Link?")
             }
-            val parsed = IcsParser.parse(text)
             val from = LocalDate.now().minusDays(14)
             val to = LocalDate.now().plusDays(180)
-            val relevant = parsed.filter { !it.startDate.isBefore(from) && !it.startDate.isAfter(to) }
+            // Serientermine (z. B. wöchentlich, Geburtstage) werden im Zeitraum aufgefaltet
+            val relevant = IcsParser.parse(text, java.time.ZoneId.systemDefault(), from, to)
             if (source.importAsTasks) importTasks(source, relevant) else importEvents(source, relevant)
-            detectExams(source, relevant)
+            // Klausuren nur in Schul-Abos suchen (im Familienkalender ist „Test“ eher der TÜV)
+            if (source.area == LifeArea.SCHOOL) detectExams(source, relevant)
             sources.setResult(source.id, now, null)
             true
         } catch (e: Exception) {
@@ -99,7 +106,7 @@ class IcalSyncRepository @Inject constructor(
     }
 
     private suspend fun importTasks(source: IcalSourceEntity, items: List<app.lifedashboard.planner.IcsEvent>) {
-        val prefix = prefixOf(source.id)
+        val prefix = prefixOf(source)
         val existing = tasks.byExternalPrefix(prefix).associateBy { it.externalUid }
         val seen = mutableSetOf<String>()
         items.forEach { item ->
@@ -110,7 +117,7 @@ class IcalSyncRepository @Inject constructor(
                 TaskEntity(
                     id = old?.id ?: 0,
                     title = item.summary.removeSuffix(" ist fällig").removeSuffix(" ist fällig."),
-                    area = LifeArea.SCHOOL,
+                    area = source.area,
                     kind = TaskKind.TODO,
                     subjectId = old?.subjectId,
                     dueEpochDay = item.startDate.toEpochDay(),
@@ -128,7 +135,7 @@ class IcalSyncRepository @Inject constructor(
     }
 
     private suspend fun importEvents(source: IcalSourceEntity, items: List<app.lifedashboard.planner.IcsEvent>) {
-        val prefix = prefixOf(source.id)
+        val prefix = prefixOf(source)
         val existing = events.byExternalPrefix(prefix).associateBy { it.externalUid }
         val seen = mutableSetOf<String>()
         items.forEach { item ->
@@ -143,8 +150,8 @@ class IcalSyncRepository @Inject constructor(
                     dateEpochDay = item.startDate.toEpochDay(),
                     startMinute = start,
                     endMinute = end?.coerceAtLeast(start ?: 0),
-                    area = LifeArea.SCHOOL,
-                    location = null,
+                    area = source.area,
+                    location = item.location?.take(120),
                     note = listOfNotNull("Aus: ${source.name}", item.description?.take(500)).joinToString("\n"),
                     externalUid = uid,
                 ),
@@ -161,6 +168,7 @@ class IcalSyncRepository @Inject constructor(
             connection.readTimeout = 20_000
             connection.setRequestProperty("User-Agent", "LifeDashboard-Android")
             val code = connection.responseCode
+            if (code == 401 || code == 403 || code == 404) error("Link ungültig oder abgelaufen (Fehler $code). Bitte neu erzeugen und eintragen.")
             if (code !in 200..299) error("Server antwortet mit Fehler $code")
             connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         } finally {
@@ -168,5 +176,13 @@ class IcalSyncRepository @Inject constructor(
         }
     }
 
-    private fun prefixOf(sourceId: Long) = "ical$sourceId:"
+    /**
+     * Kennung der übernommenen Einträge. FamilyWall hat eine feste Kennung, damit Handy und Tablet
+     * dieselben Termine erzeugen (kein Doppel beim Abgleich) und kein anderes Abo sie löscht.
+     */
+    private fun prefixOf(source: IcalSourceEntity) = if (source.isFamilyWall()) "familywall:" else "ical${source.id}:"
 }
+
+/** FamilyWall-Abo erkennen (Name oder Link). */
+fun IcalSourceEntity.isFamilyWall(): Boolean =
+    name.contains("familywall", ignoreCase = true) || url.contains("familywall", ignoreCase = true)

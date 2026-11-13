@@ -3,8 +3,8 @@
 Private Android-App **Life Dashboard** für Daniel (Schüler, 11. Klasse, OSZ Max Taut Berlin). Läuft auf Galaxy S25 (Android 17) und Galaxy Tab S8+ (Android 16).
 Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (vorher „Auto Blocker“ kurz ausschalten).
 
-**Aktueller Stand: Version 29** (versionCode 29, Datenbank-Version 12 – unverändert, alle Tests grün).
-**Code:** `main` enthält den aktuellen Stand (Version 29, auf Daniels Wunsch übernommen). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
+**Aktueller Stand: Version 30** (FamilyWall-Anbindung, Datenbank-Version 13, alle Tests grün). Die Versionsnummer der APK ist die GitHub-Build-Nummer (`GITHUB_RUN_NUMBER`).
+**Code:** `main` = Version 29. Version 30 liegt auf `ccr-eb37e95e-gq983n` (noch nicht in `main`). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
 
 ## Wie mit Daniel arbeiten
 - Immer **auf Deutsch**, einfach und kurz erklären. Daniel ist kein Entwickler und liest oft auf dem Handy.
@@ -57,6 +57,13 @@ Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (
 
 ## Volle Breite am Tablet (seit Version 29)
 - Alle Bereiche nutzen `ui/components/AdaptiveList.kt` (LazyVerticalStaggeredGrid, Spalten ab 380 dp): Handy 1 Spalte, Tablet 2–3. Kopfkarten, Umschalter, Abschnitts-Überschriften und Hinweise mit `wideItem { }` über die volle Breite, alle anderen Karten fließen ineinander. Überschrift + Karte, die zusammengehören, in **ein** Item packen (siehe „Mehr“). Neue Seiten bitte genauso bauen – keine `widthIn(max = 840.dp)`-Spalten mehr. Kalender hat sein eigenes Zwei-Bereiche-Layout.
+
+## FamilyWall & Kalender-Abos (seit Version 30)
+- FamilyWall hat keine API, aber einen **iCal-Link** (FamilyWall → Kalender → Zahnrad → ersten Kalender antippen → „iCal generieren“). Eigene Karte unter *Mehr → Kalender & Abos* mit Anleitung und „Link einfügen“ (Zwischenablage).
+- `ical_sources.area` (Migration 12→13): Schule oder Privat. FamilyWall = `PRIVATE`, Klausur-Erkennung nur bei Schul-Abos.
+- `planner/IcsParser.parse(text, zone, from, to)` faltet Serien auf (RRULE täglich/wöchentlich/monatlich/jährlich, INTERVAL, COUNT, UNTIL, BYDAY inkl. „2TU“/„-1FR“, BYMONTHDAY, BYMONTH), EXDATE, RECURRENCE-ID, STATUS:CANCELLED, mehrtägige Termine (ein Eintrag pro Tag), LOCATION, VALARM wird übersprungen. Kennung je Wiederholung `uid#yyyyMMdd`.
+- FamilyWall-Einträge haben die feste Kennung `familywall:` (statt `ical<id>:`), damit Handy und Tablet keine Doppel erzeugen.
+- Abos werden alle 2 Std (`IcalSyncWorker`, Policy UPDATE) und beim Öffnen der App (älter als 30 Min, `RootViewModel`) geholt. Test: `FamilyWallSyncTest` (echter lokaler HTTP-Server).
 
 ## Technik
 - Kotlin 2.2.21, AGP 8.13.0, Gradle 8.14.3, compileSdk/targetSdk 36, minSdk 34, KSP, Hilt 2.57.2, Compose BOM 2025.05.00, Material 3.

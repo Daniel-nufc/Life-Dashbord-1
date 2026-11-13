@@ -13,7 +13,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.util.concurrent.TimeUnit
 
-/** Holt alle 6 Stunden die Kalender-Abos im Hintergrund (nur mit Internet). */
+/** Holt alle 2 Stunden die Kalender-Abos im Hintergrund (nur mit Internet), damit Familientermine schnell da sind. */
 @HiltWorker
 class IcalSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
@@ -24,13 +24,13 @@ class IcalSyncWorker @AssistedInject constructor(
     override suspend fun doWork(): Result = if (repository.syncAll() == 0) Result.success() else Result.retry()
 
     companion object {
-        private const val NAME = "ical-sync"
+        const val NAME = "ical-sync"
 
         fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<IcalSyncWorker>(6, TimeUnit.HOURS)
+            val request = PeriodicWorkRequestBuilder<IcalSyncWorker>(2, TimeUnit.HOURS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .build()
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(NAME, ExistingPeriodicWorkPolicy.KEEP, request)
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
         }
     }
 }

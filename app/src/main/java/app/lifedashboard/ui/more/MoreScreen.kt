@@ -161,7 +161,7 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoa
                             AreaItem(Icons.Rounded.Sync, LifeArea.SCHOOL.color, "Handy ↔ Tablet", "Automatischer Abgleich über Cloud-Ordner oder WLAN", onOpenSync)
                             AreaItem(Icons.Rounded.Insights, LifeArea.SCHOOL.color, "Wochenrückblick", "Was lief gut, was nicht, Vorschläge", onOpenReview)
                             AreaItem(Icons.Rounded.BeachAccess, LifeArea.SPORT.color, "Ferien & freie Tage", "Berliner Ferien 2026/27, eigene Studientage", onOpenHolidays)
-                            AreaItem(Icons.Rounded.CalendarMonth, LifeArea.SCHOOL.color, "Kalender & Abos", "Handy-Kalender, Lernraum, IServ, WebUntis", onOpenConnections)
+                            AreaItem(Icons.Rounded.CalendarMonth, LifeArea.SCHOOL.color, "Kalender & Abos", "FamilyWall, Handy-Kalender, Lernraum, IServ, WebUntis", onOpenConnections)
                             AreaItem(Icons.Rounded.SportsHockey, LifeArea.SPORT.color, "Fitness", "Schritte, Schlaf, Puls, Ernährung, Sport-Zeitfenster · Samsung Health & MyFitnessPal", onOpenSport)
                             AreaItem(Icons.Rounded.Flag, LifeArea.PRIVATE.color, "Ziele & Gewohnheiten", "Ironman-Weg, Abi 1,7, Streaks", onOpenGoals)
                             AreaItem(Icons.Rounded.AttachMoney, LifeArea.JOB.color, "Finanzen", "Konten, Budgets, Puffer, Sparziele, DKB-Import", onOpenFinance)
