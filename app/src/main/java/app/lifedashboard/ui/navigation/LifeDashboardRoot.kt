@@ -157,6 +157,7 @@ class RootViewModel @Inject constructor(
     init {
         // Erster Start mit v28: Coach startet heute neu (alter Rückstand aus nie gesehenen Vorschlägen zählt nicht)
         viewModelScope.launch { settings.ensureCoachStart() }
+        viewModelScope.launch { settings.ensureFamilyTitles() }
         // Beim Öffnen Kalender-Abos (FamilyWall, Lernraum) auffrischen, wenn sie älter als 30 Minuten sind
         viewModelScope.launch { ical.syncStale(30 * 60_000L) }
     }

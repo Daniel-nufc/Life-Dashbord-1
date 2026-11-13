@@ -28,7 +28,21 @@ data class SystemCalendar(val id: Long, val name: String, val account: String, v
 }
 
 /** „Nur meine Termine“ für einen Kalender: wie viele Termine passen und wer im Kalender vorkommt. */
-data class PersonStats(val kept: Int, val total: Int, val people: Set<String>)
+data class PersonStats(val kept: Int, val total: Int, val people: Set<String>, val openTitles: Int = 0)
+
+/** Ein Termin-Titel aus dem Familienkalender zum Zuordnen (alle Termine mit gleichem Titel zusammen). */
+data class TitleItem(val title: String, val dates: List<LocalDate>, val choice: Boolean?, val guess: Boolean?, val autoMine: Boolean) {
+    /** Zählt als meins: selbst zugeordnet, sonst geraten (bekannte Wörter), sonst am Namen erkannt. */
+    val mine: Boolean get() = choice ?: guess ?: autoMine
+    /** Weder zugeordnet noch erkannt → die App fragt nach. */
+    val open: Boolean get() = choice == null && guess == null && !autoMine
+}
+
+/** meins? – eigene Wahl, sonst geraten, sonst am Namen erkannt. */
+private fun decide(title: String, autoMine: Boolean, mineTitles: Set<String>, notMineTitles: Set<String>): Boolean =
+    app.lifedashboard.planner.IcsPersonFilter.choice(title, mineTitles, notMineTitles)
+        ?: app.lifedashboard.planner.IcsPersonFilter.guess(title, mineTitles, notMineTitles)
+        ?: autoMine
 
 /** Termin aus dem Samsung-/Google-Kalender (nur gelesen). */
 data class ExternalEvent(
@@ -40,6 +54,8 @@ data class ExternalEvent(
     val endMinute: Int?,
     val color: Int,
     val calendarName: String,
+    /** Ganztägiger eigener Termin (z. B. Schülerreise, Spieltag): an dem Tag wird nichts geplant. */
+    val blocksDay: Boolean = false,
 )
 
 /** Liest den Handy-Kalender (Calendar Provider). Schreibt nichts. */
@@ -77,13 +93,41 @@ class SystemCalendarRepository @Inject constructor(
         calendarIds: Set<Long>,
         onlyMineIds: Set<Long> = emptySet(),
         name: String = "",
+        mineTitles: Set<String> = emptySet(),
+        notMineTitles: Set<String> = emptySet(),
     ): List<ExternalEvent> = withContext(Dispatchers.IO) {
         if (!hasPermission() || calendarIds.isEmpty()) return@withContext emptyList()
         val rows = instances(from, to, calendarIds)
         val filtered = rows.filter { it.calendarId in onlyMineIds }
-        val mineEvents = mineOf(filtered, name)
-        rows.filter { row -> row.calendarId !in onlyMineIds || row.event.id in mineEvents }.map { it.event }
+        val autoMine = mineOf(filtered, name)
+        rows.mapNotNull { row ->
+            when {
+                row.calendarId !in onlyMineIds -> row.event
+                decide(row.event.title, row.event.id in autoMine, mineTitles, notMineTitles) ->
+                    row.event.copy(blocksDay = row.event.startMinute == null)
+                else -> null
+            }
+        }
     }
+
+    /** Termin-Titel der nächsten [days] Tage zum Zuordnen („Gehören die dir?“). */
+    suspend fun titles(calendarId: Long, name: String, mineTitles: Set<String>, notMineTitles: Set<String>, days: Long = 31): List<TitleItem> =
+        withContext(Dispatchers.IO) {
+            if (!hasPermission()) return@withContext emptyList()
+            val today = LocalDate.now()
+            val rows = instances(today, today.plusDays(days - 1), setOf(calendarId))
+            val autoMine = mineOf(rows, name)
+            rows.groupBy { app.lifedashboard.planner.IcsPersonFilter.titleKey(it.event.title) }.values.map { group ->
+                val first = group.first().event
+                TitleItem(
+                    title = first.title,
+                    dates = group.map { it.event.date }.distinct().sorted(),
+                    choice = app.lifedashboard.planner.IcsPersonFilter.choice(first.title, mineTitles, notMineTitles),
+                    guess = app.lifedashboard.planner.IcsPersonFilter.guess(first.title, mineTitles, notMineTitles),
+                    autoMine = group.any { it.event.id in autoMine },
+                )
+            }.sortedBy { it.dates.first() }
+        }
 
     /** Event-IDs der Termine, die zu [name] gehören (Titel, Beschreibung, Teilnehmer, versteckte Felder der Kalender-App). */
     private fun mineOf(rows: List<Row>, name: String): Set<Long> {
@@ -127,27 +171,29 @@ class SystemCalendarRepository @Inject constructor(
         return result
     }
 
-    /** Ein Termin mit allem, was die Kalender-App dazu gespeichert hat (Knopf „Termine prüfen“). */
-    data class Inspection(val event: ExternalEvent, val mine: Boolean, val description: String?, val fields: Map<String, List<String>>)
-
-    /** Für die Fehlersuche: die Termine der nächsten [days] Tage mit allen gespeicherten Feldern. */
-    suspend fun inspect(calendarId: Long, name: String, days: Long = 14): List<Inspection> = withContext(Dispatchers.IO) {
-        if (!hasPermission()) return@withContext emptyList()
-        val today = LocalDate.now()
-        val rows = instances(today, today.plusDays(days - 1), setOf(calendarId)).distinctBy { it.event.id }
-        val fields = fieldsOf(rows.map { it.event.id }.toSet())
-        val mine = mineOf(rows, name)
-        rows.take(40).map { Inspection(it.event, it.event.id in mine, it.description, fields[it.event.id].orEmpty()) }
-    }
-
     /** Auswertung „Nur meine Termine“ für einen Kalender in den nächsten [days] Tagen (Anzeige unter Kalender & Abos). */
-    suspend fun personStats(calendarId: Long, name: String, days: Long = 31): PersonStats = withContext(Dispatchers.IO) {
+    suspend fun personStats(
+        calendarId: Long,
+        name: String,
+        mineTitles: Set<String> = emptySet(),
+        notMineTitles: Set<String> = emptySet(),
+        days: Long = 31,
+    ): PersonStats = withContext(Dispatchers.IO) {
         if (!hasPermission()) return@withContext PersonStats(0, 0, emptySet())
         val today = LocalDate.now()
         val rows = instances(today, today.plusDays(days - 1), setOf(calendarId))
-        val mine = mineOf(rows, name)
+        val autoMine = mineOf(rows, name)
         val attendees = attendeesOf(rows.map { it.event.id }.toSet())
-        PersonStats(rows.count { it.event.id in mine }, rows.size, attendees.values.flatten().toSortedSet(String.CASE_INSENSITIVE_ORDER))
+        val f = app.lifedashboard.planner.IcsPersonFilter
+        PersonStats(
+            kept = rows.count { decide(it.event.title, it.event.id in autoMine, mineTitles, notMineTitles) },
+            total = rows.size,
+            people = attendees.values.flatten().toSortedSet(String.CASE_INSENSITIVE_ORDER),
+            openTitles = rows.filter {
+                f.choice(it.event.title, mineTitles, notMineTitles) == null && f.guess(it.event.title, mineTitles, notMineTitles) == null &&
+                    it.event.id !in autoMine
+            }.map { f.titleKey(it.event.title) }.distinct().size,
+        )
     }
 
     private data class Row(val event: ExternalEvent, val calendarId: Long, val description: String?)

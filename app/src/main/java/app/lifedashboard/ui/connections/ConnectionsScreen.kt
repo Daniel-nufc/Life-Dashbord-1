@@ -60,6 +60,7 @@ import app.lifedashboard.data.sync.isFamilyWall
 import app.lifedashboard.data.sync.PersonStats
 import app.lifedashboard.data.sync.SystemCalendar
 import app.lifedashboard.data.sync.SystemCalendarRepository
+import app.lifedashboard.data.sync.TitleItem
 import app.lifedashboard.ui.components.OneUiScaffold
 import app.lifedashboard.ui.components.SectionCard
 import app.lifedashboard.ui.components.TileHeader
@@ -105,14 +106,18 @@ class ConnectionsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            settings.settings.map { Triple(it.systemCalendarIds, it.onlyMineCalendarIds, it.userName) }
-                .distinctUntilChanged()
-                .collectLatest { refreshStats(it.first, it.second, it.third) }
+            settings.settings.distinctUntilChanged { a, b ->
+                a.systemCalendarIds == b.systemCalendarIds && a.onlyMineCalendarIds == b.onlyMineCalendarIds &&
+                    a.userName == b.userName && a.mineTitles == b.mineTitles && a.notMineTitles == b.notMineTitles
+            }.collectLatest { refreshStats(it) }
         }
     }
 
-    private suspend fun refreshStats(selected: Set<Long>, onlyMine: Set<Long>, name: String) {
-        _stats.value = (selected intersect onlyMine).associateWith { systemCalendar.personStats(it, name) }
+    private suspend fun refreshStats(s: app.lifedashboard.data.settings.AppSettings) {
+        _stats.value = (s.systemCalendarIds intersect s.onlyMineCalendarIds)
+            .associateWith { systemCalendar.personStats(it, s.userName, s.mineTitles, s.notMineTitles) }
+        // offene Zuordnungsliste aktuell halten
+        titlesFor?.let { id -> _titles.value = systemCalendar.titles(id, s.userName, s.mineTitles, s.notMineTitles) }
     }
 
     fun hasCalendarPermission() = systemCalendar.hasPermission()
@@ -120,8 +125,7 @@ class ConnectionsViewModel @Inject constructor(
     fun loadCalendars() {
         viewModelScope.launch {
             _calendars.value = systemCalendar.calendars()
-            val s = settings.settings.first()
-            refreshStats(s.systemCalendarIds, s.onlyMineCalendarIds, s.userName)
+            refreshStats(settings.settings.first())
         }
     }
 
@@ -134,16 +138,27 @@ class ConnectionsViewModel @Inject constructor(
         }
     }
 
-    /** „Termine prüfen“: was FamilyWall zu den Terminen der nächsten 14 Tage gespeichert hat. */
-    private val _inspection = MutableStateFlow<List<SystemCalendarRepository.Inspection>?>(null)
-    val inspection: StateFlow<List<SystemCalendarRepository.Inspection>?> = _inspection.asStateFlow()
+    /** „Termine zuordnen“: die Titel der nächsten 31 Tage, jeweils meins / nicht meins. */
+    private var titlesFor: Long? = null
+    private val _titles = MutableStateFlow<List<TitleItem>?>(null)
+    val titles: StateFlow<List<TitleItem>?> = _titles.asStateFlow()
 
-    fun inspect(calendarId: Long) {
-        viewModelScope.launch { _inspection.value = systemCalendar.inspect(calendarId, userName.value) }
+    fun openTitles(calendarId: Long) {
+        titlesFor = calendarId
+        viewModelScope.launch {
+            val s = settings.settings.first()
+            _titles.value = systemCalendar.titles(calendarId, s.userName, s.mineTitles, s.notMineTitles)
+        }
     }
 
-    fun closeInspection() {
-        _inspection.value = null
+    fun closeTitles() {
+        titlesFor = null
+        _titles.value = null
+    }
+
+    /** Merkt sich die Wahl für den Titel – gilt für alle Termine mit diesem Titel, auch künftige. */
+    fun choose(title: String, mine: Boolean?) {
+        viewModelScope.launch { settings.setTitleChoice(title, mine) }
     }
 
     fun setOnlyMine(id: Long, on: Boolean) {
@@ -291,17 +306,19 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
                                         "Nächste 31 Tage: ${st.kept} von ${st.total} Terminen sind für dich." +
                                             if (st.people.isNotEmpty()) " Personen in FamilyWall: ${st.people.joinToString(", ")}" else "",
                                     )
-                                    if (st.total > 0 && st.kept == 0) {
+                                    if (st.openTitles > 0) {
                                         Text(
-                                            "Kein Termin wird dir zugeordnet. Tippe auf „Termine prüfen“ und schick Claude einen Screenshot – oder schalte den Filter aus, dann erscheinen alle Familientermine.",
+                                            "${st.openTitles} ${if (st.openTitles == 1) "Termin ist" else "Termine sind"} noch nicht zugeordnet – gehören sie dir? FamilyWall sagt dem Handy nicht, wer dabei ist, deshalb sagst du es einmal. Die App merkt sich den Titel für alle künftigen Termine.",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.error,
+                                            color = MaterialTheme.colorScheme.tertiary,
                                             modifier = Modifier.padding(top = 6.dp),
                                         )
                                     }
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
-                                    OutlinedButton(onClick = { viewModel.inspect(fwCalendar.id) }) { Text("Termine prüfen") }
+                                    if (mine) {
+                                        Button(onClick = { viewModel.openTitles(fwCalendar.id) }) { Text("Termine zuordnen") }
+                                    }
                                     TextButton(onClick = { viewModel.toggleCalendar(fwCalendar.id, false) }) { Text("Nicht mehr anzeigen") }
                                 }
                             }
@@ -496,46 +513,51 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
         )
     }
 
-    val inspection by viewModel.inspection.collectAsStateWithLifecycle()
-    inspection?.let { list ->
+    val titleList by viewModel.titles.collectAsStateWithLifecycle()
+    titleList?.let { list ->
         AlertDialog(
-            onDismissRequest = viewModel::closeInspection,
-            title = { Text("FamilyWall · nächste 14 Tage") },
+            onDismissRequest = viewModel::closeTitles,
+            title = { Text("Welche Termine sind deine?") },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text(
-                        "${list.count { it.mine }} von ${list.size} Terminen sind für dich. Hier steht, was FamilyWall zu jedem Termin speichert.",
+                        "Nächste 31 Tage. Deine Wahl gilt für alle Termine mit diesem Titel – auch künftige (z. B. jeder „Spieltag“). Neue Titel ordnet die App nach bekannten Wörtern zu („Turnier“ = deins, „Marie“ = nicht deins). Nur deine Termine kommen in den Tagesplan.",
                         style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (list.isEmpty()) Text("Keine Termine in den nächsten 14 Tagen gefunden.")
+                    if (list.isEmpty()) Text("Keine Termine in den nächsten 31 Tagen.")
                     list.forEach { item ->
-                        val e = item.event
                         Column {
+                            Text(item.title, style = MaterialTheme.typography.titleSmall)
                             Text(
-                                (if (item.mine) "FÜR DICH · " else "nicht für dich · ") + e.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                color = if (item.mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            )
-                            val time = e.startMinute?.let { "%d:%02d".format(it / 60, it % 60) } ?: "ganztägig"
-                            Text(
-                                "${e.date.dayOfMonth}.${e.date.monthValue}. · $time · Farbe #%06X".format(e.color and 0xFFFFFF),
+                                item.dates.take(6).joinToString(", ") { "${it.dayOfMonth}.${it.monthValue}." } +
+                                    (if (item.dates.size > 6) " …" else "") +
+                                    when {
+                                        item.choice != null -> ""
+                                        item.guess != null -> " · vermutet – tippe zum Bestätigen"
+                                        item.autoMine -> " · erkannt am Namen"
+                                        else -> " · offen – gehört das dir?"
+                                    },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            item.description?.let { Text("Beschreibung: " + it.take(160), style = MaterialTheme.typography.bodySmall) }
-                            if (item.fields.isEmpty()) Text("Keine weiteren Felder", style = MaterialTheme.typography.bodySmall)
-                            item.fields.forEach { (key, values) ->
-                                Text(
-                                    key.removePrefix("sync_data").let { if (it != key) "Daten $it" else key } + ": " + values.joinToString(" | ").take(160),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = item.mine,
+                                    onClick = { viewModel.choose(item.title, if (item.choice == true) null else true) },
+                                    label = { Text("Meins") },
+                                )
+                                FilterChip(
+                                    selected = !item.mine && !item.open,
+                                    onClick = { viewModel.choose(item.title, if (item.choice == false) null else false) },
+                                    label = { Text("Nicht meins") },
                                 )
                             }
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = viewModel::closeInspection) { Text("Schließen") } },
+            confirmButton = { TextButton(onClick = viewModel::closeTitles) { Text("Fertig") } },
         )
     }
 }

@@ -164,10 +164,16 @@ class AgendaRepository @Inject constructor(
 ) {
     private fun externalEvents(from: LocalDate, to: LocalDate): Flow<List<ExternalEvent>> =
         combine(
-            settingsRepository.settings.map { Triple(it.systemCalendarIds, it.onlyMineCalendarIds, it.userName) }.distinctUntilChanged(),
+            settingsRepository.settings.map { listOf(it.systemCalendarIds, it.onlyMineCalendarIds, it.userName, it.mineTitles, it.notMineTitles) }
+                .distinctUntilChanged(),
             systemCalendar.changes(),
         ) { config, _ -> config }
-            .mapLatest { (ids, onlyMine, name) -> runCatching { systemCalendar.events(from, to, ids, onlyMine, name) }.getOrDefault(emptyList()) }
+            .mapLatest { c ->
+                @Suppress("UNCHECKED_CAST")
+                runCatching {
+                    systemCalendar.events(from, to, c[0] as Set<Long>, c[1] as Set<Long>, c[2] as String, c[3] as Set<String>, c[4] as Set<String>)
+                }.getOrDefault(emptyList())
+            }
 
     fun observe(from: LocalDate, days: Int): Flow<AgendaRange> {
         val to = from.plusDays((days - 1).toLong())

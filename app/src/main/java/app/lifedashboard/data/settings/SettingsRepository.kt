@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import app.lifedashboard.planner.SchoolWeekCalculator
 import app.lifedashboard.planner.WeekType
 import app.lifedashboard.planner.minuteToTime
@@ -36,6 +37,9 @@ data class AppSettings(
     val systemCalendarIds: Set<Long>,
     /** Handy-Kalender, aus denen nur Termine für [userName] kommen (z. B. der FamilyWall-Familienkalender). */
     val onlyMineCalendarIds: Set<Long> = emptySet(),
+    /** Termin-Titel (klein geschrieben), die Daniel als „meins“ bzw. „nicht meins“ markiert hat – gilt auch für künftige Termine. */
+    val mineTitles: Set<String> = emptySet(),
+    val notMineTitles: Set<String> = emptySet(),
     /** Reihenfolge der Bereiche bei Konflikten, Standard: Schule > Sport > Etsy. */
     val priorityOrder: List<String>,
     /** Geschützter Puffer (Notgroschen) in Cent – wird nie als „verfügbar“ gezählt. */
@@ -171,6 +175,8 @@ class SettingsRepository @Inject constructor(
                 priorityOrder = (p[PRIORITY_ORDER] ?: "SCHOOL,SPORT,ETSY").split(',').filter { it.isNotBlank() },
                 systemCalendarIds = p[SYSTEM_CALENDARS].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
                 onlyMineCalendarIds = p[ONLY_MINE_CALENDARS].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
+                mineTitles = p[MINE_TITLES].orEmpty(),
+                notMineTitles = p[NOT_MINE_TITLES].orEmpty(),
             )
         }
 
@@ -250,6 +256,40 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[ONLY_MINE_CALENDARS] = ids.sorted().joinToString(",") }
     }
 
+    /**
+     * Einmalig Daniels FamilyWall-Titel vorbelegen (aus seinen Screenshots vom 13.11.2026: grün = Daniel,
+     * gelb = meistens dabei). „Floorball Training“ steht schon als festes Training in der App → nicht doppelt.
+     */
+    suspend fun ensureFamilyTitles() {
+        val key = app.lifedashboard.planner.IcsPersonFilter::titleKey
+        dataStore.edit {
+            if (it[FAMILY_TITLES_SEEDED] == true) return@edit
+            it[MINE_TITLES] = it[MINE_TITLES].orEmpty() + listOf(
+                "Spieltag", "Spieltag Kleinfeld", "Turnier", "Floorball Mixed Turnier Falken", "Spieltag Daniel U17 KF",
+                "Friseur", "Vieleicht Hetha", "Daniel - Schülerreise", "Sponsoring TSC", "Augenärztin - alle mit Tropfen",
+                "Treff mit Karin und Familie?",
+            ).map(key)
+            it[NOT_MINE_TITLES] = it[NOT_MINE_TITLES].orEmpty() + listOf(
+                "Augentropfen Papa", "Training bei den Eisbären", "Sunshine - Essen vorbestellen", "Amtstag", "Kosmetik",
+                "Hochzeitstag Oma&Opa", "Hochzeitstag A&M", "Spieltag Marie W", "Spieltag Marie GF", "Spieltag Marie U13",
+                "Kurzurlaub mit Mandy und Konstanze", "Hüttenzauber Marie", "Kammermusik-Matinee", "Floorball Training",
+                "Weihnachtsferien 2026 Berlin", "Herbstferien 2026 Berlin", "Reiterferien Barlin",
+                "Winter - Berlin - Ferien im Schuljahr 2026/2027", "Maries Geburtstag", "Marie - Schule Staatsoper",
+                "Abteilungsversammlung TSC", "QS-Weihnachtsfeier", "Kinderarzt Kontrolle Größe",
+            ).map(key)
+            it[FAMILY_TITLES_SEEDED] = true
+        }
+    }
+
+    /** Termin-Titel als meins (true), nicht meins (false) oder offen (null) merken. */
+    suspend fun setTitleChoice(title: String, mine: Boolean?) {
+        val key = app.lifedashboard.planner.IcsPersonFilter.titleKey(title)
+        dataStore.edit {
+            it[MINE_TITLES] = it[MINE_TITLES].orEmpty() - key + (if (mine == true) setOf(key) else emptySet())
+            it[NOT_MINE_TITLES] = it[NOT_MINE_TITLES].orEmpty() - key + (if (mine == false) setOf(key) else emptySet())
+        }
+    }
+
     suspend fun setPriorityOrder(order: List<String>) {
         dataStore.edit { it[PRIORITY_ORDER] = order.joinToString(",") }
     }
@@ -318,6 +358,9 @@ class SettingsRepository @Inject constructor(
         val SEED_VERSION = intPreferencesKey("seed_version")
         val SYSTEM_CALENDARS = stringPreferencesKey("system_calendar_ids")
         val ONLY_MINE_CALENDARS = stringPreferencesKey("only_mine_calendar_ids")
+        val MINE_TITLES = stringSetPreferencesKey("mine_titles")
+        val NOT_MINE_TITLES = stringSetPreferencesKey("not_mine_titles")
+        val FAMILY_TITLES_SEEDED = booleanPreferencesKey("family_titles_seeded")
         val PRIORITY_ORDER = stringPreferencesKey("priority_order")
         val BUFFER = androidx.datastore.preferences.core.longPreferencesKey("buffer_cents")
         val JOB_WAGE = androidx.datastore.preferences.core.longPreferencesKey("job_wage_cents")

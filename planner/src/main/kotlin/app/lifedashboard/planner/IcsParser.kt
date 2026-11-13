@@ -48,6 +48,39 @@ object IcsPersonFilter {
         return PersonFilterResult(kept, events.size, people)
     }
 
+    /** Vergleichsschlüssel für Titel: Groß/klein und Leerzeichen egal. */
+    fun titleKey(title: String): String = title.trim().lowercase().replace(Regex("\\s+"), " ")
+
+    /** Was Daniel selbst zugeordnet hat: true = meins, false = nicht meins, null = noch offen. */
+    fun choice(title: String, mineTitles: Set<String>, notMineTitles: Set<String>): Boolean? = when (titleKey(title)) {
+        in notMineTitles -> false
+        in mineTitles -> true
+        else -> null
+    }
+
+    private val stopWords = setOf("und", "mit", "bei", "der", "die", "das", "den", "dem", "für", "von", "zum", "zur", "am", "im", "in", "an", "alle", "berlin")
+
+    private fun tokens(title: String): Set<String> =
+        titleKey(title).split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 && it !in stopWords }.toSet()
+
+    /**
+     * Rät bei einem neuen Titel, ob er Daniel gehört: Wörter, die bisher nur in seinen Titeln vorkamen
+     * („turnier“, „u17“), sprechen dafür; Wörter, die nur in fremden Titeln vorkamen („marie“, „papa“), dagegen.
+     * null = keine Ahnung → die App fragt nach.
+     */
+    fun guess(title: String, mineTitles: Set<String>, notMineTitles: Set<String>): Boolean? {
+        val mineTokens = mineTitles.flatMap(::tokens).toSet()
+        val otherTokens = notMineTitles.flatMap(::tokens).toSet()
+        val words = tokens(title)
+        val forMe = words.any { it in mineTokens && it !in otherTokens }
+        val forOthers = words.any { it in otherTokens && it !in mineTokens }
+        return when {
+            forOthers -> false
+            forMe -> true
+            else -> null
+        }
+    }
+
     /** Ein Termin aus dem Handy-Kalender mit allen Feldern, die eine App wie FamilyWall dazu speichert. */
     data class Candidate(val title: String, val description: String?, val fields: Map<String, List<String>>)
 

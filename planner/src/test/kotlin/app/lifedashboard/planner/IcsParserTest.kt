@@ -290,4 +290,25 @@ class IcsParserTest {
         // sync1 enthält bei allen „Daniel_Sohn“ → wird ignoriert; sync3 nennt die ausgewählten Personen
         assertEquals(setOf(0, 3), IcsPersonFilter.mine("Daniel", items))
     }
+
+    @Test
+    fun `selbst zugeordnete Titel gelten fuer alle Termine mit dem Titel`() {
+        val mine = setOf(IcsPersonFilter.titleKey("Spieltag"))
+        val notMine = setOf(IcsPersonFilter.titleKey("Hochzeitstag Oma&Opa"))
+        assertEquals(true, IcsPersonFilter.choice("  spieltag ", mine, notMine))
+        assertEquals(false, IcsPersonFilter.choice("Hochzeitstag  Oma&Opa", mine, notMine))
+        assertNull(IcsPersonFilter.choice("Spieltag Kleinfeld", mine, notMine))
+    }
+
+    @Test
+    fun `neue Titel werden an bekannten Woertern erkannt`() {
+        val mine = setOf("spieltag", "spieltag kleinfeld", "turnier", "spieltag daniel u17 kf")
+        val others = setOf("spieltag marie w", "spieltag marie gf", "augentropfen papa", "training bei den eisbären")
+        assertEquals(true, IcsPersonFilter.guess("Turnier Falken", mine, others))
+        assertEquals(true, IcsPersonFilter.guess("Spieltag U17 Pokal", mine, others))
+        assertEquals(false, IcsPersonFilter.guess("Spieltag Marie U13", mine, others))
+        assertEquals(false, IcsPersonFilter.guess("Papa Zahnarzt", mine, others))
+        assertNull(IcsPersonFilter.guess("Spieltag", emptySet(), emptySet()))
+        assertNull(IcsPersonFilter.guess("Kino", mine, others))
+    }
 }
