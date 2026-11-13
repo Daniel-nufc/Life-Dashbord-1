@@ -336,6 +336,15 @@ private fun DayPane(
 ) {
     val isToday = day.date == LocalDate.now()
     val planned = plan.visible()
+    var miniFor by remember { mutableStateOf<app.lifedashboard.data.db.PlanBlockEntity?>(null) }
+    miniFor?.let { b ->
+        app.lifedashboard.ui.focus.MiniSportDialog(
+            b,
+            onMini = { viewModel.miniSport(b); miniFor = null },
+            onDecline = { viewModel.decline(b); miniFor = null },
+            onDismiss = { miniFor = null },
+        )
+    }
     SectionCard(focus = false) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f)) {
@@ -378,7 +387,7 @@ private fun DayPane(
                 actions = app.lifedashboard.ui.components.PlanActions(
                     accept = viewModel::accept,
                     done = viewModel::done,
-                    decline = viewModel::decline,
+                    decline = { b -> if (b.type == app.lifedashboard.planner.DemandType.SPORT && b.endMinute - b.startMinute > 15) miniFor = b else viewModel.decline(b) },
                     later = viewModel::later,
                 ),
                 modifier = Modifier.padding(top = 12.dp),

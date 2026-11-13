@@ -36,7 +36,36 @@ class FitnessViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val engine: PlanningEngine,
     progressRepository: app.lifedashboard.data.repository.ProgressRepository,
+    private val strava: app.lifedashboard.data.sync.StravaRepository,
 ) : ViewModel() {
+
+    data class StravaState(val connected: Boolean, val hasClient: Boolean, val lastSync: Long?, val busy: Boolean = false)
+
+    private val _stravaBusy = MutableStateFlow(false)
+    val stravaState: StateFlow<StravaState> = kotlinx.coroutines.flow.combine(settingsRepository.settings.map { it.stravaConnected }, _stravaBusy) { c, busy ->
+        StravaState(c, strava.hasClient, strava.lastSyncMillis, busy)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StravaState(false, false, null))
+
+    /** Zugangsdaten speichern und den Link zum Erlauben liefern (öffnet Strava) */
+    fun stravaAuthorize(clientId: String, clientSecret: String): android.net.Uri {
+        if (clientId.isNotBlank() && clientSecret.isNotBlank()) strava.saveClient(clientId, clientSecret)
+        return strava.authorizeUri()
+    }
+
+    /** Falls die Rückkehr nicht klappt: Link aus dem Browser einfügen */
+    fun stravaPaste(link: String) = stravaRun { strava.handleRedirect(link).getOrThrow().let { "Strava verbunden – $it Trainings übernommen" } }
+    fun stravaSync() = stravaRun { strava.sync(full = false).let { if (it > 0) "$it neue Trainings von Strava" else "Keine neuen Trainings auf Strava" } }
+    fun stravaDisconnect() = stravaRun { strava.disconnect(); "Strava getrennt" }
+
+    private fun stravaRun(block: suspend () -> String) {
+        viewModelScope.launch {
+            _stravaBusy.value = true
+            _message.value = runCatching { block() }.getOrElse { "Strava: ${it.message}" }
+            _stravaBusy.value = false
+            loadOverview()
+        }
+    }
+
 
     /** Level, Wochenziele und Ironman-Weg */
     val progress: StateFlow<app.lifedashboard.planner.ProgressState?> = progressRepository.observe()

@@ -87,7 +87,7 @@ fun FloatingDock(
                 .size(44.dp)
                 .graphicsLayer { alpha = visible }
                 .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (app.isDark) 0.16f else 0.12f)),
+                .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.primary, app.glow, 0.45f)))),
         )
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             items.forEach { item ->
@@ -111,7 +111,7 @@ private fun DockIcon(item: Destination, selected: Boolean, modifier: Modifier, o
         Icon(
             item.icon,
             contentDescription = null,
-            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(24.dp).graphicsLayer { scaleX = scale; scaleY = scale },
         )
     }

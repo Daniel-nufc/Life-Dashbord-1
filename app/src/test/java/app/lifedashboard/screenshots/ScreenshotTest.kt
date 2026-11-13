@@ -158,6 +158,19 @@ class ScreenshotTest {
         settle()
         assertText("Fortschritt")
         shot(device, "01_heute")
+        // Fokus-Modus aus „Jetzt starten“
+        if (compose.onAllNodes(hasText("Jetzt starten") and hasClickAction()).fetchSemanticsNodes().isNotEmpty()) {
+            compose.onAllNodes(hasText("Jetzt starten") and hasClickAction()).onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+            settle()
+            check(compose.onAllNodes(hasText("FOKUS")).fetchSemanticsNodes().isNotEmpty()) { "Fokus-Modus öffnet nicht" }
+            shotDialog(device, "01b_fokus")
+            compose.onAllNodes(hasText("Fertig") and hasClickAction()).onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+            settle()
+            check(compose.onAllNodes(hasText("GESCHAFFT")).fetchSemanticsNodes().isNotEmpty()) { "Abschluss fehlt" }
+            shotDialog(device, "01c_geschafft")
+            compose.onAllNodes(hasText("Weiter") and hasClickAction()).onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+            settle()
+        }
         scrollDown(); shot(device, "02_heute_unten")
 
         tab("Kalender"); shot(device, "03_kalender")
@@ -165,6 +178,7 @@ class ScreenshotTest {
         tab("Lernen"); shot(device, "05_lernen_klausuren"); assertText("Analysis"); assertText("Plan passt"); shot(device, "05b_lernen_mathe")
 
         tab("Fitness"); shot(device, "07_fitness"); assertText("Ironman-Weg"); shot(device, "07b_fitness_ironman")
+        assertText("Strava"); shot(device, "07c_fitness_strava")
         assertText("Sport-Zeitfenster diese Woche"); shot(device, "08_fitness_zeitfenster")
         scrollDown(); shot(device, "08b_fitness_unten")
         tab("Finanzen"); shot(device, "09_finanzen")
@@ -245,6 +259,21 @@ class ScreenshotTest {
 
     private fun allTexts(node: androidx.compose.ui.semantics.SemanticsNode): List<String> =
         node.config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.Text) { emptyList() }.map { it.text } + node.children.flatMap { allTexts(it) }
+
+    /** Dialoge liegen in einem eigenen Fenster – das ganze Bild des Dialog-Fensters speichern. */
+    private fun shotDialog(device: String, name: String) {
+        compose.waitForIdle()
+        val roots: List<android.view.View> = runCatching {
+            val wmgClass = Class.forName("android.view.WindowManagerGlobal")
+            val wmg = wmgClass.getMethod("getInstance").invoke(null)
+            val field = wmgClass.getDeclaredField("mRoots").apply { isAccessible = true }
+            (field.get(wmg) as List<*>).mapNotNull { root -> root?.javaClass?.getMethod("getView")?.invoke(root) as? android.view.View }
+        }.getOrDefault(emptyList())
+        val view = roots.lastOrNull() ?: return shot(device, name)
+        val bitmap = Bitmap.createBitmap(view.width.coerceAtLeast(1), view.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888).also { view.draw(android.graphics.Canvas(it)) }
+        val dir = File(outDir, device).apply { mkdirs() }
+        File(dir, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
 
     private fun shot(device: String, name: String) {
         compose.waitForIdle()

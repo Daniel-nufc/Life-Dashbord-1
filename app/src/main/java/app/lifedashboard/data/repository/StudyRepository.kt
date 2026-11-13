@@ -78,12 +78,17 @@ class StudyRepository @Inject constructor(
             val averageBySubject = grades.groupBy { it.subjectId }
                 .mapValues { (_, g) -> app.lifedashboard.planner.Grades.average(g.map { it.points to it.weight }) }
             /** Realistische Lernzeit an einem Tag: an Trainings- und Arbeitstagen weniger, an freien Tagen mehr. */
+            // gleiche Regeln wie das Tages-Pensum: werktags 2 Std (mit Training/Job 1 Std), Samstag 2 Std, Sonntag frei
             fun capacity(date: LocalDate): Int {
-                val free = date.dayOfWeek.value >= 6 || freeRanges.any { date in it }
-                val routineMinutes = routineBlocks.filter { it.active && date.dayOfWeek in it.days() }.sumOf { it.endMinute - it.startMinute }
-                val shiftMinutes = shifts.filter { it.dateEpochDay == date.toEpochDay() }.sumOf { it.endMinute - it.startMinute }
-                val base = if (free) 150 else 120
-                return (base - (routineMinutes / 2).coerceAtMost(60) - shiftMinutes * 2 / 5).coerceAtLeast(25)
+                val busy = routineBlocks.any { it.active && it.area == app.lifedashboard.data.db.LifeArea.SPORT && date.dayOfWeek in it.days() } ||
+                    shifts.any { it.dateEpochDay == date.toEpochDay() }
+                return when {
+                    date.dayOfWeek == java.time.DayOfWeek.SUNDAY -> 0
+                    date.dayOfWeek == java.time.DayOfWeek.SATURDAY -> 120
+                    freeRanges.any { date in it } -> 150
+                    busy -> 60
+                    else -> 120
+                }
             }
             val subjectById = subjects.associateBy { it.id }
             val topicsByExam = topics.groupBy { it.examId }

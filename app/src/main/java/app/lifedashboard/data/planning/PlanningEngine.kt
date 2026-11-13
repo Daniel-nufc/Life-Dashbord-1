@@ -110,13 +110,12 @@ class PlanningEngine @Inject constructor(
             var free = freeSlots(window, day.timeline().filter { it.kind != EntryKind.FREE }.map { it.range }, Duration.ofMinutes(15))
             if (day.date == today) free = DayPlanner.from(free, minuteToTime(((nowMinute + 4) / 5) * 5))
             val totalFree = free.sumOf { it.duration.toMinutes() }.toInt()
-            val capacity = minOf(dailyLimit(day), totalFree - 60).coerceAtLeast(0)
+            // Verteilt wird nur Schulisches – gegen das Schul-Pensum des Tages
+            val capacity = minOf(schoolCap(day, overview), totalFree - 60).coerceAtLeast(0)
             val studyLoad = overview.plan.filter { it.date == day.date }.sumOf { it.minutes }
-            val sportLoad = runCatching { training.sessionsFor(day.date) }.getOrDefault(emptyList())
-                .filter { !it.done && !it.skipped }.sumOf { it.session.minutes }
-            val keptLoad = kept.filter { it.dateEpochDay == day.date.toEpochDay() && !it.demandKey.startsWith("study:") && !it.demandKey.startsWith("train:") }
+            val keptLoad = kept.filter { it.dateEpochDay == day.date.toEpochDay() && !it.demandKey.startsWith("study:") && it.type.isSchool() }
                 .sumOf { it.endMinute - it.startMinute }
-            app.lifedashboard.planner.BalanceDay(day.date, capacity, studyLoad + sportLoad + keptLoad)
+            app.lifedashboard.planner.BalanceDay(day.date, capacity, studyLoad + keptLoad)
         }
         val items = range.allTasks.filter { !it.done && it.dueEpochDay != null && it.dueEpochDay <= today.toEpochDay() + 7 }
             .mapNotNull { task ->
@@ -130,8 +129,17 @@ class PlanningEngine @Inject constructor(
         return app.lifedashboard.planner.LoadBalancer.assign(days, items)
     }
 
-    /** Tageslimit: werktags max. 3 Std, am Wochenende/in den Ferien 4 Std. */
-    private fun dailyLimit(day: DayAgenda) = if (day.isSchoolFree) 240 else 180
+    private fun DemandType.isSchool() = this == DemandType.STUDY || this == DemandType.HOMEWORK || this == DemandType.REVIEW
+
+    /** Schul-Pensum des Tages (Klausur in 1–2 Tagen gibt auch sonntags etwas Zeit). */
+    private fun schoolCap(day: DayAgenda, overview: StudyOverview) =
+        day.schoolCapMinutes(examSoon = overview.upcoming.any { it.daysLeft(day.date) in 1..2 })
+
+    /** Tageslimit gesamt: Schul-Pensum + Platz für Sport/Etsy. Sonntag bleibt frei. */
+    private fun dailyLimit(day: DayAgenda, overview: StudyOverview): Int {
+        val school = schoolCap(day, overview)
+        return if (day.date.dayOfWeek == DayOfWeek.SUNDAY) school else school + 75
+    }
 
     private suspend fun replanLocked(date: LocalDate, balance: Map<String, Map<LocalDate, Int>>) {
         val today = LocalDate.now()
@@ -179,14 +187,29 @@ class PlanningEngine @Inject constructor(
         val core = buildDemands(date, day, range.allTasks, overview, settings, balance)
         // Etsy und Ziel-Schritte füllen nur leichte Tage auf – an vollen Tagen bleiben sie weg (gleichmäßige Wochen)
         val coreMinutes = core.sumOf { it.minutes } + trainings.sumOf { it.session.minutes } + kept.sumOf { it.endMinute - it.startMinute }
-        val comfort = if (day.isSchoolFree) 150 else 100
+        val comfort = when {
+            date.dayOfWeek == DayOfWeek.SUNDAY -> 0
+            day.isSchoolFree -> 150
+            else -> 100
+        }
         // … und auch dann nur so viel, bis der Tag „angenehm voll“ ist (werktags 1:40 Std, frei 2:30 Std)
         var room = comfort - coreMinutes
         val extra = if (room < 25) emptyList() else (etsyDemands(date, day, range.allTasks, overview) + goalDemands(date, day)).mapNotNull { d ->
             val minutes = minOf(d.minutes, room)
             if (minutes < minOf(25, d.minutes)) null else d.copy(minutes = minutes, minChunk = minOf(d.minChunk, minutes), maxChunk = minOf(d.maxChunk, minutes)).also { room -= minutes }
         }
-        val demands = (core + extra + trainings.map { t ->
+        // Schul-Pensum: Wichtigstes zuerst, der Rest kommt an anderen Tagen (Verteilung + Lernplan)
+        val schoolDoneToday = kept.filter { it.type.isSchool() }.sumOf { it.endMinute - it.startMinute }
+        var schoolRoom = schoolCap(day, overview) - schoolDoneToday
+        val tempConfig = PlannerConfig(typeWeight = typeWeights(settings, overview, date))
+        val cappedCore = core.sortedByDescending { DayPlanner.score(it, date, tempConfig) }.mapNotNull { d ->
+            if (!d.type.isSchool()) return@mapNotNull d
+            val minutes = minOf(d.minutes, schoolRoom)
+            if (minutes < minOf(10, d.minutes)) return@mapNotNull null
+            schoolRoom -= minutes
+            d.copy(minutes = minutes, minChunk = minOf(d.minChunk, minutes))
+        }
+        val demands = (cappedCore + extra + trainings.map { t ->
             Demand(
                 key = t.session.key,
                 type = DemandType.SPORT,
@@ -205,7 +228,7 @@ class PlanningEngine @Inject constructor(
         // Tageslimit: werktags max. 3 Std, am Wochenende/in den Ferien 4 Std – und mind. 1 Std echte Freizeit bleibt
         val totalFree = free.sumOf { it.duration.toMinutes() }.toInt()
         val alreadyToday = kept.sumOf { it.endMinute - it.startMinute }
-        val cap = dailyLimit(day) - alreadyToday
+        val cap = dailyLimit(day, overview) - alreadyToday
         val budget = minOf(cap, totalFree - 60).coerceAtLeast(0)
 
         val config = PlannerConfig(typeWeight = typeWeights(settings, overview, date), preferences = preferenceModel())
@@ -226,6 +249,17 @@ class PlanningEngine @Inject constructor(
             },
         )
     }
+
+    /** Sport-Zeitfenster nur kurz: 15 Minuten statt ganz ausfallen lassen – die Serie bleibt. */
+    suspend fun miniSport(block: PlanBlockEntity, minutes: Int = 15) {
+        dao.setEnd(block.id, block.startMinute + minutes)
+        dao.setStatus(block.id, PlanStatus.ACCEPTED)
+        feedback(block, FeedbackAction.ACCEPTED)
+        trainingFor(block)?.let { training.shorten(it.session) }
+    }
+
+    /** Plan für einen Tag (z. B. morgen) bestätigen */
+    suspend fun acceptDay(date: LocalDate) = acceptAll(date, date)
 
     suspend fun accept(block: PlanBlockEntity) {
         dao.setStatus(block.id, PlanStatus.ACCEPTED)
@@ -410,7 +444,8 @@ class PlanningEngine @Inject constructor(
                 // Hausaufgaben sollen am Vortag fertig sein
                 deadline = due?.let { LocalDate.ofEpochDay(if (task.kind == TaskKind.HOMEWORK) it - 1 else it) },
                 minChunk = minOf(25, minutes),
-                maxChunk = 60,
+                // flexible Blocklänge: kurze Aufgaben am Stück, lange in Blöcken bis 90 Min
+                maxChunk = minOf(90, maxOf(50, minutes)),
                 refId = task.id,
             )
         }

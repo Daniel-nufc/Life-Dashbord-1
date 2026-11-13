@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Pool
 import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.Icon
@@ -81,7 +82,13 @@ private fun km(meters: Int): String = if (meters % 1000 == 0) "${meters / 1000}"
 
 /** Kompakte Karte für „Heute“: Level, Punkte, Serie und die beiden Wochenringe. */
 @Composable
-fun ProgressCard(state: ProgressState, onClick: () -> Unit) {
+fun ProgressCard(
+    state: ProgressState,
+    onClick: () -> Unit,
+    onRedeem: ((Int) -> Unit)? = null,
+    /** Spiegel am Abend: Social-Media-Zeit heute (null = nicht anzeigen) */
+    socialMinutesToday: Int? = null,
+) {
     SectionCard(onClick = onClick) {
         TileHeader(Icons.Rounded.Bolt, "Fortschritt", MaterialTheme.colorScheme.primary) {
             if (state.xpToday > 0) {
@@ -95,19 +102,83 @@ fun ProgressCard(state: ProgressState, onClick: () -> Unit) {
             WeekRingTile("Lernen", state.studyWeek, LifeArea.SCHOOL.color, Modifier.weight(1f))
             StreakTile(state, Modifier.weight(1f))
         }
+        if (onRedeem != null) {
+            Spacer(Modifier.height(18.dp))
+            GamingRow(state, onRedeem)
+        }
+        socialMinutesToday?.let { social ->
+            Spacer(Modifier.height(14.dp))
+            MirrorRow(social, state.schoolMinutesToday)
+        }
+    }
+}
+
+/** Zockzeit: verdient mit Lernen und Sport, einlösbar in 30-Minuten-Schritten. */
+@Composable
+private fun GamingRow(state: ProgressState, onRedeem: (Int) -> Unit) {
+    val tones = LocalAppColors.current
+    val r = state.reward
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(tones.energy.copy(alpha = if (r.locked) 0.06f else 0.12f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(Icons.Rounded.SportsEsports, null, tint = if (r.locked) MaterialTheme.colorScheme.outline else tones.energy, modifier = Modifier.size(24.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                if (r.locked) "Zockzeit gesperrt" else "Zockzeit: ${minutesText(r.availableMinutes)}",
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                if (r.locked) "Erst ${minutesText(state.backlogMinutes)} Rückstand aufholen."
+                else "Verdient diese Woche: ${minutesText(r.earnedMinutes)}" + if (r.redeemedMinutes > 0) " · eingelöst ${minutesText(r.redeemedMinutes)}" else "",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (!r.locked && r.availableMinutes >= 30) {
+            Text(
+                "30 Min einlösen",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(tones.energy).clickable { onRedeem(30) }.padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
+/** Ehrlicher Spiegel: Handy gegen Schule, heute. */
+@Composable
+private fun MirrorRow(socialMinutes: Int, schoolMinutes: Int) {
+    val tones = LocalAppColors.current
+    val total = (socialMinutes + schoolMinutes).coerceAtLeast(1)
+    Column {
+        Row(Modifier.fillMaxWidth()) {
+            Text("Heute: Handy ${minutesText(socialMinutes)}", style = MaterialTheme.typography.labelMedium, color = tones.warning, modifier = Modifier.weight(1f))
+            Text("Schule ${minutesText(schoolMinutes)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(50))) {
+            if (socialMinutes > 0) Box(Modifier.weight(socialMinutes.toFloat() / total).height(6.dp).background(tones.warning))
+            if (schoolMinutes > 0) Box(Modifier.weight(schoolMinutes.toFloat() / total).height(6.dp).background(MaterialTheme.colorScheme.primary))
+        }
     }
 }
 
 @Composable
 fun LevelRow(state: ProgressState) {
     Row(verticalAlignment = Alignment.Bottom) {
-        Text("${state.level.level}", style = MaterialTheme.typography.displaySmall, modifier = Modifier.alignByBaseline())
+        app.lifedashboard.ui.components.AnimatedNumber(state.level.level, MaterialTheme.typography.displaySmall, Modifier.alignByBaseline())
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f).alignByBaseline()) {
             Text("Level · ${state.level.title}", style = MaterialTheme.typography.titleSmall)
         }
         Text(
-            "noch ${state.level.xpToNext} Punkte",
+            "${state.level.xpTotal} Punkte · noch ${state.level.xpToNext}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.alignByBaseline(),
@@ -148,7 +219,7 @@ private fun StreakTile(state: ProgressState, modifier: Modifier = Modifier) {
                 Icon(
                     Icons.Rounded.LocalFireDepartment,
                     contentDescription = null,
-                    tint = if (state.activeToday) app.warning else MaterialTheme.colorScheme.outline,
+                    tint = if (state.activeToday) app.energy else MaterialTheme.colorScheme.outline,
                     modifier = Modifier.size(20.dp),
                 )
                 Text("${state.streak.current}", style = MaterialTheme.typography.headlineSmall)
@@ -163,7 +234,7 @@ private fun StreakTile(state: ProgressState, modifier: Modifier = Modifier) {
                 else -> "heute starten"
             },
             style = MaterialTheme.typography.bodySmall,
-            color = if (alive && !state.activeToday) app.warning else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (alive && !state.activeToday) app.energy else MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
     }

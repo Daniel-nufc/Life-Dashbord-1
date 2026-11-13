@@ -56,8 +56,8 @@ fun OneUiScaffold(
                         text = title,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
-                        letterSpacing = (-0.3).sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        letterSpacing = (-0.6).sp,
                     )
                 },
                 navigationIcon = { if (!LocalHideBack.current) navigationIcon() },

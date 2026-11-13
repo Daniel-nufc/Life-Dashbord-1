@@ -149,6 +149,10 @@ class RootViewModel @Inject constructor(
     val userName: StateFlow<String> = settings.settings.map { it.userName }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
+    fun redeemGaming(minutes: Int) {
+        viewModelScope.launch { settings.redeemGaming(minutes) }
+    }
+
     fun levelSeen(level: Int) {
         viewModelScope.launch { settings.setLastSeenLevel(level) }
     }

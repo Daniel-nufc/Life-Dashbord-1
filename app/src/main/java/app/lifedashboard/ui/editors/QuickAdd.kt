@@ -48,6 +48,8 @@ fun QuickAddSheet(date: LocalDate, onPick: (EditRequest) -> Unit, onDismiss: () 
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             )
+            // Schnell-Eingabe in einem Satz, z. B. „Mi 17 Uhr Zahnarzt“
+            QuickInputBar(onRequest = onPick, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             SheetItem(Icons.Rounded.MenuBook, LifeArea.SCHOOL.color, "Hausaufgabe", "Fällig automatisch zur nächsten Stunde") {
                 onPick(EditRequest.Homework(null))
             }

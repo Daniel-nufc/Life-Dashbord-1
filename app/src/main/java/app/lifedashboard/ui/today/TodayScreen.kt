@@ -72,7 +72,6 @@ import app.lifedashboard.ui.tasks.TaskRow
 import app.lifedashboard.data.repository.euro
 import java.time.LocalDate
 
-private val HeroColors = listOf(Color(0xFF6FD3A6))
 
 @Composable
 fun TodayScreen(
@@ -84,6 +83,13 @@ fun TodayScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val progress by viewModel.progress.collectAsStateWithLifecycle()
+    val tomorrowPlan by viewModel.tomorrowPlan.collectAsStateWithLifecycle()
+    val social by viewModel.socialToday.collectAsStateWithLifecycle()
+    var focusBlock by remember { mutableStateOf<app.lifedashboard.data.db.PlanBlockEntity?>(null) }
+    var miniFor by remember { mutableStateOf<app.lifedashboard.data.db.PlanBlockEntity?>(null) }
+    val decline: (app.lifedashboard.data.db.PlanBlockEntity) -> Unit = { b ->
+        if (b.type == app.lifedashboard.planner.DemandType.SPORT && b.endMinute - b.startMinute > 15) miniFor = b else viewModel.decline(b)
+    }
     var showAdd by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<EditRequest?>(null) }
 
@@ -97,17 +103,16 @@ fun TodayScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalItemSpacing = 12.dp,
             ) {
-                item(span = StaggeredGridItemSpan.FullLine) { Hero(s) }
-                if (s.now.dayOfWeek == java.time.DayOfWeek.SUNDAY || s.now.dayOfWeek == java.time.DayOfWeek.SATURDAY) {
+                item(span = StaggeredGridItemSpan.FullLine) {
+                    NextUpHero(s, progress, onStart = { focusBlock = it }, onLater = viewModel::later)
+                }
+                if (s.now.dayOfWeek == java.time.DayOfWeek.SUNDAY) {
                     item(span = StaggeredGridItemSpan.FullLine) {
                         SectionCard(onClick = onOpenReview) {
                             TileHeader(Icons.Rounded.AutoAwesome, "Dein Wochenrückblick", LifeArea.SCHOOL.color)
                             Text("Was lief gut, was nicht – und Vorschläge für die neue Woche. 2 Minuten.", style = MaterialTheme.typography.bodyMedium)
                         }
                     }
-                }
-                item(span = StaggeredGridItemSpan.FullLine) {
-                    app.lifedashboard.ui.editors.QuickInputBar(onRequest = { editing = it })
                 }
                 if (s.allDayEvents.isNotEmpty() || s.externalAllDay.isNotEmpty()) {
                     item {
@@ -132,7 +137,18 @@ fun TodayScreen(
                 s.cards.forEach { card ->
                     when (card) {
                         "PROGRESS" -> progress?.let { p ->
-                            item(key = card) { app.lifedashboard.ui.progress.ProgressCard(p, onClick = onOpenProgress) }
+                            item(key = card) {
+                                app.lifedashboard.ui.progress.ProgressCard(
+                                    p,
+                                    onClick = onOpenProgress,
+                                    onRedeem = viewModel::redeemGaming,
+                                    // Spiegel ab 17 Uhr: Handy gegen Schule
+                                    socialMinutesToday = social?.takeIf { s.now.hour >= 17 }?.toMinutes()?.toInt(),
+                                )
+                            }
+                        }
+                        "TOMORROW" -> if (s.now.hour >= 19) {
+                            item(key = card) { TomorrowCard(tomorrowPlan, onConfirm = viewModel::acceptTomorrow) }
                         }
                         "NOW" -> item(key = card) { NowTile(s) }
                         "TASKS" -> item(key = card) {
@@ -161,7 +177,7 @@ fun TodayScreen(
                                 actions = PlanActions(
                                     accept = viewModel::accept,
                                     done = viewModel::done,
-                                    decline = viewModel::decline,
+                                    decline = decline,
                                     later = viewModel::later,
                                 ),
                                 replan = viewModel::replanNow,
@@ -191,39 +207,16 @@ fun TodayScreen(
         )
     }
     EditorHost(editing, onDismiss = { editing = null })
-}
-
-@Composable
-private fun Hero(s: TodayUiState.Ready) {
-    GradientCard(HeroColors) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(s.dateLabel, color = Color.White, style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Pill("Woche ${s.weekType.name}", Color.White.copy(alpha = 0.25f))
-                    Pill(s.holiday ?: if (s.isSchoolDay) "Schultag" else "Schulfrei", Color.White.copy(alpha = 0.25f))
-                }
-                Spacer(Modifier.height(12.dp))
-                if (s.examsToday.isNotEmpty()) {
-                    Text("Heute: Klausur ${s.examsToday.joinToString()} – du schaffst das!", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-                Text(s.coachLine, color = Color.White.copy(alpha = 0.78f), style = MaterialTheme.typography.bodyMedium)
-            }
-            Spacer(Modifier.width(12.dp))
-            val progress = if (s.freeTimeTotal.isZero) 0f else s.freeTimeLeft.toMinutes().toFloat() / s.freeTimeTotal.toMinutes()
-            ProgressRing(progress = progress, color = Color(0xFF6FD3A6), size = 84.dp, stroke = 5.dp, trackColor = Color.White.copy(alpha = 0.12f)) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "%d:%02d".format(s.freeTimeLeft.toHours(), s.freeTimeLeft.toMinutesPart()),
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text("frei", color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.labelSmall)
-                }
-            }
-        }
+    focusBlock?.let { b ->
+        app.lifedashboard.ui.focus.FocusMode(b, onDone = { viewModel.done(b) }, onClose = { focusBlock = null })
+    }
+    miniFor?.let { b ->
+        app.lifedashboard.ui.focus.MiniSportDialog(
+            b,
+            onMini = { viewModel.miniSport(b); miniFor = null },
+            onDecline = { viewModel.decline(b); miniFor = null },
+            onDismiss = { miniFor = null },
+        )
     }
 }
 

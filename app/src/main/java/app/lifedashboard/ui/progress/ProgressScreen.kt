@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Insights
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +38,8 @@ import app.lifedashboard.ui.navigation.RootViewModel
 @Composable
 fun ProgressScreen(onBack: () -> Unit, viewModel: RootViewModel = hiltViewModel()) {
     val state by viewModel.progress.collectAsStateWithLifecycle()
+    val name by viewModel.userName.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
     OneUiScaffold(
         title = "Fortschritt",
         navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Zurück") } },
@@ -52,7 +55,17 @@ fun ProgressScreen(onBack: () -> Unit, viewModel: RootViewModel = hiltViewModel(
                 contentPadding = padding.listPadding(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                item { ProgressCard(s, onClick = {}) }
+                item { ProgressCard(s, onClick = {}, onRedeem = viewModel::redeemGaming) }
+                item {
+                    app.lifedashboard.ui.components.SectionCard(onClick = { WeeklyReport.share(context, s, name) }) {
+                        TileHeader(Icons.Rounded.Share, "Wochenbericht teilen", MaterialTheme.colorScheme.primary)
+                        Text(
+                            "Schick deine Woche als Bild an Eltern, Freunde oder Trainer. Wer mitschaut, hilft dir dranzubleiben.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 item { IronmanPathCard(s.ironman) }
                 item {
                     SectionCard {
@@ -69,9 +82,11 @@ fun ProgressScreen(onBack: () -> Unit, viewModel: RootViewModel = hiltViewModel(
                         PointsRow("1 Minute Lernen", "${Progress.XP_PER_STUDY_MINUTE} Punkte")
                         PointsRow("Aufgabe abgehakt", "${Progress.XP_PER_TASK} Punkte")
                         PointsRow("Gewohnheit abgehakt", "${Progress.XP_PER_HABIT} Punkte")
+                        PointsRow("Schul-Block verpasst", "−${Progress.PENALTY_PER_MISSED_MINUTE} pro Minute")
+                        PointsRow("25 Min Schule / 45 Min Sport", "+15 Min Zockzeit")
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Die Serie zählt Tage mit Sport oder Lernen. Ein Tag pro Woche darf fehlen, ohne dass sie reißt. " +
+                            "Die Serie zählt Tage mit Sport oder Lernen. Strenger Coach: Ein verpasster Schul-Block bricht die Serie, ab 1 Std Rückstand ist die Zockzeit gesperrt. " +
                                 "Alles wird aus deinen Einträgen berechnet – es geht nichts verloren.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

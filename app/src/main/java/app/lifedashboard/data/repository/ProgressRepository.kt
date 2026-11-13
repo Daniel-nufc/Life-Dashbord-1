@@ -7,7 +7,11 @@ import app.lifedashboard.data.db.StudyDao
 import app.lifedashboard.data.db.TaskDao
 import app.lifedashboard.data.db.WorkoutType
 import app.lifedashboard.data.settings.SettingsRepository
+import app.lifedashboard.data.db.PlanStatus
 import app.lifedashboard.planner.ActivityLog
+import app.lifedashboard.planner.BlockLog
+import app.lifedashboard.planner.BlockOutcome
+import app.lifedashboard.planner.DemandType
 import app.lifedashboard.planner.Discipline
 import app.lifedashboard.planner.Progress
 import app.lifedashboard.planner.ProgressInput
@@ -37,6 +41,7 @@ class ProgressRepository @Inject constructor(
     private val routines: RoutineRepository,
     private val study: StudyRepository,
     private val settings: SettingsRepository,
+    private val planDao: app.lifedashboard.data.db.PlanDao,
 ) {
     private fun Long.toDate(): LocalDate = Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDate()
 
@@ -66,8 +71,30 @@ class ProgressRepository @Inject constructor(
             val doneWeek = overview.sessionsThisWeek.sumOf { it.minutes }
             sportGoal to maxOf(MIN_STUDY_GOAL, doneWeek + plannedRest)
         }
-        return combine(logs, goals) { l, g ->
-            Progress.compute(ProgressInput(today, l.activities, l.study, l.tasksDone, l.habitDays, weeklySportGoalMinutes = g.first, weeklyStudyGoalMinutes = g.second))
+        // Vergangene Schul-Blöcke der letzten 8 Wochen: erledigt oder verpasst (heute nur, was schon vorbei ist)
+        val nowMinute = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
+        val blocks = planDao.observeBetween(today.toEpochDay() - 56, today.toEpochDay()).map { list ->
+            list.filter { it.type == DemandType.STUDY || it.type == DemandType.HOMEWORK || it.type == DemandType.REVIEW }
+                .mapNotNull { b ->
+                    val past = b.dateEpochDay < today.toEpochDay() || b.endMinute <= nowMinute
+                    val outcome = when {
+                        b.status == PlanStatus.DONE -> BlockOutcome.DONE
+                        b.status == PlanStatus.MISSED -> BlockOutcome.MISSED
+                        past && (b.status == PlanStatus.PROPOSED || b.status == PlanStatus.ACCEPTED) -> BlockOutcome.MISSED
+                        else -> null
+                    } ?: return@mapNotNull null
+                    BlockLog(LocalDate.ofEpochDay(b.dateEpochDay), b.endMinute - b.startMinute, outcome)
+                }
+        }
+        val prefs = settings.settings.map { it.strictCoach to it.redeemedThisWeek(today) }.distinctUntilChanged()
+        return combine(logs, goals, blocks, prefs) { l, g, b, p ->
+            Progress.compute(
+                ProgressInput(
+                    today, l.activities, l.study, l.tasksDone, l.habitDays,
+                    weeklySportGoalMinutes = g.first, weeklyStudyGoalMinutes = g.second,
+                    blocks = b, strict = p.first, redeemedMinutes = p.second,
+                ),
+            )
         }.distinctUntilChanged()
     }
 

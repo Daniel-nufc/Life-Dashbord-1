@@ -163,7 +163,7 @@ fun Meter(
                 .fillMaxHeight()
                 .fillMaxWidth(animated)
                 .clip(RoundedCornerShape(50))
-                .background(color),
+                .background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(color.copy(alpha = 0.7f), androidx.compose.ui.graphics.lerp(color, Color.White, 0.25f)))),
         )
     }
 }

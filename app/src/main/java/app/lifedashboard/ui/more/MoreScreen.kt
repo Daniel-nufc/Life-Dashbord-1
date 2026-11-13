@@ -88,6 +88,10 @@ class MoreViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setAppLockEnabled(enabled) }
     }
 
+    fun setStrict(strict: Boolean) {
+        viewModelScope.launch { settingsRepository.setStrictCoach(strict) }
+    }
+
     fun setThemeMode(mode: String) {
         viewModelScope.launch { settingsRepository.setThemeMode(mode) }
     }
@@ -227,6 +231,12 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoa
                                     }
                                 }
                             },
+                            colors = transparentItem(),
+                        )
+                        ListItem(
+                            headlineContent = { Text("Strenger Coach") },
+                            supportingContent = { Text("Verpasste Schul-Blöcke kosten Punkte und brechen die Serie, ab 1 Std Rückstand ist die Zockzeit gesperrt") },
+                            trailingContent = { Switch(checked = s.strictCoach, onCheckedChange = { viewModel.setStrict(it) }) },
                             colors = transparentItem(),
                         )
                         ListItem(

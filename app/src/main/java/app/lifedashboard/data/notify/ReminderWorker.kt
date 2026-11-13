@@ -40,11 +40,14 @@ class ReminderWorker @AssistedInject constructor(
     private val automation: app.lifedashboard.data.repository.AutomationRepository,
     private val training: app.lifedashboard.data.repository.TrainingRepository,
     private val progress: app.lifedashboard.data.repository.ProgressRepository,
+    private val usage: app.lifedashboard.data.sync.UsageRepository,
+    private val strava: app.lifedashboard.data.sync.StravaRepository,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
         runCatching { check() }
         runCatching { automation.autoCheckHabits() }
+        runCatching { strava.syncIfDue() }
         runCatching { training.syncFromHealth() }
         runCatching { finance.generateRecurring() }
         app.lifedashboard.widget.updateWidgets(applicationContext)
@@ -125,6 +128,34 @@ class ReminderWorker @AssistedInject constructor(
         // 5) Training heute (ca. 1–2 Std vorher)
         day.routines.filter { it.area == LifeArea.SPORT && it.startMinute - nowMin in 60..120 }.forEach { r ->
             notifier.send("training:${r.id}", Channel.SPORT, "Heute ${r.title} um ${minutesToTimeText(r.startMinute)}", "Tasche packen, was trinken – los geht's!")
+        }
+
+        // 5a) Abends: Plan für morgen bestätigen (20:30–21:29) – morgen musst du dann nur noch anfangen
+        if (nowMin in (20 * 60 + 30) until (21 * 60 + 30)) {
+            val tomorrow = today.plusDays(1)
+            runCatching { engine.planDays(tomorrow, 1) }
+            val blocks = engine.observeDay(tomorrow).first().filter { it.status == PlanStatus.PROPOSED || it.status == PlanStatus.ACCEPTED }
+            if (blocks.isNotEmpty()) {
+                val minutes = blocks.sumOf { it.endMinute - it.startMinute }
+                val first = blocks.minBy { it.startMinute }
+                notifier.send(
+                    "tomorrow", Channel.PLAN,
+                    "Morgen: ${blocks.size} ${if (blocks.size == 1) "Block" else "Blöcke"}, ${if (minutes >= 60) "%d:%02d Std".format(minutes / 60, minutes % 60) else "$minutes Min"}",
+                    "Los geht's um ${minutesToTimeText(first.startMinute)} mit ${first.title}. Kurz bestätigen – dauert 10 Sekunden.",
+                    ignoreLimit = true,
+                )
+            }
+        }
+
+        // 5c) 21:30–21:59: Spiegel + Handy weg um 22 Uhr
+        if (nowMin in (21 * 60 + 30) until (22 * 60)) {
+            val social = runCatching { usage.socialTime(today) }.getOrNull()
+            val state = runCatching { progress.observe(today).first() }.getOrNull()
+            val mirror = if (social != null && state != null) {
+                val sm = social.toMinutes().toInt()
+                "Heute: Handy ${if (sm >= 60) "%d:%02d Std".format(sm / 60, sm % 60) else "$sm Min"}, Schule ${state.schoolMinutesToday} Min. "
+            } else ""
+            notifier.send("sleep", Channel.PLAN, "Um 22 Uhr Handy weg", mirror + "Wer gut schläft, lernt morgen doppelt so leicht.", ignoreLimit = true)
         }
 
         // 5b) Motivation am frühen Abend: Serie retten, knapp vor dem nächsten Level oder Wochenziel in Reichweite.

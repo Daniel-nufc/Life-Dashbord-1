@@ -189,6 +189,9 @@ interface PlanDao {
     @Query("UPDATE plan_blocks SET status = :status WHERE id = :id")
     suspend fun setStatus(id: Long, status: PlanStatus)
 
+    @Query("UPDATE plan_blocks SET endMinute = :endMinute WHERE id = :id")
+    suspend fun setEnd(id: Long, endMinute: Int)
+
     /** Alte Trainings-Einheiten (vor den Sport-Zeitfenstern) ab [fromDay] löschen – erledigte bleiben. */
     @Query("DELETE FROM plan_blocks WHERE dateEpochDay >= :fromDay AND demandKey LIKE 'train:%' AND demandKey NOT LIKE '%:WINDOW' AND status IN ('PROPOSED', 'ACCEPTED')")
     suspend fun deleteOldTrainingBlocks(fromDay: Long)

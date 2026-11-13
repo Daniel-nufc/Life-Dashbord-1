@@ -135,8 +135,10 @@ class TrainingRepository @Inject constructor(
     suspend fun syncFromHealth(): Int {
         val list = runCatching { health.recentWorkouts(14) }.getOrDefault(emptyList())
         var added = 0
+        val existing = sportDao.observeWorkouts().first()
         for (hw in list) {
             if (sportDao.countExternal(hw.id) > 0) continue
+            if (existing.any { it.externalId?.startsWith("strava:") == true && it.dateEpochDay == hw.date.toEpochDay() && kotlin.math.abs(it.durationMinutes - hw.minutes) <= 5 }) continue
             if (hw.kind == HealthWorkout.Kind.WALK && (hw.distanceMeters ?: 0) < 3000) continue
             val id = sportDao.upsertWorkout(
                 WorkoutEntity(

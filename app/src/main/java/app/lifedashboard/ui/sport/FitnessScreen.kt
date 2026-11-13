@@ -1,5 +1,6 @@
 package app.lifedashboard.ui.sport
 
+import androidx.compose.material.icons.rounded.DirectionsRun
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.Arrangement
@@ -109,6 +110,8 @@ private val HEART = Color(0xFFE5486A)
 @Composable
 fun FitnessScreen(onBack: () -> Unit, viewModel: FitnessViewModel = hiltViewModel()) {
     val overview by viewModel.overview.collectAsStateWithLifecycle()
+    val stravaState by viewModel.stravaState.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
     val healthState by viewModel.healthState.collectAsStateWithLifecycle()
@@ -161,6 +164,18 @@ fun FitnessScreen(onBack: () -> Unit, viewModel: FitnessViewModel = hiltViewMode
                 }
                 snapshot?.let { s -> item { WeekCharts(s) } }
                 item { TrainingMinutesCard(workouts, overview) }
+                item {
+                    StravaCard(
+                        state = stravaState,
+                        onAuthorize = { id, secret ->
+                            val uri = viewModel.stravaAuthorize(id, secret)
+                            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri)) }
+                        },
+                        onPaste = viewModel::stravaPaste,
+                        onSync = viewModel::stravaSync,
+                        onDisconnect = viewModel::stravaDisconnect,
+                    )
+                }
                 item {
                     ConnectionsCard(
                         state = healthState,
@@ -629,3 +644,74 @@ private fun WorkoutRow(w: WorkoutWithSets, onClick: () -> Unit) {
 }
 
 private fun Duration.hm() = "%d:%02d h".format(toHours(), toMinutesPart())
+
+
+/** Strava: Läufe, Radfahrten und Schwimmen automatisch übernehmen. */
+@Composable
+private fun StravaCard(
+    state: FitnessViewModel.StravaState,
+    onAuthorize: (String, String) -> Unit,
+    onPaste: (String) -> Unit,
+    onSync: () -> Unit,
+    onDisconnect: () -> Unit,
+) {
+    val strava = Color(0xFFFC5200)
+    var clientId by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+    var secret by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+    var link by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+    var expanded by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    SectionCard {
+        TileHeader(Icons.Rounded.DirectionsRun, "Strava", strava) {
+            Pill(if (state.connected) "verbunden" else "nicht verbunden", if (state.connected) LifeArea.SPORT.color else MaterialTheme.colorScheme.outline)
+        }
+        if (state.connected) {
+            Text(
+                "Deine Strava-Aktivitäten landen automatisch im Trainings-Log (alle 3 Stunden) und schieben dich auf dem Ironman-Weg voran." +
+                    (state.lastSync?.let { " Zuletzt: " + java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime().format(java.time.format.DateTimeFormatter.ofPattern("d.M. HH:mm")) } ?: ""),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                app.lifedashboard.ui.components.MiniAction(if (state.busy) "Lädt …" else "Jetzt abrufen", filled = true, onClick = onSync)
+                app.lifedashboard.ui.components.MiniAction("Trennen", filled = false, onClick = onDisconnect)
+            }
+            return@SectionCard
+        }
+        Text(
+            "Holt alle deine Läufe aus Strava – auch alte wie Winterberg. Einmalig einrichten (2 Minuten, kostenlos):",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        if (!expanded && !state.hasClient) {
+            TextButton(onClick = { expanded = true }) { Text("Einrichten") }
+            return@SectionCard
+        }
+        if (!state.hasClient || expanded) {
+            Text(
+                "1. Im Browser strava.com/settings/api öffnen und einloggen.\n" +
+                    "2. App anlegen: Name „Life Dashboard“, Kategorie „Training“, Website „http://localhost“, " +
+                    "Authorization Callback Domain: localhost\n" +
+                    "3. „Client ID“ und „Client Secret“ hier eintragen und auf „Mit Strava verbinden“ tippen.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+            OutlinedTextField(clientId, { clientId = it.filter(Char::isDigit) }, label = { Text("Client ID") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(secret, { secret = it.trim() }, label = { Text("Client Secret") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+        }
+        Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            app.lifedashboard.ui.components.MiniAction("Mit Strava verbinden", filled = true) {
+                if (state.hasClient || (clientId.isNotBlank() && secret.isNotBlank())) onAuthorize(clientId, secret)
+            }
+        }
+        Text(
+            "Kommst du nach dem Erlauben nicht automatisch zurück? Kopiere den Link aus der Adresszeile und füge ihn hier ein:",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(link, { link = it }, placeholder = { Text("lifedashboard://localhost/strava?code=…") }, singleLine = true, modifier = Modifier.weight(1f))
+            TextButton(enabled = link.isNotBlank() && !state.busy, onClick = { onPaste(link); link = "" }) { Text("OK") }
+        }
+    }
+}

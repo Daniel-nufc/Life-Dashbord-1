@@ -37,6 +37,10 @@ data class AppColors(
     val onInkMuted: Color,
     val positive: Color,
     val warning: Color,
+    /** Energie-Farbe für Serie, Zockzeit und Belohnungen */
+    val energy: Color,
+    /** Zweite Leuchtfarbe für Verläufe (zusammen mit primary) */
+    val glow: Color,
     val isDark: Boolean,
 )
 
@@ -47,8 +51,10 @@ private val DarkAppColors = AppColors(
     ink = Color(0xFF1A1A1D),
     onInk = Color(0xFFF3F2EE),
     onInkMuted = Color(0xFFA3A3A8),
-    positive = Color(0xFF6FD3A6),
-    warning = Color(0xFFE9B35B),
+    positive = Color(0xFF3EE29A),
+    warning = Color(0xFFF2B84B),
+    energy = Color(0xFFFF8A4C),
+    glow = Color(0xFF3BC9F0),
     isDark = true,
 )
 
@@ -59,24 +65,26 @@ private val LightAppColors = AppColors(
     ink = Color(0xFF17171A),
     onInk = Color(0xFFF6F4EF),
     onInkMuted = Color(0xFFB0AFAA),
-    positive = Color(0xFF0E6B4C),
-    warning = Color(0xFF9A6A12),
+    positive = Color(0xFF07875A),
+    warning = Color(0xFFB07400),
+    energy = Color(0xFFE8622A),
+    glow = Color(0xFF0B9CC4),
     isDark = false,
 )
 
 val LocalAppColors = staticCompositionLocalOf { LightAppColors }
 
 private val DarkScheme = darkColorScheme(
-    primary = Color(0xFF6FD3A6),
-    onPrimary = Color(0xFF04241A),
+    primary = Color(0xFF3EE29A),
+    onPrimary = Color(0xFF032317),
     primaryContainer = Color(0xFF143427),
     onPrimaryContainer = Color(0xFFC4EEDB),
     secondary = Color(0xFFC9C8C3),
     onSecondary = Color(0xFF1A1A1D),
     secondaryContainer = Color(0xFF242427),
     onSecondaryContainer = Color(0xFFE6E5E0),
-    tertiary = Color(0xFFE9B35B),
-    onTertiary = Color(0xFF2B1E05),
+    tertiary = Color(0xFFFF8A4C),
+    onTertiary = Color(0xFF2E1104),
     tertiaryContainer = Color(0xFF3A2C12),
     onTertiaryContainer = Color(0xFFF6DDB0),
     error = Color(0xFFFF7A6B),
@@ -98,12 +106,12 @@ private val DarkScheme = darkColorScheme(
     surfaceContainerHighest = Color(0xFF222225),
     inverseSurface = Color(0xFFF3F2EE),
     inverseOnSurface = Color(0xFF17171A),
-    inversePrimary = Color(0xFF0E6B4C),
+    inversePrimary = Color(0xFF07875A),
     scrim = Color(0xFF000000),
 )
 
 private val LightScheme = lightColorScheme(
-    primary = Color(0xFF0E6B4C),
+    primary = Color(0xFF07875A),
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFD9ECE3),
     onPrimaryContainer = Color(0xFF0A3D2C),
@@ -111,7 +119,7 @@ private val LightScheme = lightColorScheme(
     onSecondary = Color(0xFFFFFFFF),
     secondaryContainer = Color(0xFFE9E6DF),
     onSecondaryContainer = Color(0xFF1F1F22),
-    tertiary = Color(0xFF8A5E0E),
+    tertiary = Color(0xFFE8622A),
     onTertiary = Color(0xFFFFFFFF),
     tertiaryContainer = Color(0xFFF4E6C8),
     onTertiaryContainer = Color(0xFF3F2A04),
@@ -134,7 +142,7 @@ private val LightScheme = lightColorScheme(
     surfaceContainerHighest = Color(0xFFECE9E2),
     inverseSurface = Color(0xFF17171A),
     inverseOnSurface = Color(0xFFF6F4EF),
-    inversePrimary = Color(0xFF6FD3A6),
+    inversePrimary = Color(0xFF3EE29A),
     scrim = Color(0xFF000000),
 )
 
@@ -152,13 +160,13 @@ private const val TABULAR = "tnum"
 private fun appTypography(): Typography {
     val base = Typography()
     return base.copy(
-        displaySmall = base.displaySmall.copy(fontWeight = FontWeight.Light, fontSize = 40.sp, lineHeight = 46.sp, letterSpacing = (-0.02).em, fontFeatureSettings = TABULAR),
-        headlineLarge = base.headlineLarge.copy(fontWeight = FontWeight.Light, letterSpacing = (-0.02).em, fontFeatureSettings = TABULAR),
-        headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.Normal, letterSpacing = (-0.015).em, fontFeatureSettings = TABULAR),
-        headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.Medium, fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = (-0.01).em, fontFeatureSettings = TABULAR),
-        titleLarge = base.titleLarge.copy(fontWeight = FontWeight.Medium, fontSize = 20.sp, lineHeight = 26.sp, letterSpacing = (-0.01).em, fontFeatureSettings = TABULAR),
-        titleMedium = base.titleMedium.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.em, fontFeatureSettings = TABULAR),
-        titleSmall = base.titleSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.em),
+        displaySmall = base.displaySmall.copy(fontWeight = FontWeight.Bold, fontSize = 42.sp, lineHeight = 46.sp, letterSpacing = (-0.03).em, fontFeatureSettings = TABULAR),
+        headlineLarge = base.headlineLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = (-0.03).em, fontFeatureSettings = TABULAR),
+        headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em, fontFeatureSettings = TABULAR),
+        headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = (-0.015).em, fontFeatureSettings = TABULAR),
+        titleLarge = base.titleLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 26.sp, letterSpacing = (-0.01).em, fontFeatureSettings = TABULAR),
+        titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.em, fontFeatureSettings = TABULAR),
+        titleSmall = base.titleSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.em),
         bodyLarge = base.bodyLarge.copy(letterSpacing = 0.em, lineHeight = 23.sp),
         bodyMedium = base.bodyMedium.copy(letterSpacing = 0.em, lineHeight = 20.sp),
         bodySmall = base.bodySmall.copy(letterSpacing = 0.01.em, lineHeight = 17.sp),

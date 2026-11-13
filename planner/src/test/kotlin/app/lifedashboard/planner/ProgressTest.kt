@@ -145,3 +145,49 @@ class ProgressTest {
         assertTrue(nudge.first.contains("60 Min"))
     }
 }
+
+class StrictCoachTest {
+    private val today = LocalDate.of(2026, 11, 13) // Freitag
+
+    private fun input(blocks: List<BlockLog>, study: List<StudyLog> = emptyList(), activities: List<ActivityLog> = emptyList(), strict: Boolean = true, redeemed: Int = 0) =
+        ProgressInput(today, activities, study, emptyList(), emptyList(), 180, 240, blocks, strict, redeemed)
+
+    @Test
+    fun `missed blocks cost points and build backlog`() {
+        val s = Progress.compute(
+            input(
+                blocks = listOf(BlockLog(today.minusDays(1), 50, BlockOutcome.MISSED), BlockLog(today.minusDays(2), 50, BlockOutcome.DONE)),
+                study = listOf(StudyLog(today.minusDays(2), 50)),
+            ),
+        )
+        assertEquals(50, s.backlogMinutes)
+        assertEquals(50, s.penaltyXp)
+        assertEquals(100 - 50, s.level.xpTotal)
+    }
+
+    @Test
+    fun `missed day breaks the streak in strict mode`() {
+        val blocks = listOf(
+            BlockLog(today.minusDays(1), 50, BlockOutcome.MISSED),
+            BlockLog(today.minusDays(2), 50, BlockOutcome.DONE),
+            BlockLog(today.minusDays(3), 50, BlockOutcome.DONE),
+        )
+        assertEquals(0, Progress.compute(input(blocks)).streak.current)
+        // ohne strengen Modus hilft der Joker
+        assertEquals(3, Progress.compute(input(blocks, strict = false)).streak.current)
+    }
+
+    @Test
+    fun `gaming time is earned and locked by backlog`() {
+        val done = (0..3).map { BlockLog(today.minusDays(it.toLong()), 50, BlockOutcome.DONE) }
+        val free = Progress.compute(input(done, activities = listOf(ActivityLog(today, Discipline.RUN, 45, 6000)), redeemed = 30))
+        // 200 Min Schule → 120, 45 Min Sport → 15 → 135
+        assertEquals(135, free.reward.earnedMinutes)
+        assertEquals(105, free.reward.availableMinutes)
+        assertFalse(free.reward.locked)
+
+        val locked = Progress.compute(input(done + BlockLog(today.minusDays(1), 75, BlockOutcome.MISSED)))
+        assertTrue(locked.reward.locked)
+        assertEquals(0, locked.reward.availableMinutes)
+    }
+}

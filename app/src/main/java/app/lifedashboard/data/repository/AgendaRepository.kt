@@ -54,7 +54,21 @@ data class DayAgenda(
         dayStart = settings.dayStartFor(date, holiday != null),
         dayEnd = settings.dayEnd,
         commuteMinutes = settings.schoolCommuteMinutes,
+        breakAfterSchoolMinutes = AFTER_SCHOOL_BREAK_MINUTES,
     )
+
+    /** Schul-Pensum (Lernen + Hausaufgaben) für diesen Tag: werktags 2 Std, mit Training/Job 1 Std, Samstag 2 Std, Sonntag frei. */
+    fun schoolCapMinutes(examSoon: Boolean = false): Int = when {
+        date.dayOfWeek == DayOfWeek.SUNDAY -> if (examSoon) 60 else 0
+        date.dayOfWeek == DayOfWeek.SATURDAY -> 120
+        holiday != null -> 150
+        routines.any { it.area == app.lifedashboard.data.db.LifeArea.SPORT } || shifts.isNotEmpty() -> 60
+        else -> 120
+    }
+
+    companion object {
+        const val AFTER_SCHOOL_BREAK_MINUTES = 60
+    }
 }
 
 data class AgendaRange(

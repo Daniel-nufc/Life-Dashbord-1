@@ -46,10 +46,18 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Rückkehr von Strava nach dem Erlauben -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="lifedashboard" android:host="localhost" />
             </intent-filter>
             <!-- Health Connect: Erklärung, wofür die Daten genutzt werden -->
             <intent-filter>
@@ -91,6 +99,17 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/exam_widget_info" />
         </receiver>
+
+        <!-- Wochenbericht als Bild teilen -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- WorkManager wird von der App selbst (mit Hilt) gestartet -->
         <provider

@@ -14,7 +14,7 @@ import app.lifedashboard.planner.freeSlots
 import java.time.Duration
 import java.time.LocalTime
 
-enum class EntryKind { LESSON, ROUTINE, COMMUTE, EVENT, JOB, PLAN, FREE }
+enum class EntryKind { LESSON, ROUTINE, COMMUTE, BREAK, EVENT, JOB, PLAN, FREE }
 
 data class TimelineEntry(
     val range: TimeRange,
@@ -46,6 +46,8 @@ object DayTimelineBuilder {
         externalEvents: List<ExternalEvent> = emptyList(),
         planBlocks: List<PlanBlockEntity> = emptyList(),
         minFreeMinutes: Long = 30,
+        /** Pause nach dem Heimweg, in der nichts geplant wird (Essen, abschalten) */
+        breakAfterSchoolMinutes: Int = 0,
     ): List<TimelineEntry> {
         val fixed = mutableListOf<TimelineEntry>()
 
@@ -71,6 +73,11 @@ object DayTimelineBuilder {
             }
             if (last.plusMinutes(commute).isAfter(last)) {
                 fixed += TimelineEntry(TimeRange(last, last.plusMinutes(commute)), "Heimweg", null, EntryKind.COMMUTE)
+            }
+            val home = last.plusMinutes(commute)
+            val breakEnd = home.plusMinutes(breakAfterSchoolMinutes.toLong())
+            if (breakAfterSchoolMinutes > 0 && breakEnd.isAfter(home) && !breakEnd.isBefore(home)) {
+                fixed += TimelineEntry(TimeRange(home, breakEnd), "Pause", "Essen, abschalten", EntryKind.BREAK)
             }
         }
 

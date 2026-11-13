@@ -51,7 +51,16 @@ data class AppSettings(
     val lastSeenLevel: Int = 0,
     /** Erscheinungsbild: SYSTEM, LIGHT oder DARK */
     val themeMode: String = "SYSTEM",
+    /** Strenger Coach: verpasste Schul-Blöcke kosten Punkte, kein Joker, Zockzeit-Sperre */
+    val strictCoach: Boolean = true,
+    /** Eingelöste Zockzeit: Wochen-Schlüssel (z. B. 2026-W46) → Minuten */
+    val redeemedGaming: Pair<String, Int> = "" to 0,
+    /** Strava ist verbunden (Tokens liegen im Keystore) */
+    val stravaConnected: Boolean = false,
 ) {
+    /** In dieser Woche eingelöste Zockzeit */
+    fun redeemedThisWeek(today: LocalDate = LocalDate.now()): Int =
+        if (redeemedGaming.first == weekKey(today)) redeemedGaming.second else 0
     /**
      * A/B-Woche als Zählung der Schulwochen ab dem Ankerdatum (KW 46/2026 = A).
      * Reine Ferienwochen werden übersprungen – deshalb immer die Ferien mitgeben.
@@ -77,10 +86,17 @@ data class TrainingSettings(
 )
 
 /** Alle Karten, die auf „Heute“ angezeigt werden können. */
-val ALL_TODAY_CARDS = listOf("PROGRESS", "NOW", "TASKS", "EXAM", "TIMELINE", "HABITS", "MONEY", "ETSY")
+val ALL_TODAY_CARDS = listOf("PROGRESS", "TOMORROW", "TASKS", "TIMELINE", "NOW", "EXAM", "HABITS", "MONEY", "ETSY")
+
+/** Seit Version 26 standardmäßig ausgeblendet – die Startseite zeigt nur Tagesplan, Aufgaben und Fortschritt. */
+val DEFAULT_HIDDEN_CARDS = setOf("NOW", "EXAM", "HABITS", "MONEY", "ETSY")
+
+fun weekKey(date: LocalDate): String =
+    "%d-W%02d".format(date.get(java.time.temporal.IsoFields.WEEK_BASED_YEAR), date.get(java.time.temporal.IsoFields.WEEK_OF_WEEK_BASED_YEAR))
 
 fun todayCardLabel(key: String) = when (key) {
-    "PROGRESS" -> "Level, Serie & Wochenziele"
+    "PROGRESS" -> "Level, Serie & Zockzeit"
+    "TOMORROW" -> "Plan für morgen (abends)"
     "NOW" -> "Jetzt & Als Nächstes"
     "TASKS" -> "Hausaufgaben & Aufgaben"
     "EXAM" -> "Nächste Klausur"
@@ -120,10 +136,18 @@ class SettingsRepository @Inject constructor(
                 },
                 lastSeenLevel = p[LAST_LEVEL] ?: 0,
                 themeMode = p[THEME_MODE] ?: "SYSTEM",
-                hiddenTodayCards = p[HIDDEN_CARDS]?.split(',')?.filter { it.isNotBlank() }?.toSet() ?: emptySet(),
+                // Nach dem Update auf v26 einmal die neue, ruhigere Startseite (eigene Auswahl danach bleibt)
+                hiddenTodayCards = if (p[CARDS_V26] == true) {
+                    p[HIDDEN_CARDS]?.split(',')?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+                } else {
+                    DEFAULT_HIDDEN_CARDS
+                },
+                strictCoach = p[STRICT] ?: true,
+                redeemedGaming = p[REDEEMED]?.split(':')?.takeIf { it.size == 2 }?.let { it[0] to (it[1].toIntOrNull() ?: 0) } ?: ("" to 0),
+                stravaConnected = p[STRAVA] ?: false,
                 training = TrainingSettings(
                     windowsPerWeek = p[T_WINDOWS] ?: 3,
-                    windowMinutes = p[T_WINDOW_MIN] ?: 60,
+                    windowMinutes = p[T_WINDOW_MIN] ?: 45,
                     sundayRest = p[T_SUNDAY_REST] ?: true,
                     stepGoal = p[T_STEP_GOAL] ?: 8000,
                     askBattery = p[ASK_BATTERY] ?: true,
@@ -138,6 +162,23 @@ class SettingsRepository @Inject constructor(
                 systemCalendarIds = p[SYSTEM_CALENDARS].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
             )
         }
+
+    suspend fun setStrictCoach(strict: Boolean) {
+        dataStore.edit { it[STRICT] = strict }
+    }
+
+    suspend fun setStravaConnected(connected: Boolean) {
+        dataStore.edit { it[STRAVA] = connected }
+    }
+
+    /** Zockzeit einlösen (zählt pro Woche) */
+    suspend fun redeemGaming(minutes: Int, today: LocalDate = LocalDate.now()) {
+        dataStore.edit { p ->
+            val key = weekKey(today)
+            val current = p[REDEEMED]?.split(':')?.takeIf { it.size == 2 && it[0] == key }?.get(1)?.toIntOrNull() ?: 0
+            p[REDEEMED] = "$key:${current + minutes}"
+        }
+    }
 
     suspend fun setLastSeenLevel(level: Int) {
         dataStore.edit { it[LAST_LEVEL] = level }
@@ -191,6 +232,7 @@ class SettingsRepository @Inject constructor(
         dataStore.edit {
             it[TODAY_CARDS] = order.joinToString(",")
             it[HIDDEN_CARDS] = hidden.joinToString(",")
+            it[CARDS_V26] = true
         }
     }
 
@@ -222,6 +264,10 @@ class SettingsRepository @Inject constructor(
 
     private companion object {
         val LAST_LEVEL = intPreferencesKey("last_seen_level")
+        val CARDS_V26 = booleanPreferencesKey("today_cards_v26")
+        val STRICT = booleanPreferencesKey("strict_coach")
+        val REDEEMED = stringPreferencesKey("gaming_redeemed")
+        val STRAVA = booleanPreferencesKey("strava_connected")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val APP_LOCK = booleanPreferencesKey("app_lock_enabled")
         val LOCK_TIMEOUT = intPreferencesKey("lock_timeout_minutes")

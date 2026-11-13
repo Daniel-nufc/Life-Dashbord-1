@@ -43,6 +43,7 @@ class PlanningIntegrationTest {
     @Inject lateinit var study: StudyRepository
     @Inject lateinit var engine: PlanningEngine
     @Inject lateinit var training: TrainingRepository
+    @Inject lateinit var agenda: app.lifedashboard.data.repository.AgendaRepository
 
     private val today = LocalDate.now()
     private val tomorrow = today.plusDays(1)
@@ -150,8 +151,39 @@ class PlanningIntegrationTest {
             )
         }
         engine.planDays(tomorrow, 1)
-        val minutes = blocks(tomorrow, 1).filter { it.type != DemandType.SPORT }.sumOf { it.endMinute - it.startMinute }
-        val limit = if (tomorrow.dayOfWeek == DayOfWeek.SATURDAY || tomorrow.dayOfWeek == DayOfWeek.SUNDAY) 240 else 180
-        assertTrue("$minutes Min geplant – Limit $limit", minutes <= limit)
+        val school = blocks(tomorrow, 1).filter { it.type == DemandType.STUDY || it.type == DemandType.HOMEWORK || it.type == DemandType.REVIEW }
+            .sumOf { it.endMinute - it.startMinute }
+        // Schul-Pensum: höchstens 2 Std (Sonntag mit Klausur in 1–2 Tagen: 1 Std)
+        assertTrue("$school Min Schule geplant – Limit 120", school <= 120)
+    }
+
+    @Test
+    fun `Sonntag bleibt frei, wenn keine Klausur ansteht`() = runBlocking {
+        seed.seedIfNeeded()
+        val sunday = today.with(java.time.temporal.TemporalAdjusters.next(DayOfWeek.SUNDAY))
+        db.taskDao().upsert(
+            app.lifedashboard.data.db.TaskEntity(title = "Aufsatz", area = app.lifedashboard.data.db.LifeArea.SCHOOL, kind = app.lifedashboard.data.db.TaskKind.TODO,
+                subjectId = null, dueEpochDay = sunday.plusDays(3).toEpochDay(), estimatedMinutes = 120, done = false, doneAtMillis = null, note = null,
+                createdAtMillis = System.currentTimeMillis()),
+        )
+        engine.planDays(sunday, 1)
+        assertTrue("am Sonntag nichts geplant: ${blocks(sunday, 1).map { it.title }}", blocks(sunday, 1).isEmpty())
+    }
+
+    @Test
+    fun `nach der Schule eine Stunde Pause`() = runBlocking {
+        seed.seedIfNeeded()
+        val day = (1L..10L).map { today.plusDays(it) }.first { it.dayOfWeek == DayOfWeek.TUESDAY }
+        db.taskDao().upsert(
+            app.lifedashboard.data.db.TaskEntity(title = "Lesen", area = app.lifedashboard.data.db.LifeArea.SCHOOL, kind = app.lifedashboard.data.db.TaskKind.TODO,
+                subjectId = null, dueEpochDay = day.toEpochDay(), estimatedMinutes = 50, done = false, doneAtMillis = null, note = null,
+                createdAtMillis = System.currentTimeMillis()),
+        )
+        engine.planDays(day, 1)
+        val agendaDay = agenda.observe(day, 1).first().days.first()
+        val schoolEnd = agendaDay.lessons.mapNotNull { it.timeRange?.end }.maxOrNull() ?: return@runBlocking
+        val home = schoolEnd.hour * 60 + schoolEnd.minute + agendaDay.settings.schoolCommuteMinutes
+        val afterSchool = blocks(day, 1).filter { it.startMinute >= schoolEnd.hour * 60 + schoolEnd.minute }
+        assertTrue("erst 60 Min nach dem Heimweg planen: ${afterSchool.map { it.startMinute }}", afterSchool.all { it.startMinute >= home + 60 })
     }
 }

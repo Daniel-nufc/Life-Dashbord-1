@@ -81,6 +81,11 @@ sealed interface TodayUiState {
         val etsyOrders: Int,
         val etsyNextStep: String?,
         val now: LocalDateTime,
+        /** Nächster oder laufender Block aus dem Tagesplan */
+        val nextBlock: PlanBlockEntity? = null,
+        /** Heute schon verpasste Schul-Blöcke */
+        val missedToday: Int = 0,
+        val schoolBlocksLeft: Int = 0,
     ) : TodayUiState
 }
 
@@ -106,7 +111,11 @@ class TodayViewModel @Inject constructor(
     private val etsy: app.lifedashboard.data.repository.EtsyRepository,
     private val automation: app.lifedashboard.data.repository.AutomationRepository,
     progressRepository: app.lifedashboard.data.repository.ProgressRepository,
+    private val settings: app.lifedashboard.data.settings.SettingsRepository,
+    private val usage: app.lifedashboard.data.sync.UsageRepository,
 ) : ViewModel() {
+
+
 
     /** Tickt jede Minute, damit „Jetzt“ und „Als Nächstes“ aktuell bleiben. */
     private val clock = flow {
@@ -118,6 +127,19 @@ class TodayViewModel @Inject constructor(
     }.shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     private val date = clock.map { it.toLocalDate() }.distinctUntilChanged()
+
+    /** Plan für morgen – wird abends bestätigt */
+    val tomorrowPlan: StateFlow<List<PlanBlockEntity>> = date.flatMapLatest { engine.observeDay(it.plusDays(1)) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Spiegel: Social-Media-Zeit heute (null = keine Erlaubnis) – alle 15 Minuten neu */
+    val socialToday: StateFlow<Duration?> = clock.map { it.minute / 15 }.distinctUntilChanged()
+        .map { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { usage.socialTime(LocalDate.now()) }.getOrNull() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun redeemGaming(minutes: Int) = launch { settings.redeemGaming(minutes) }
+    fun acceptTomorrow() = launch { engine.acceptDay(LocalDate.now().plusDays(1)) }
+    fun miniSport(block: PlanBlockEntity) = launch { engine.miniSport(block) }
 
     private val inputs = date.flatMapLatest { d ->
         val extra = combine(finance.overview(d), etsy.overview(d)) { m, e -> Extra(m, e) }
@@ -186,11 +208,11 @@ class TodayViewModel @Inject constructor(
         val nextExam = input.study.upcoming.firstOrNull()
 
         val coach = when {
-            overdue.isNotEmpty() -> "${overdue.size} ${if (overdue.size == 1) "Aufgabe ist" else "Aufgaben sind"} überfällig. Heute weg damit – fang mit 5 Minuten an."
+            overdue.isNotEmpty() -> "${overdue.size} ${if (overdue.size == 1) "Aufgabe ist" else "Aufgaben sind"} überfällig. Keine Ausreden – heute ist sie weg."
             nextExam != null && nextExam.daysLeft(today.date) in 1..3 -> "${nextExam.subject?.name ?: "Klausur"} in ${nextExam.daysLeft(today.date)} ${if (nextExam.daysLeft(today.date) == 1) "Tag" else "Tagen"}. Heute zählt."
             homeworkTomorrow > 0 -> "$homeworkTomorrow ${if (homeworkTomorrow == 1) "Hausaufgabe" else "Hausaufgaben"} bis morgen. Jetzt 5 Minuten anfangen, nicht später."
             current != null && current.kind == EntryKind.LESSON -> "Konzentrier dich – um ${"%02d:%02d".format(current.range.end.hour, current.range.end.minute)} ist der Block vorbei."
-            nextPlan != null -> "Als Nächstes geplant: ${nextPlan.title}. Nur anfangen – der Rest kommt von allein."
+            nextPlan != null -> "Nicht nachdenken, anfangen. Die ersten 5 Minuten sind die schwersten."
             freeLeft >= Duration.ofHours(1) -> "Noch ${freeLeft.pretty()} frei heute. Nutz sie für etwas, das dich weiterbringt."
             tomorrow != null && tomorrow.lessons.isNotEmpty() && time.hour >= 21 -> "Ab ins Bett – morgen ist Schule."
             else -> "Läuft. Bleib dran."
@@ -238,6 +260,13 @@ class TodayViewModel @Inject constructor(
             etsyOrders = input.extra.etsy?.thisMonth?.orders ?: 0,
             etsyNextStep = input.extra.etsy?.nextDesign?.let { "${it.title}: ${it.status.nextStepHint()}" },
             now = now,
+            nextBlock = input.plan.filter { (it.status == PlanStatus.PROPOSED || it.status == PlanStatus.ACCEPTED) && it.endMinute > time.hour * 60 + time.minute }
+                .minByOrNull { it.startMinute },
+            missedToday = input.plan.count { it.status == PlanStatus.MISSED && it.type.isSchoolType() },
+            schoolBlocksLeft = input.plan.count { (it.status == PlanStatus.PROPOSED || it.status == PlanStatus.ACCEPTED) && it.type.isSchoolType() },
         )
     }
 }
+
+fun app.lifedashboard.planner.DemandType.isSchoolType() =
+    this == app.lifedashboard.planner.DemandType.STUDY || this == app.lifedashboard.planner.DemandType.HOMEWORK || this == app.lifedashboard.planner.DemandType.REVIEW

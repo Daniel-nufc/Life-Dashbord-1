@@ -10,6 +10,8 @@ import androidx.biometric.BiometricPrompt
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.map
 import app.lifedashboard.core.security.AppLockManager
@@ -28,11 +30,14 @@ class MainActivity : FragmentActivity() {
 
     @Inject lateinit var lanSync: app.lifedashboard.data.devicesync.LanSyncManager
 
+    @Inject lateinit var strava: app.lifedashboard.data.sync.StravaRepository
+
     private var promptShowing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) handleLink(intent)
         setContent {
             val themeMode by settings.settings.map { it.themeMode }.collectAsStateWithLifecycle("SYSTEM")
             val dark = when (themeMode) {
@@ -48,6 +53,25 @@ class MainActivity : FragmentActivity() {
                     LifeDashboardRoot()
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleLink(intent)
+    }
+
+    /** Rückkehr von Strava: lifedashboard://localhost/strava?code=… */
+    private fun handleLink(intent: android.content.Intent?) {
+        val data = intent?.data ?: return
+        if (data.scheme != "lifedashboard" || data.path?.startsWith("/strava") != true) return
+        lifecycleScope.launch {
+            val result = strava.handleRedirect(data.toString())
+            android.widget.Toast.makeText(
+                this@MainActivity,
+                result.fold({ "Strava verbunden – $it Trainings übernommen" }, { "Strava: ${it.message}" }),
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
         }
     }
 

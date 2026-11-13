@@ -12,6 +12,23 @@ data class ActivityLog(val date: LocalDate, val discipline: Discipline, val minu
 
 data class StudyLog(val date: LocalDate, val minutes: Int)
 
+/** Was aus einem geplanten Schul-Block (Lernen, Hausaufgabe, Wiederholung) geworden ist. */
+enum class BlockOutcome { DONE, MISSED }
+
+/** Ein vergangener Schul-Block aus dem Tagesplan. */
+data class BlockLog(val date: LocalDate, val minutes: Int, val outcome: BlockOutcome)
+
+/** Zockzeit: verdient mit Lernen und Sport, gesperrt bei zu viel Rückstand. */
+data class RewardState(
+    val earnedMinutes: Int,
+    val redeemedMinutes: Int,
+    /** Rückstand (verpasste Schul-Minuten) in dieser Woche */
+    val backlogMinutes: Int,
+) {
+    val locked: Boolean get() = backlogMinutes >= Progress.LOCK_BACKLOG_MINUTES
+    val availableMinutes: Int get() = if (locked) 0 else (earnedMinutes - redeemedMinutes).coerceAtLeast(0)
+}
+
 data class ProgressInput(
     val today: LocalDate,
     val activities: List<ActivityLog>,
@@ -22,6 +39,12 @@ data class ProgressInput(
     val habitDays: List<LocalDate>,
     val weeklySportGoalMinutes: Int,
     val weeklyStudyGoalMinutes: Int,
+    /** Vergangene Schul-Blöcke aus dem Tagesplan (erledigt / verpasst) */
+    val blocks: List<BlockLog> = emptyList(),
+    /** Strenger Coach: kein Joker, verpasste Blöcke kosten Punkte und brechen die Serie */
+    val strict: Boolean = true,
+    /** Diese Woche schon eingelöste Zockzeit */
+    val redeemedMinutes: Int = 0,
 )
 
 data class LevelInfo(
@@ -90,6 +113,13 @@ data class ProgressState(
     val studyWeek: WeekRing,
     val ironman: IronmanPath,
     val badges: List<Badge>,
+    /** Verpasste Schul-Minuten in dieser Woche */
+    val backlogMinutes: Int = 0,
+    /** Durch verpasste Blöcke verlorene Punkte (insgesamt) */
+    val penaltyXp: Int = 0,
+    val reward: RewardState = RewardState(0, 0, 0),
+    /** Heute geschaffte Schul-Minuten (Blöcke + Lernzeit) */
+    val schoolMinutesToday: Int = 0,
 ) {
     val earnedBadges: Int get() = badges.count { it.earned }
 }
@@ -105,6 +135,14 @@ object Progress {
     const val XP_PER_HABIT = 5
     /** Mehr als 4 Std pro Einheit bzw. Lerntag bringt keine Extra-Punkte (kein Anreiz zum Übertreiben). */
     const val MAX_MINUTES_COUNTED = 240
+    /** Verpasster Schul-Block: so viele Punkte pro Minute gehen verloren (strenger Coach) */
+    const val PENALTY_PER_MISSED_MINUTE = 1
+    /** Ab so viel Rückstand in der Woche ist die Zockzeit gesperrt */
+    const val LOCK_BACKLOG_MINUTES = 60
+
+    /** Zockzeit: 25 Min Schule → 15 Min, 45 Min Sport → 15 Min (auf 5 Min gerundet) */
+    fun gamingMinutes(schoolMinutes: Int, sportMinutes: Int): Int =
+        ((schoolMinutes * 3 / 5 + sportMinutes / 3) / 5) * 5
 
     val STAGES = listOf(
         IronmanStage("Erste 10 km", 0, 0, 10_000),
@@ -141,9 +179,12 @@ object Progress {
     private fun studyXpByDay(study: List<StudyLog>): Map<LocalDate, Int> =
         study.groupBy { it.date }.mapValues { (_, l) -> l.sumOf { it.minutes }.coerceIn(0, MAX_MINUTES_COUNTED) * XP_PER_STUDY_MINUTE }
 
+    fun penaltyXp(input: ProgressInput): Int =
+        if (!input.strict) 0 else input.blocks.filter { it.outcome == BlockOutcome.MISSED }.sumOf { it.minutes } * PENALTY_PER_MISSED_MINUTE
+
     fun totalXp(input: ProgressInput): Int =
-        input.activities.sumOf(::sportXp) + studyXpByDay(input.study).values.sum() +
-            input.tasksDone.size * XP_PER_TASK + input.habitDays.size * XP_PER_HABIT
+        (input.activities.sumOf(::sportXp) + studyXpByDay(input.study).values.sum() +
+            input.tasksDone.size * XP_PER_TASK + input.habitDays.size * XP_PER_HABIT - penaltyXp(input)).coerceAtLeast(0)
 
     fun xpOn(input: ProgressInput, day: LocalDate): Int =
         input.activities.filter { it.date == day }.sumOf(::sportXp) + (studyXpByDay(input.study)[day] ?: 0) +
@@ -171,12 +212,18 @@ object Progress {
         val monday = weekStart(today)
         fun inWeek(d: LocalDate) = !d.isBefore(monday) && !d.isAfter(today)
 
-        val activeDays = (input.activities.filter { it.minutes > 0 }.map { it.date } + input.study.filter { it.minutes > 0 }.map { it.date }).toSet()
-        val streak = Streaks.compute(activeDays, today)
+        // Ein Tag zählt für die Serie, wenn du etwas gemacht hast – im strengen Modus nur, wenn kein Schul-Block verpasst wurde
+        val missedDays = if (input.strict) input.blocks.filter { it.outcome == BlockOutcome.MISSED }.map { it.date }.toSet() else emptySet()
+        val activeDays = (input.activities.filter { it.minutes > 0 }.map { it.date } + input.study.filter { it.minutes > 0 }.map { it.date } +
+            input.blocks.filter { it.outcome == BlockOutcome.DONE }.map { it.date }).toSet() - missedDays
+        val streak = Streaks.compute(activeDays, today, jokersPerWeek = if (input.strict) 0 else 1)
         val level = levelFor(totalXp(input))
         val path = ironman(input.activities)
         val sportMinutes = input.activities.filter { inWeek(it.date) }.sumOf { it.minutes }
         val studyMinutes = input.study.filter { inWeek(it.date) }.sumOf { it.minutes }
+        val backlog = input.blocks.filter { inWeek(it.date) && it.outcome == BlockOutcome.MISSED }.sumOf { it.minutes }
+        // Schul-Zeit dieser Woche: erledigte Blöcke + freie Lernzeit (Fokus-Timer ohne Block zählt über study)
+        val schoolWeek = maxOf(studyMinutes, input.blocks.filter { inWeek(it.date) && it.outcome == BlockOutcome.DONE }.sumOf { it.minutes })
 
         return ProgressState(
             level = level,
@@ -187,6 +234,13 @@ object Progress {
             studyWeek = WeekRing(studyMinutes, input.weeklyStudyGoalMinutes),
             ironman = path,
             badges = badges(input, level, streak, path),
+            backlogMinutes = backlog,
+            penaltyXp = penaltyXp(input),
+            reward = RewardState(gamingMinutes(schoolWeek, sportMinutes), input.redeemedMinutes, if (input.strict) backlog else 0),
+            schoolMinutesToday = maxOf(
+                input.study.filter { it.date == today }.sumOf { it.minutes },
+                input.blocks.filter { it.date == today && it.outcome == BlockOutcome.DONE }.sumOf { it.minutes },
+            ),
         )
     }
 
@@ -204,7 +258,7 @@ object Progress {
             Badge("first_workout", "Erster Schritt", "Das erste Training eingetragen", frac(input.activities.size, 1)),
             Badge("run_5k", "5 km", "5 km am Stück gelaufen", frac(path.bestRunMeters, 5_000)),
             Badge("run_10k", "10 km", "10 km am Stück gelaufen", frac(path.bestRunMeters, 10_000)),
-            Badge("run_hm", "Halbmarathon", "21,1 km am Stück gelaufen", frac(path.bestRunMeters, 21_100)),
+            Badge("run_hm", "21,1 km", "21,1 km am Stück gelaufen", frac(path.bestRunMeters, 21_100)),
             Badge("swim_1k", "Wasserfest", "1 km am Stück geschwommen", frac(path.bestSwimMeters, 1_000)),
             Badge("bike_40k", "Rollt", "40 km am Stück auf dem Rad", frac(path.bestBikeMeters, 40_000)),
             Badge("tri_week", "Dreikampf", "Schwimmen, Rad und Laufen in einer Woche", frac(triWeek, 3)),

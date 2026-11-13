@@ -21,6 +21,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DirectionsBus
 import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.LocalCafe
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -53,7 +54,7 @@ class PlanActions(
 @Composable
 fun entryColor(entry: TimelineEntry): Color = when (entry.kind) {
     EntryKind.LESSON -> entry.colorArgb?.let { Color(it) } ?: LifeArea.SCHOOL.color
-    EntryKind.COMMUTE -> MaterialTheme.colorScheme.outline
+    EntryKind.COMMUTE, EntryKind.BREAK -> MaterialTheme.colorScheme.outline
     EntryKind.FREE -> MaterialTheme.colorScheme.outlineVariant
     EntryKind.EVENT -> entry.colorArgb?.let { Color(it) } ?: entry.area?.color ?: MaterialTheme.colorScheme.primary
     else -> entry.area?.color ?: MaterialTheme.colorScheme.primary
@@ -87,10 +88,17 @@ fun DayTimeline(
     modifier: Modifier = Modifier,
     onEntryClick: ((TimelineEntry) -> Unit)? = null,
 ) {
+    // Freizeit nach dem letzten geplanten Block: verdient, wenn alles erledigt ist
+    val plans = entries.filter { it.plan != null && it.plan.status != PlanStatus.DECLINED && it.plan.status != PlanStatus.MOVED }
+    val lastPlanEnd = plans.maxOfOrNull { it.range.end }
+    val openBlocks = plans.count { it.plan!!.status != PlanStatus.DONE }
     Column(modifier.fillMaxWidth()) {
         entries.forEachIndexed { index, entry ->
+            val reward = entry.kind == EntryKind.FREE && lastPlanEnd != null && !entry.range.start.isBefore(lastPlanEnd) &&
+                entries.subList(index, entries.size).none { it.plan != null }
             TimelineRow(
                 entry = entry,
+                freeLabel = if (reward) (if (openBlocks == 0) "Freizeit – verdient" else "Freizeit · noch $openBlocks ${if (openBlocks == 1) "Block" else "Blöcke"} davor") else null,
                 isNow = now != null && now in entry.range,
                 isPast = now != null && !entry.range.end.isAfter(now),
                 first = index == 0,
@@ -111,6 +119,7 @@ private fun TimelineRow(
     last: Boolean,
     actions: PlanActions?,
     onClick: (() -> Unit)?,
+    freeLabel: String? = null,
 ) {
     val tones = LocalAppColors.current
     val accent = entryColor(entry)
@@ -154,6 +163,7 @@ private fun TimelineRow(
                     val icon = when {
                         done -> Icons.Rounded.Check
                         entry.kind == EntryKind.COMMUTE -> Icons.Rounded.DirectionsBus
+                        entry.kind == EntryKind.BREAK -> Icons.Rounded.LocalCafe
                         entry.kind == EntryKind.LESSON -> Icons.Rounded.School
                         else -> entry.area?.icon ?: Icons.Rounded.Event
                     }
@@ -181,9 +191,13 @@ private fun TimelineRow(
         Column(Modifier.weight(1f).padding(top = 7.dp, bottom = 9.dp + extra)) {
             if (free) {
                 Text(
-                    "Frei · ${entry.range.duration.pretty()}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = fade),
+                    (freeLabel ?: "Frei") + " · ${entry.range.duration.pretty()}",
+                    style = if (freeLabel != null) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodySmall,
+                    color = when {
+                        freeLabel?.startsWith("Freizeit –") == true -> tones.energy
+                        freeLabel != null -> MaterialTheme.colorScheme.onSurfaceVariant
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = fade)
+                    },
                     modifier = Modifier.padding(top = 2.dp),
                 )
             } else {
