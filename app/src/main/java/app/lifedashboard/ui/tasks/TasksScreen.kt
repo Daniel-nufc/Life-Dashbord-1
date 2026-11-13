@@ -26,7 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,6 +86,7 @@ import app.lifedashboard.ui.components.SectionCard
 import app.lifedashboard.ui.components.color
 import app.lifedashboard.ui.components.label
 import app.lifedashboard.ui.components.listPadding
+import app.lifedashboard.ui.components.wideItem
 import app.lifedashboard.ui.components.longName
 import app.lifedashboard.ui.components.readable
 import app.lifedashboard.ui.editors.AddFab
@@ -242,15 +243,11 @@ fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
         val sections = if (showDone) doneSections(done, today) else openSections(open, today)
 
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth(),
-                contentPadding = padding.listPadding(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                item(key = "hero") {
+            app.lifedashboard.ui.components.AdaptiveList(padding) {
+                wideItem(key = "hero") {
                     TasksHero(current, today, onStart = { task, block -> focus = task to block }, onOpen = { editing = it.toEditRequest() })
                 }
-                item(key = "switch") {
+                wideItem(key = "switch") {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Segmented(
                             left = "Offen · ${open.size}", right = "Erledigt · ${done.count { it.doneDate()?.let { d -> !d.isBefore(today.minusDays(6)) } == true }}",
@@ -265,7 +262,7 @@ fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
                     }
                 }
                 if (sections.isEmpty()) {
-                    item(key = "empty") {
+                    wideItem(key = "empty") {
                         SectionCard {
                             if (showDone) {
                                 EmptyState(Icons.Rounded.TaskAlt, "Noch nichts erledigt", "Hak die erste Aufgabe ab – das zählt 15 Punkte.")
@@ -276,7 +273,7 @@ fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
                     }
                 }
                 sections.forEach { section ->
-                    item(key = "h-${section.key}") { SectionHeader(section) }
+                    wideItem(key = "h-${section.key}") { SectionHeader(section) }
                     items(section.tasks, key = { "t${it.id}" }) { task ->
                         TaskCard(
                             task = task,
@@ -294,7 +291,7 @@ fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
                         )
                     }
                 }
-                item(key = "hint") {
+                wideItem(key = "hint") {
                     Text(
                         "Wischen nach rechts = erledigt, nach links = löschen. Hausaufgaben werden automatisch zur nächsten Stunde fällig und spätestens am Vortag eingeplant.",
                         style = MaterialTheme.typography.bodySmall,

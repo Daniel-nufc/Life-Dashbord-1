@@ -1,5 +1,6 @@
 package app.lifedashboard.ui.holidays
 
+import app.lifedashboard.ui.components.wideItem
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Delete
@@ -80,8 +81,8 @@ fun HolidaysScreen(onBack: () -> Unit, viewModel: HolidaysViewModel = hiltViewMo
         },
     ) { padding ->
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(Modifier.widthIn(max = 840.dp).fillMaxWidth(), contentPadding = padding.listPadding(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                item {
+            app.lifedashboard.ui.components.AdaptiveList(padding) {
+                wideItem {
                     Text(
                         "Berliner Ferien und Feiertage sind eingetragen (ohne Gewähr – bitte mit dem Schulkalender abgleichen). " +
                             "Zusätzliche freie Tage wie Studientage mit „Neu“ eintragen. An diesen Tagen gibt es keinen Unterricht im Plan, " +

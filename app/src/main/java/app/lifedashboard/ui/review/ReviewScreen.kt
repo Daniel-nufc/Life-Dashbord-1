@@ -1,5 +1,6 @@
 package app.lifedashboard.ui.review
 
+import app.lifedashboard.ui.components.wideItem
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -78,12 +79,8 @@ fun ReviewScreen(onBack: () -> Unit, viewModel: ReviewViewModel = hiltViewModel(
             return@OneUiScaffold
         }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth(),
-                contentPadding = padding.listPadding(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item {
+            app.lifedashboard.ui.components.AdaptiveList(padding) {
+                wideItem {
                     GradientCard(listOf(Color(0xFF7B5CF0), Color(0xFF3D7BF7))) {
                         Text("Woche ab ${r.weekStart.friendly()}", color = Color.White.copy(alpha = 0.85f))
                         Text("${r.done} von ${r.planned} Blöcken erledigt", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)

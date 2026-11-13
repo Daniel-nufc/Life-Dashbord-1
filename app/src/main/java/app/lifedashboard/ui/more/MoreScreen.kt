@@ -1,5 +1,6 @@
 package app.lifedashboard.ui.more
 
+import app.lifedashboard.ui.components.wideItem
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -151,156 +152,160 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoa
 
     OneUiScaffold(title = "Mehr") { padding ->
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth(),
-                contentPadding = padding.listPadding(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item { SectionTitle("Bereiche") }
+            app.lifedashboard.ui.components.AdaptiveList(padding) {
                 item {
-                    SectionCard {
-                        AreaItem(Icons.Rounded.EmojiEvents, LifeArea.SPORT.color, "Fortschritt & Abzeichen", "Level, Serie, Wochenziele, Ironman-Weg", onOpenProgress)
-                        AreaItem(Icons.Rounded.Sync, LifeArea.SCHOOL.color, "Handy ↔ Tablet", "Automatischer Abgleich über Cloud-Ordner oder WLAN", onOpenSync)
-                        AreaItem(Icons.Rounded.Insights, LifeArea.SCHOOL.color, "Wochenrückblick", "Was lief gut, was nicht, Vorschläge", onOpenReview)
-                        AreaItem(Icons.Rounded.BeachAccess, LifeArea.SPORT.color, "Ferien & freie Tage", "Berliner Ferien 2026/27, eigene Studientage", onOpenHolidays)
-                        AreaItem(Icons.Rounded.CalendarMonth, LifeArea.SCHOOL.color, "Kalender & Abos", "Handy-Kalender, Lernraum, IServ, WebUntis", onOpenConnections)
-                        AreaItem(Icons.Rounded.SportsHockey, LifeArea.SPORT.color, "Fitness", "Schritte, Schlaf, Puls, Ernährung, Sport-Zeitfenster · Samsung Health & MyFitnessPal", onOpenSport)
-                        AreaItem(Icons.Rounded.Flag, LifeArea.PRIVATE.color, "Ziele & Gewohnheiten", "Ironman-Weg, Abi 1,7, Streaks", onOpenGoals)
-                        AreaItem(Icons.Rounded.AttachMoney, LifeArea.JOB.color, "Finanzen", "Konten, Budgets, Puffer, Sparziele, DKB-Import", onOpenFinance)
-                        AreaItem(Icons.Rounded.Storefront, LifeArea.ETSY.color, "Etsy-Shop", "Umsatz, Motiv-Pipeline, Checkliste", onOpenEtsy)
+                    Column {
+                        SectionTitle("Bereiche")
+                        SectionCard {
+                            AreaItem(Icons.Rounded.EmojiEvents, LifeArea.SPORT.color, "Fortschritt & Abzeichen", "Level, Serie, Wochenziele, Ironman-Weg", onOpenProgress)
+                            AreaItem(Icons.Rounded.Sync, LifeArea.SCHOOL.color, "Handy ↔ Tablet", "Automatischer Abgleich über Cloud-Ordner oder WLAN", onOpenSync)
+                            AreaItem(Icons.Rounded.Insights, LifeArea.SCHOOL.color, "Wochenrückblick", "Was lief gut, was nicht, Vorschläge", onOpenReview)
+                            AreaItem(Icons.Rounded.BeachAccess, LifeArea.SPORT.color, "Ferien & freie Tage", "Berliner Ferien 2026/27, eigene Studientage", onOpenHolidays)
+                            AreaItem(Icons.Rounded.CalendarMonth, LifeArea.SCHOOL.color, "Kalender & Abos", "Handy-Kalender, Lernraum, IServ, WebUntis", onOpenConnections)
+                            AreaItem(Icons.Rounded.SportsHockey, LifeArea.SPORT.color, "Fitness", "Schritte, Schlaf, Puls, Ernährung, Sport-Zeitfenster · Samsung Health & MyFitnessPal", onOpenSport)
+                            AreaItem(Icons.Rounded.Flag, LifeArea.PRIVATE.color, "Ziele & Gewohnheiten", "Ironman-Weg, Abi 1,7, Streaks", onOpenGoals)
+                            AreaItem(Icons.Rounded.AttachMoney, LifeArea.JOB.color, "Finanzen", "Konten, Budgets, Puffer, Sparziele, DKB-Import", onOpenFinance)
+                            AreaItem(Icons.Rounded.Storefront, LifeArea.ETSY.color, "Etsy-Shop", "Umsatz, Motiv-Pipeline, Checkliste", onOpenEtsy)
+                        }
                     }
                 }
 
-                val s = settings ?: return@LazyColumn
-                item { SectionTitle("Einstellungen") }
+                val s = settings ?: return@AdaptiveList
                 item {
-                    SectionCard {
-                        ListItem(
-                            headlineContent = { Text("Dein Name") },
-                            supportingContent = { Text(s.userName) },
-                            modifier = Modifier.clickable { editName = true },
-                            colors = transparentItem(),
-                        )
-                        ListItem(
-                            headlineContent = { Text("Erscheinungsbild") },
-                            supportingContent = { Text("Hell, dunkel oder wie das Gerät") },
-                            colors = transparentItem(),
-                        )
-                        val modes = listOf("SYSTEM" to "Automatisch", "LIGHT" to "Hell", "DARK" to "Dunkel")
-                        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                            modes.forEachIndexed { index, (key, label) ->
-                                SegmentedButton(
-                                    selected = s.themeMode == key,
-                                    onClick = { viewModel.setThemeMode(key) },
-                                    shape = SegmentedButtonDefaults.itemShape(index, modes.size),
-                                ) { Text(label) }
-                            }
-                        }
-                        ListItem(
-                            headlineContent = { Text("Karten auf „Heute“") },
-                            supportingContent = {
-                                Column {
-                                    Text("Ein-/ausblenden und mit ↑ nach oben holen.")
-                                    s.todayCards.forEachIndexed { index, key ->
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            app.lifedashboard.ui.components.CheckMark(checked = key !in s.hiddenTodayCards, onCheckedChange = { viewModel.toggleCard(key) }, size = 20.dp)
-                                            Text(app.lifedashboard.data.settings.todayCardLabel(key), modifier = Modifier.weight(1f))
-                                            if (index > 0) {
-                                                IconButton(onClick = { viewModel.moveCardUp(key) }) { Icon(Icons.Rounded.KeyboardArrowUp, "nach oben") }
-                                            }
-                                        }
-                                    }
+                    Column {
+                        SectionTitle("Einstellungen")
+                        SectionCard {
+                            ListItem(
+                                headlineContent = { Text("Dein Name") },
+                                supportingContent = { Text(s.userName) },
+                                modifier = Modifier.clickable { editName = true },
+                                colors = transparentItem(),
+                            )
+                            ListItem(
+                                headlineContent = { Text("Erscheinungsbild") },
+                                supportingContent = { Text("Hell, dunkel oder wie das Gerät") },
+                                colors = transparentItem(),
+                            )
+                            val modes = listOf("SYSTEM" to "Automatisch", "LIGHT" to "Hell", "DARK" to "Dunkel")
+                            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                                modes.forEachIndexed { index, (key, label) ->
+                                    SegmentedButton(
+                                        selected = s.themeMode == key,
+                                        onClick = { viewModel.setThemeMode(key) },
+                                        shape = SegmentedButtonDefaults.itemShape(index, modes.size),
+                                    ) { Text(label) }
                                 }
-                            },
-                            colors = transparentItem(),
-                        )
-                        ListItem(
-                            headlineContent = { Text("Prioritäten bei wenig Zeit") },
-                            supportingContent = {
-                                Column {
-                                    Text("Was die Planung zuerst bekommt. Tippe ↑, um etwas nach vorne zu holen.")
-                                    s.priorityOrder.forEachIndexed { index, area ->
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text("${index + 1}. ${areaName(area)}", modifier = Modifier.weight(1f))
-                                            if (index > 0) {
-                                                IconButton(onClick = { viewModel.movePriorityUp(area) }) {
-                                                    Icon(Icons.Rounded.KeyboardArrowUp, "nach oben")
+                            }
+                            ListItem(
+                                headlineContent = { Text("Karten auf „Heute“") },
+                                supportingContent = {
+                                    Column {
+                                        Text("Ein-/ausblenden und mit ↑ nach oben holen.")
+                                        s.todayCards.forEachIndexed { index, key ->
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                app.lifedashboard.ui.components.CheckMark(checked = key !in s.hiddenTodayCards, onCheckedChange = { viewModel.toggleCard(key) }, size = 20.dp)
+                                                Text(app.lifedashboard.data.settings.todayCardLabel(key), modifier = Modifier.weight(1f))
+                                                if (index > 0) {
+                                                    IconButton(onClick = { viewModel.moveCardUp(key) }) { Icon(Icons.Rounded.KeyboardArrowUp, "nach oben") }
                                                 }
                                             }
                                         }
                                     }
+                                },
+                                colors = transparentItem(),
+                            )
+                            ListItem(
+                                headlineContent = { Text("Prioritäten bei wenig Zeit") },
+                                supportingContent = {
+                                    Column {
+                                        Text("Was die Planung zuerst bekommt. Tippe ↑, um etwas nach vorne zu holen.")
+                                        s.priorityOrder.forEachIndexed { index, area ->
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text("${index + 1}. ${areaName(area)}", modifier = Modifier.weight(1f))
+                                                if (index > 0) {
+                                                    IconButton(onClick = { viewModel.movePriorityUp(area) }) {
+                                                        Icon(Icons.Rounded.KeyboardArrowUp, "nach oben")
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                colors = transparentItem(),
+                            )
+                            ListItem(
+                                headlineContent = { Text("Strenger Coach") },
+                                supportingContent = { Text("Verpasste Schul-Blöcke kosten Punkte und brechen die Serie, ab 1 Std Rückstand ist die Zockzeit gesperrt") },
+                                trailingContent = { Switch(checked = s.strictCoach, onCheckedChange = { viewModel.setStrict(it) }) },
+                                colors = transparentItem(),
+                            )
+                            ListItem(
+                                headlineContent = { Text("App-Sperre") },
+                                supportingContent = { Text("Fingerabdruck beim Öffnen") },
+                                trailingContent = { Switch(checked = s.appLockEnabled, onCheckedChange = { viewModel.setAppLock(it) }) },
+                                colors = transparentItem(),
+                            )
+                            ListItem(
+                                headlineContent = { Text("Diese Woche ist") },
+                                supportingContent = { Text("Falls A/B einmal nicht stimmt (z. B. nach den Ferien)") },
+                                colors = transparentItem(),
+                            )
+                            val thisWeek = s.weekCalculator(freeRanges).weekTypeFor(LocalDate.now())
+                            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                                WeekType.entries.forEachIndexed { index, week ->
+                                    SegmentedButton(
+                                        selected = thisWeek == week,
+                                        onClick = { viewModel.setThisWeek(week) },
+                                        shape = SegmentedButtonDefaults.itemShape(index, WeekType.entries.size),
+                                    ) { Text("Woche ${week.name}") }
                                 }
-                            },
-                            colors = transparentItem(),
-                        )
-                        ListItem(
-                            headlineContent = { Text("Strenger Coach") },
-                            supportingContent = { Text("Verpasste Schul-Blöcke kosten Punkte und brechen die Serie, ab 1 Std Rückstand ist die Zockzeit gesperrt") },
-                            trailingContent = { Switch(checked = s.strictCoach, onCheckedChange = { viewModel.setStrict(it) }) },
-                            colors = transparentItem(),
-                        )
-                        ListItem(
-                            headlineContent = { Text("App-Sperre") },
-                            supportingContent = { Text("Fingerabdruck beim Öffnen") },
-                            trailingContent = { Switch(checked = s.appLockEnabled, onCheckedChange = { viewModel.setAppLock(it) }) },
-                            colors = transparentItem(),
-                        )
-                        ListItem(
-                            headlineContent = { Text("Diese Woche ist") },
-                            supportingContent = { Text("Falls A/B einmal nicht stimmt (z. B. nach den Ferien)") },
-                            colors = transparentItem(),
-                        )
-                        val thisWeek = s.weekCalculator(freeRanges).weekTypeFor(LocalDate.now())
-                        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                            WeekType.entries.forEachIndexed { index, week ->
-                                SegmentedButton(
-                                    selected = thisWeek == week,
-                                    onClick = { viewModel.setThisWeek(week) },
-                                    shape = SegmentedButtonDefaults.itemShape(index, WeekType.entries.size),
-                                ) { Text("Woche ${week.name}") }
                             }
+                            ListItem(
+                                headlineContent = { Text("Schulweg") },
+                                supportingContent = { Text("${s.schoolCommuteMinutes} Minuten pro Richtung") },
+                                trailingContent = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(onClick = { viewModel.changeCommute(-5) }) { Icon(Icons.Rounded.Remove, "weniger") }
+                                        IconButton(onClick = { viewModel.changeCommute(5) }) { Icon(Icons.Rounded.Add, "mehr") }
+                                    }
+                                },
+                                colors = transparentItem(),
+                            )
+                            ListItem(
+                                headlineContent = { Text("Tag unter der Woche") },
+                                supportingContent = { Text("${s.dayStart.hhmm()}–${s.dayEnd.hhmm()} (aufstehen bis schlafen)") },
+                                colors = transparentItem(),
+                            )
+                            ListItem(
+                                headlineContent = { Text("Wochenende ab") },
+                                supportingContent = { Text("${s.weekendDayStart.hhmm()} Uhr – vorher plant die App nichts") },
+                                modifier = Modifier.clickable {
+                                    context.pickTime(s.weekendDayStart) { viewModel.setWeekendStart(it.hour * 60 + it.minute) }
+                                },
+                                colors = transparentItem(),
+                            )
                         }
-                        ListItem(
-                            headlineContent = { Text("Schulweg") },
-                            supportingContent = { Text("${s.schoolCommuteMinutes} Minuten pro Richtung") },
-                            trailingContent = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(onClick = { viewModel.changeCommute(-5) }) { Icon(Icons.Rounded.Remove, "weniger") }
-                                    IconButton(onClick = { viewModel.changeCommute(5) }) { Icon(Icons.Rounded.Add, "mehr") }
-                                }
-                            },
-                            colors = transparentItem(),
-                        )
-                        ListItem(
-                            headlineContent = { Text("Tag unter der Woche") },
-                            supportingContent = { Text("${s.dayStart.hhmm()}–${s.dayEnd.hhmm()} (aufstehen bis schlafen)") },
-                            colors = transparentItem(),
-                        )
-                        ListItem(
-                            headlineContent = { Text("Wochenende ab") },
-                            supportingContent = { Text("${s.weekendDayStart.hhmm()} Uhr – vorher plant die App nichts") },
-                            modifier = Modifier.clickable {
-                                context.pickTime(s.weekendDayStart) { viewModel.setWeekendStart(it.hour * 60 + it.minute) }
-                            },
-                            colors = transparentItem(),
-                        )
                     }
                 }
-                item { SectionTitle("Daten") }
                 item {
-                    SectionCard {
-                        AreaItem(Icons.Rounded.Backup, LifeArea.SCHOOL.color, "Backup & Übertragen", "Verschlüsselt sichern (für den Alltag: „Handy ↔ Tablet“)", onOpenBackup)
+                    Column {
+                        SectionTitle("Daten")
+                        SectionCard {
+                            AreaItem(Icons.Rounded.Backup, LifeArea.SCHOOL.color, "Backup & Übertragen", "Verschlüsselt sichern (für den Alltag: „Handy ↔ Tablet“)", onOpenBackup)
+                        }
                     }
                 }
-                item { SectionTitle("Info") }
                 item {
-                    SectionCard {
-                        Text("Life Dashboard ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "Alle Daten bleiben verschlüsselt auf diesem Gerät.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    Column {
+                        SectionTitle("Info")
+                        SectionCard {
+                            Text("Life Dashboard ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "Alle Daten bleiben verschlüsselt auf diesem Gerät.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }

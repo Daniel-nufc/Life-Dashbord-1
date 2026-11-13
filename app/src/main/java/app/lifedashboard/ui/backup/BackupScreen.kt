@@ -137,11 +137,7 @@ fun BackupScreen(onBack: () -> Unit, viewModel: BackupViewModel = hiltViewModel(
         navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Zurück") } },
     ) { padding ->
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth(),
-                contentPadding = padding.listPadding(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+            app.lifedashboard.ui.components.AdaptiveList(padding) {
                 message?.let { item { SectionCard { Text(it, style = MaterialTheme.typography.bodyLarge) } } }
                 if (busy) item { SectionCard { Text("Einen Moment …") } }
                 item {

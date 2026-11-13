@@ -1,5 +1,6 @@
 package app.lifedashboard.ui.sync
 
+import app.lifedashboard.ui.components.wideItem
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -136,12 +137,8 @@ fun SyncScreen(onBack: () -> Unit, viewModel: SyncViewModel = hiltViewModel()) {
     ) { padding ->
         val s = settings ?: return@OneUiScaffold
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth(),
-                contentPadding = padding.listPadding(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item {
+            app.lifedashboard.ui.components.AdaptiveList(padding) {
+                wideItem {
                     GradientCard(listOf(Color(0xFF3D7BF7), Color(0xFF8B5CF6))) {
                         Text("Automatischer Abgleich", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         Text(

@@ -1,5 +1,6 @@
 package app.lifedashboard.ui.sport
 
+import app.lifedashboard.ui.components.wideItem
 import androidx.compose.material.icons.rounded.DirectionsRun
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -17,7 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Bedtime
@@ -138,12 +139,8 @@ fun FitnessScreen(onBack: () -> Unit, viewModel: FitnessViewModel = hiltViewMode
         floatingActionButton = { AddFab { newWorkout = true } },
     ) { padding ->
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth(),
-                contentPadding = padding.listPadding(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item { TodayHero(snapshot, overview, settings.stepGoal) }
+            app.lifedashboard.ui.components.AdaptiveList(padding) {
+                wideItem { TodayHero(snapshot, overview, settings.stepGoal) }
                 progress?.let { p ->
                     item { app.lifedashboard.ui.progress.ProgressCard(p, onClick = {}) }
                     item { app.lifedashboard.ui.progress.IronmanPathCard(p.ironman) }
@@ -185,7 +182,7 @@ fun FitnessScreen(onBack: () -> Unit, viewModel: FitnessViewModel = hiltViewMode
                     )
                 }
                 // Feste Trainings
-                item { app.lifedashboard.ui.components.SectionTitle("Feste Trainings") }
+                wideItem { app.lifedashboard.ui.components.SectionTitle("Feste Trainings") }
                 items(routines, key = { "r${it.id}" }) { routine ->
                     SectionCard(onClick = { editing = EditRequest.Routine(routine) }) {
                         TileHeader(routine.area.icon, routine.title, routine.area.color) {
@@ -202,11 +199,11 @@ fun FitnessScreen(onBack: () -> Unit, viewModel: FitnessViewModel = hiltViewMode
                         }
                     }
                 }
-                item { TextButton(onClick = { editing = EditRequest.Routine(null) }) { Text("+ Festes Training hinzufügen") } }
+                wideItem { TextButton(onClick = { editing = EditRequest.Routine(null) }) { Text("+ Festes Training hinzufügen") } }
                 // Log
-                item { app.lifedashboard.ui.components.SectionTitle("Trainings-Log") }
+                wideItem { app.lifedashboard.ui.components.SectionTitle("Trainings-Log") }
                 if (workouts.isEmpty()) {
-                    item {
+                    wideItem {
                         SectionCard {
                             Text(
                                 "Noch kein Training eingetragen. Tippe auf „Neu“ – oder lass Trainings aus Samsung Health & Co. automatisch kommen.",

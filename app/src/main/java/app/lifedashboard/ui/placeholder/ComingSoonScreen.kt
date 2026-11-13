@@ -1,5 +1,6 @@
 package app.lifedashboard.ui.placeholder
 
+import app.lifedashboard.ui.components.wideItem
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,12 +30,8 @@ fun ComingSoonScreen(
 ) {
     OneUiScaffold(title = title) { padding ->
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth(),
-                contentPadding = padding.listPadding(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item {
+            app.lifedashboard.ui.components.AdaptiveList(padding) {
+                wideItem {
                     SectionCard {
                         EmptyState(icon = icon, title = "Kommt in $phase", message = "Hier entsteht gerade etwas.")
                     }

@@ -1,5 +1,6 @@
 package app.lifedashboard.ui.etsy
 
+import app.lifedashboard.ui.components.wideItem
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,7 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -136,12 +137,8 @@ fun EtsyScreen(onBack: () -> Unit, onOpenTasks: () -> Unit, viewModel: EtsyViewM
             return@OneUiScaffold
         }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth(),
-                contentPadding = padding.listPadding(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item {
+            app.lifedashboard.ui.components.AdaptiveList(padding) {
+                wideItem {
                     GradientCard(EtsyGradient) {
                         Text("Diesen Monat", color = Color.White.copy(alpha = 0.85f))
                         Text(d.thisMonth.revenueCents.euro() + " Umsatz", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
@@ -238,9 +235,9 @@ fun EtsyScreen(onBack: () -> Unit, onOpenTasks: () -> Unit, viewModel: EtsyViewM
                         )
                     }
                 }
-                item { Text("Verkäufe", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp)) }
+                wideItem { Text("Verkäufe", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp)) }
                 if (d.sales.isEmpty()) {
-                    item { SectionCard { Text("Noch keine Verkäufe – das erste kommt!", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+                    wideItem { SectionCard { Text("Noch keine Verkäufe – das erste kommt!", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
                 }
                 items(d.sales.take(50), key = { it.id }) { sale ->
                     SectionCard(onClick = { saleDialog = sale }) {

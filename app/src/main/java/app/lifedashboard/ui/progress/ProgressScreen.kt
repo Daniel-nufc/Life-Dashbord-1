@@ -55,11 +55,7 @@ fun ProgressScreen(onBack: () -> Unit, viewModel: RootViewModel = hiltViewModel(
             return@OneUiScaffold
         }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth(),
-                contentPadding = padding.listPadding(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+            app.lifedashboard.ui.components.AdaptiveList(padding) {
                 item { ProgressCard(s, onClick = {}, onRedeem = viewModel::redeemGaming, onEditGoals = { editGoals = true }) }
                 item {
                     app.lifedashboard.ui.components.SectionCard(onClick = { confirmRestart = true }) {

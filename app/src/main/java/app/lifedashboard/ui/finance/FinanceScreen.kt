@@ -1,5 +1,6 @@
 package app.lifedashboard.ui.finance
 
+import app.lifedashboard.ui.components.wideItem
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,7 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -202,12 +203,8 @@ fun FinanceScreen(onBack: () -> Unit, viewModel: FinanceViewModel = hiltViewMode
             return@OneUiScaffold
         }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth(),
-                contentPadding = padding.listPadding(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item {
+            app.lifedashboard.ui.components.AdaptiveList(padding) {
+                wideItem {
                     GradientCard(MoneyGradient) {
                         Text("VERFÜGBAR (OHNE PUFFER)", color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.labelMedium, letterSpacing = 1.1.sp)
                         Text(d.availableCents.euro(), color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.Light)
@@ -379,7 +376,7 @@ fun FinanceScreen(onBack: () -> Unit, viewModel: FinanceViewModel = hiltViewMode
                         }
                     }
                 }
-                item { app.lifedashboard.ui.components.SectionTitle("Umsätze") }
+                wideItem { app.lifedashboard.ui.components.SectionTitle("Umsätze") }
                 items(d.transactions.take(60), key = { it.id }) { tx ->
                     SectionCard(onClick = { txDialog = tx }) {
                         Row(verticalAlignment = Alignment.CenterVertically) {

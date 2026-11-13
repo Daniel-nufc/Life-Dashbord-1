@@ -1,5 +1,6 @@
 package app.lifedashboard.ui.learn
 
+import app.lifedashboard.ui.components.wideItem
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,7 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -110,12 +111,8 @@ fun LearnScreen(viewModel: LearnViewModel = hiltViewModel()) {
             return@OneUiScaffold
         }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth(),
-                contentPadding = padding.listPadding(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item {
+            app.lifedashboard.ui.components.AdaptiveList(padding) {
+                wideItem {
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                         listOf("Klausuren", "Noten", "Fokus").forEachIndexed { index, label ->
                             SegmentedButton(
@@ -169,13 +166,13 @@ data class GradeDialogRequest(val grade: app.lifedashboard.data.db.GradeEntity?,
 
 // ======================================================================== Klausuren
 
-private fun androidx.compose.foundation.lazy.LazyListScope.examsTab(
+private fun androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridScope.examsTab(
     data: StudyOverview,
     viewModel: LearnViewModel,
     onEdit: (ExamEntity) -> Unit,
 ) {
     val next = data.upcoming.firstOrNull()
-    item {
+    wideItem {
         if (next == null) {
             SectionCard {
                 TileHeader(Icons.Rounded.Event, "Keine Klausur eingetragen", LifeArea.SCHOOL.color)
@@ -237,7 +234,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.examsTab(
     }
     val past = data.exams.filter { it.daysLeft() < 0 }
     if (past.isNotEmpty()) {
-        item {
+        wideItem {
             Text(
                 "Vergangen: " + past.takeLast(5).joinToString(" · ") { "${it.subject?.code ?: it.exam.title} (${it.date.friendly()})" },
                 style = MaterialTheme.typography.bodySmall,
@@ -442,13 +439,13 @@ private fun TopicRow(topic: TopicEntity, accent: Color, viewModel: LearnViewMode
 // ======================================================================== Noten
 
 @OptIn(ExperimentalLayoutApi::class)
-private fun androidx.compose.foundation.lazy.LazyListScope.gradesTab(
+private fun androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridScope.gradesTab(
     data: StudyOverview,
     onAddGrade: (Long) -> Unit,
     onEditGrade: (app.lifedashboard.data.db.GradeEntity) -> Unit,
     onEditSubject: (app.lifedashboard.data.db.SubjectEntity) -> Unit,
 ) {
-    item {
+    wideItem {
         val avg = data.overallAverage
         val target = Grades.pointsForGrade(TARGET_GRADE)
         GradientCard(listOf(Color(0xFF1DB370), Color(0xFF3D7BF7))) {
@@ -475,7 +472,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.gradesTab(
             }
         }
     }
-    item {
+    wideItem {
         Text(
             "Grobe Orientierung (Formel 17 − 3 × Note), nicht die offizielle Abi-Berechnung. Die Noten der 11. zählen meist noch nicht fürs Abi.",
             style = MaterialTheme.typography.bodySmall,
