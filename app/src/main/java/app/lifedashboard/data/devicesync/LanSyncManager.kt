@@ -41,15 +41,15 @@ interface SyncPeer {
 }
 
 object LanProtocol {
-    suspend fun serve(socket: Socket, repo: SyncPeer): Pair<MergeResult, String> = socket.use { s ->
+    suspend fun serve(socket: Socket, repo: SyncPeer): Pair<MergeResult, String> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { socket.use { s ->
         s.soTimeout = 30_000
         val incoming = SyncFrame.read(s.getInputStream()) ?: error("Leere Anfrage")
         val result = repo.mergeEncoded(incoming)
         SyncFrame.write(s.getOutputStream(), repo.encodedSnapshot())
         result
-    }
+    } }
 
-    suspend fun request(host: InetAddress, port: Int, repo: SyncPeer): Pair<MergeResult, String> =
+    suspend fun request(host: InetAddress, port: Int, repo: SyncPeer): Pair<MergeResult, String> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         Socket().use { s ->
             s.connect(InetSocketAddress(host, port), 5_000)
             s.soTimeout = 30_000
@@ -57,6 +57,7 @@ object LanProtocol {
             val reply = SyncFrame.read(s.getInputStream()) ?: error("Keine Antwort")
             repo.mergeEncoded(reply)
         }
+    }
 }
 
 /**
@@ -195,7 +196,10 @@ class LanSyncManager @Inject constructor(
     }
 
     /** Sofort mit dem gefundenen Gerät abgleichen (Knopf „Jetzt abgleichen“). */
-    suspend fun exchangeNow(): Boolean {
+    suspend fun exchangeNow(): Boolean = kotlinx.coroutines.withContext(Dispatchers.IO) { exchangeOnIo() }
+
+    // Netzwerk nie im Bildschirm-Thread (sonst NetworkOnMainThreadException)
+    private suspend fun exchangeOnIo(): Boolean {
         val (host, port) = peer ?: return false
         exchangeLock.withLock {
             runCatching { LanProtocol.request(host, port, repo) }
