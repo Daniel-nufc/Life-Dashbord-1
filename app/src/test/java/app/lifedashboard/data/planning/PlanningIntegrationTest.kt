@@ -157,6 +157,60 @@ class PlanningIntegrationTest {
         assertTrue("$school Min Schule geplant – Limit 120", school <= 120)
     }
 
+    private fun nextSchoolDay(from: LocalDate): Pair<LocalDate, app.lifedashboard.data.repository.DayAgenda> = runBlocking {
+        (1L..21L).map { from.plusDays(it) }.firstNotNullOf { d ->
+            agenda.observe(d, 1).first().days.first().takeIf { it.lessons.size >= 3 && it.holiday == null }?.let { d to it }
+        }
+    }
+
+    private suspend fun homework(title: String, subjectId: Long, due: LocalDate, minutes: Int = 30) =
+        db.taskDao().upsert(
+            app.lifedashboard.data.db.TaskEntity(title = title, area = app.lifedashboard.data.db.LifeArea.SCHOOL, kind = app.lifedashboard.data.db.TaskKind.HOMEWORK,
+                subjectId = subjectId, dueEpochDay = due.toEpochDay(), estimatedMinutes = minutes, done = false, doneAtMillis = null, note = null,
+                createdAtMillis = System.currentTimeMillis()),
+        )
+
+    @Test
+    fun `Hofpausen werden nie verplant`() = runBlocking {
+        seed.seedIfNeeded()
+        val (day, agendaDay) = nextSchoolDay(today)
+        val subjectId = agendaDay.lessons.first().subject.id
+        (1..6).forEach { homework("Aufgabe $it", subjectId, day.plusDays(1), 25) }
+        engine.planDays(day, 1)
+        val breaks = app.lifedashboard.planner.schoolBreaks(agendaDay.lessons.mapNotNull { it.timeRange })
+        val inBreaks = blocks(day, 1).filter { b -> breaks.any { b.startMinute < it.end.hour * 60 + it.end.minute && b.endMinute > it.start.hour * 60 + it.start.minute } }
+        val inLessons = blocks(day, 1).filter { b -> agendaDay.lessons.mapNotNull { it.timeRange }.any { b.startMinute < it.end.hour * 60 + it.end.minute && b.endMinute > it.start.hour * 60 + it.start.minute } }
+        assertTrue("Blöcke in Hofpausen: ${inBreaks.map { "${it.startMinute}-${it.endMinute}" }}", inBreaks.isEmpty())
+        assertTrue("Blöcke im Unterricht: ${inLessons.map { "${it.startMinute}-${it.endMinute}" }}", inLessons.isEmpty())
+        // auch die Anzeige zeigt in den Hofpausen keine „freie Zeit“
+        val freeInBreaks = agendaDay.timeline().filter { f -> f.kind == app.lifedashboard.ui.today.EntryKind.FREE && breaks.any { f.range.start < it.end && f.range.end > it.start } }
+        assertTrue("freie Zeit in Hofpausen angezeigt: ${freeInBreaks.map { it.range }}", freeInBreaks.isEmpty())
+    }
+
+    @Test
+    fun `Hausaufgabe wird spaetestens am Vortag eingeplant`() = runBlocking {
+        seed.seedIfNeeded()
+        val (due, agendaDay) = nextSchoolDay(today.plusDays(2))
+        homework("Arbeitsblatt", agendaDay.lessons.first().subject.id, due, 50)
+        engine.planDays(today, (due.toEpochDay() - today.toEpochDay() + 1).toInt())
+        val mine = blocks(today, (due.toEpochDay() - today.toEpochDay() + 1).toInt()).filter { it.title.contains("Arbeitsblatt") }
+        assertTrue("Hausaufgabe wurde gar nicht geplant", mine.isNotEmpty())
+        assertTrue("nie am Abgabetag: ${mine.map { LocalDate.ofEpochDay(it.dateEpochDay) }}", mine.all { it.dateEpochDay < due.toEpochDay() })
+    }
+
+    @Test
+    fun `Hausaufgabe fuer heute nur vor der Stunde`() = runBlocking {
+        seed.seedIfNeeded()
+        val (day, agendaDay) = nextSchoolDay(today)
+        // Fach mit einer späteren Stunde, damit vorher etwas Zeit ist
+        val lesson = agendaDay.lessons.filter { it.timeRange != null }.maxBy { it.timeRange!!.start }
+        homework("Vokabeln", lesson.subject.id, day, 20)
+        engine.planDays(day, 1)
+        val cutoff = agendaDay.homeworkCutoff(lesson.subject.id)!!
+        val mine = blocks(day, 1).filter { it.title.contains("Vokabeln") }
+        assertTrue("nach der Stunde geplant: ${mine.map { it.startMinute }}", mine.all { it.endMinute <= cutoff.hour * 60 + cutoff.minute })
+    }
+
     @Test
     fun `Sonntag bleibt frei, wenn keine Klausur ansteht`() = runBlocking {
         seed.seedIfNeeded()

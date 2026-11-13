@@ -11,6 +11,7 @@ import app.lifedashboard.data.repository.LessonItem
 import app.lifedashboard.data.sync.ExternalEvent
 import app.lifedashboard.planner.TimeRange
 import app.lifedashboard.planner.freeSlots
+import app.lifedashboard.planner.schoolBreaks
 import java.time.Duration
 import java.time.LocalTime
 
@@ -147,7 +148,8 @@ object DayTimelineBuilder {
 
         if (!dayEnd.isAfter(dayStart)) return fixed.sortedBy { it.range.start }
         val window = TimeRange(dayStart, dayEnd)
-        val free = freeSlots(window, fixed.map { it.range }, Duration.ofMinutes(minFreeMinutes)).map {
+        // Hofpausen sind keine freie Zeit (Freistunden ab 1 Std schon)
+        val free = freeSlots(window, fixed.map { it.range } + schoolBreaks(schoolRanges), Duration.ofMinutes(minFreeMinutes)).map {
             TimelineEntry(it, "Freie Zeit", null, EntryKind.FREE)
         }
 

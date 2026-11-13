@@ -48,3 +48,15 @@ fun freeSlots(
 
     return free.filter { it.duration >= minDuration }
 }
+
+/**
+ * Hofpausen: Lücken zwischen zwei Unterrichtsstunden, die kürzer als [maxBreakMinutes] sind.
+ * Sie gelten als belegt (nie verplant). Längere Lücken (Freistunden) bleiben frei.
+ */
+fun schoolBreaks(lessons: List<TimeRange>, maxBreakMinutes: Long = 60): List<TimeRange> {
+    val sorted = lessons.sortedBy { it.start }
+    return sorted.zipWithNext().mapNotNull { (a, b) ->
+        val gap = Duration.between(a.end, b.start)
+        if (!gap.isNegative && !gap.isZero && gap.toMinutes() < maxBreakMinutes) TimeRange(a.end, b.start) else null
+    }
+}

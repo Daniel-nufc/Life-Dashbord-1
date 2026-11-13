@@ -107,7 +107,7 @@ class PlanningEngine @Inject constructor(
 
         val days = range.days.map { day ->
             val window = TimeRange(settings.dayStartFor(day.date, day.holiday != null), settings.dayEnd)
-            var free = freeSlots(window, day.timeline().filter { it.kind != EntryKind.FREE }.map { it.range }, Duration.ofMinutes(15))
+            var free = freeSlots(window, day.busyRanges(), Duration.ofMinutes(15))
             if (day.date == today) free = DayPlanner.from(free, minuteToTime(((nowMinute + 4) / 5) * 5))
             val totalFree = free.sumOf { it.duration.toMinutes() }.toInt()
             // Verteilt wird nur Schulisches – gegen das Schul-Pensum des Tages
@@ -169,7 +169,7 @@ class PlanningEngine @Inject constructor(
         val overview = study.overview(today).first()
         val settings = range.settings
 
-        val fixed = day.timeline().filter { it.kind != EntryKind.FREE }.map { it.range } + blockedRanges
+        val fixed = day.busyRanges() + blockedRanges
         val window = TimeRange(settings.dayStartFor(date, day.holiday != null), settings.dayEnd)
         var free = freeSlots(window, fixed, Duration.ofMinutes(15))
         if (date == today) {
@@ -232,7 +232,33 @@ class PlanningEngine @Inject constructor(
         val budget = minOf(cap, totalFree - 60).coerceAtLeast(0)
 
         val config = PlannerConfig(typeWeight = typeWeights(settings, overview, date), preferences = preferenceModel())
-        val planned = DayPlanner.plan(date, free, demands, config, maxTotalMinutes = budget)
+        // Hausaufgaben, die HEUTE fällig sind: nur VOR der Stunde des Fachs einplanen (danach ist es zu spät).
+        // Ist die Stunde schon vorbei, wird sie wie eine überfällige Aufgabe behandelt.
+        val tasksById = range.allTasks.associateBy { it.id }
+        val dueTodayCutoff = demands.filter { it.type == DemandType.HOMEWORK }.mapNotNull { d ->
+            val task = d.refId?.let { tasksById[it] } ?: return@mapNotNull null
+            if (task.dueEpochDay != epoch) return@mapNotNull null
+            val cutoff = day.homeworkCutoff(task.subjectId) ?: return@mapNotNull null
+            if (date == today && nowMinute >= cutoff.minuteOfDay()) null else d.key to cutoff
+        }.toMap()
+        val early = if (dueTodayCutoff.isEmpty()) emptyList() else {
+            val cutoff = dueTodayCutoff.values.min()
+            val before = free.mapNotNull { slot ->
+                when {
+                    !slot.start.isBefore(cutoff) -> null
+                    slot.end.isAfter(cutoff) -> TimeRange(slot.start, cutoff)
+                    else -> slot
+                }
+            }.filter { it.duration.toMinutes() >= 10 }
+            DayPlanner.plan(date, before, demands.filter { it.key in dueTodayCutoff }, config, maxTotalMinutes = budget)
+        }
+        // Was vor der Stunde keinen Platz fand, wird heute nicht mehr nach der Stunde geplant
+        val rest = demands.filter { it.key !in dueTodayCutoff }
+        val freeAfterEarly = if (early.isEmpty()) free else free.flatMap { slot ->
+            // geplante Hausaufgabe + 5 Min Pause danach sind belegt
+            freeSlots(slot, early.map { TimeRange(it.range.start, maxOf(it.range.end, minOf(it.range.end.plusMinutes(5), slot.end))) }, Duration.ofMinutes(15))
+        }
+        val planned = early + DayPlanner.plan(date, freeAfterEarly, rest, config, maxTotalMinutes = budget - early.sumOf { it.range.duration.toMinutes().toInt() })
         dao.insertAll(
             planned.map {
                 PlanBlockEntity(

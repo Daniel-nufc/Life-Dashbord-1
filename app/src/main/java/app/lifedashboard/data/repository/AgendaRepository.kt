@@ -57,6 +57,29 @@ data class DayAgenda(
         breakAfterSchoolMinutes = AFTER_SCHOOL_BREAK_MINUTES,
     )
 
+    /**
+     * Alles, was an diesem Tag keine freie Zeit ist: feste Einträge plus Hofpausen
+     * (Lücken unter 1 Std zwischen zwei Stunden werden nie verplant, Freistunden schon).
+     */
+    fun busyRanges(planBlocks: List<PlanBlockEntity> = emptyList()): List<app.lifedashboard.planner.TimeRange> =
+        timeline(planBlocks).filter { it.kind != app.lifedashboard.ui.today.EntryKind.FREE }.map { it.range } +
+            app.lifedashboard.planner.schoolBreaks(lessons.mapNotNull { it.timeRange })
+
+    /**
+     * Bis wann eine heute fällige Hausaufgabe spätestens fertig sein muss: Beginn der Stunde des Fachs –
+     * ist es die erste Stunde des Tages, schon vor dem Schulweg. Freistunden davor zählen mit.
+     */
+    fun homeworkCutoff(subjectId: Long?): java.time.LocalTime? {
+        val lesson = firstLessonStart(subjectId) ?: return null
+        val schoolStart = lessons.mapNotNull { it.timeRange?.start }.minOrNull()
+        return if (lesson == schoolStart) lesson.minusMinutes(settings.schoolCommuteMinutes.toLong()) else lesson
+    }
+
+    /** Beginn der ersten Stunde eines Fachs an diesem Tag (für Hausaufgaben, die heute fällig sind) */
+    fun firstLessonStart(subjectId: Long?): java.time.LocalTime? =
+        lessons.filter { subjectId == null || it.subject.id == subjectId }.mapNotNull { it.timeRange?.start }.minOrNull()
+            ?: lessons.mapNotNull { it.timeRange?.start }.minOrNull()
+
     /** Schul-Pensum (Lernen + Hausaufgaben) für diesen Tag: werktags 2 Std, mit Training/Job 1 Std, Samstag 2 Std, Sonntag frei. */
     fun schoolCapMinutes(examSoon: Boolean = false): Int = when {
         date.dayOfWeek == DayOfWeek.SUNDAY -> if (examSoon) 60 else 0

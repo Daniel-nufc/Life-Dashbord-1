@@ -53,6 +53,21 @@ class DayTimelineBuilderTest {
     }
 
     @Test
+    fun hofpausenSindNichtFrei() {
+        // 8:00–9:30, 9:50–11:20, 11:40–13:10 – zwei 20-Minuten-Pausen
+        val entries = DayTimelineBuilder.build(
+            lessons = listOf(lesson(1, 480, 570), lesson(2, 590, 680), lesson(3, 700, 790)),
+            routines = emptyList(),
+            dayStart = LocalTime.of(6, 0),
+            dayEnd = LocalTime.of(22, 0),
+            commuteMinutes = 30,
+            minFreeMinutes = 15,
+        )
+        val free = entries.filter { it.kind == EntryKind.FREE }.map { it.range }
+        assertEquals(listOf(TimeRange.of(6, 0, 7, 30), TimeRange.of(13, 40, 22, 0)), free)
+    }
+
+    @Test
     fun termineUndJobBlockierenZeitGanztaegigeNicht() {
         val entries = DayTimelineBuilder.build(
             lessons = emptyList(),
