@@ -75,6 +75,8 @@ class CalendarViewModel @Inject constructor(
 
     fun accept(block: PlanBlockEntity) { viewModelScope.launch { engine.accept(block) } }
     fun decline(block: PlanBlockEntity) { viewModelScope.launch { engine.decline(block) } }
+    fun done(block: PlanBlockEntity) { viewModelScope.launch { engine.done(block) } }
+    fun later(block: PlanBlockEntity) { viewModelScope.launch { engine.later(block) } }
     fun acceptWeek() { viewModelScope.launch { engine.acceptAll(_weekStart.value, _weekStart.value.plusDays(6)) } }
     fun replanWeek() {
         viewModelScope.launch { engine.planDays(maxOf(_weekStart.value, LocalDate.now()), 7) }

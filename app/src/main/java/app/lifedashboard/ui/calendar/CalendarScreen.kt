@@ -1,5 +1,17 @@
 package app.lifedashboard.ui.calendar
 
+import androidx.compose.foundation.layout.Box
+import app.lifedashboard.ui.components.compactSchool
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import app.lifedashboard.ui.components.readable
+import app.lifedashboard.ui.components.shortName
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -121,6 +133,16 @@ fun CalendarScreen(viewModel: CalendarViewModel = hiltViewModel()) {
 
 private val dayFormatter = DateTimeFormatter.ofPattern("d. MMM", GERMAN)
 
+private fun hoursText(minutes: Int): String = if (minutes >= 60) "%d:%02d Std".format(minutes / 60, minutes % 60) else "$minutes Min"
+
+private fun List<app.lifedashboard.data.db.PlanBlockEntity>.visible() = filter {
+    it.status == app.lifedashboard.data.db.PlanStatus.PROPOSED || it.status == app.lifedashboard.data.db.PlanStatus.ACCEPTED || it.status == app.lifedashboard.data.db.PlanStatus.DONE
+}
+
+/**
+ * Wochenansicht: oben die sieben Tage mit ihrer Auslastung (man sieht sofort, ob die Woche gleichmäßig ist),
+ * darunter der gewählte Tag als Zeitstrahl. Am Tablet stehen Woche und Tag nebeneinander.
+ */
 @Composable
 private fun WeekContent(
     padding: PaddingValues,
@@ -139,26 +161,25 @@ private fun WeekContent(
         LoadingState()
         return
     }
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 300.dp),
-        contentPadding = padding.listPadding(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item(span = { GridItemSpan(maxLineSpan) }) { topContent() }
-        item(span = { GridItemSpan(maxLineSpan) }) {
-          Column {
+    val today = LocalDate.now()
+    var selectedEpoch by rememberSaveable(weekStart) {
+        mutableStateOf((if (!today.isBefore(weekStart) && !today.isAfter(weekStart.plusDays(6))) today else weekStart).toEpochDay())
+    }
+    val selected = range.days.firstOrNull { it.date.toEpochDay() == selectedEpoch } ?: range.days.first()
+    val loads = range.days.associate { d -> d.date to plan.visible().filter { it.dateEpochDay == d.date.toEpochDay() }.sumOf { it.endMinute - it.startMinute } }
+    val proposals = plan.count { it.status == app.lifedashboard.data.db.PlanStatus.PROPOSED }
+
+    val header: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            topContent()
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = viewModel::previousWeek) {
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, contentDescription = "Vorherige Woche")
                 }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("KW ${CalendarViewModel.weekNumber(weekStart)} · Woche ${range.days.first().weekType.name}", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "KW ${CalendarViewModel.weekNumber(weekStart)} · Woche ${range.days.first().weekType.name}",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Text(
-                        "${weekStart.format(dayFormatter)} – ${weekStart.plusDays(6).format(dayFormatter)}",
+                        "${weekStart.format(dayFormatter)} – ${weekStart.plusDays(6).format(dayFormatter)} · ${hoursText(loads.values.sum())} geplant",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -167,29 +188,143 @@ private fun WeekContent(
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = "Nächste Woche")
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (weekStart != planningMonday()) {
-                    TextButton(onClick = viewModel::thisWeek) { Text("Zur aktuellen Woche") }
-                }
-                val proposals = plan.count { it.status == app.lifedashboard.data.db.PlanStatus.PROPOSED }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (proposals > 0) {
-                    androidx.compose.material3.FilledTonalButton(onClick = viewModel::acceptWeek) { Text("✓ Woche übernehmen ($proposals)") }
+                    app.lifedashboard.ui.components.MiniAction("Woche übernehmen ($proposals)", filled = true, onClick = viewModel::acceptWeek)
                 }
-                TextButton(onClick = viewModel::replanWeek) { Text("↻ Neu planen") }
+                app.lifedashboard.ui.components.MiniAction("Neu planen", filled = false, onClick = viewModel::replanWeek)
+                if (weekStart != planningMonday()) {
+                    app.lifedashboard.ui.components.MiniAction("Aktuelle Woche", filled = false, onClick = viewModel::thisWeek)
+                }
             }
-          }
         }
-        items(range.days, key = { it.date.toEpochDay() }) { day ->
-            DayCard(
-                day, range, plan.filter { it.dateEpochDay == day.date.toEpochDay() },
-                trainingWeek.filter { it.session.date == day.date }, viewModel, onAdd, onEdit, onOpenTimetable,
-            )
+    }
+    val dayPane: @Composable () -> Unit = {
+        DayPane(
+            selected, range, plan.filter { it.dateEpochDay == selected.date.toEpochDay() },
+            trainingWeek.filter { it.session.date == selected.date }, viewModel, onAdd, onEdit, onOpenTimetable,
+        )
+    }
+
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (maxWidth >= 760.dp) {
+            Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                LazyColumn(
+                    Modifier.width(340.dp),
+                    contentPadding = PaddingValues(top = padding.calculateTopPadding() + 4.dp, bottom = 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    item { header() }
+                    item {
+                        SectionCard(focus = false) {
+                            range.days.forEach { d ->
+                                WeekRow(d, loads[d.date] ?: 0, d.date == selected.date) { selectedEpoch = d.date.toEpochDay() }
+                            }
+                        }
+                    }
+                }
+                LazyColumn(
+                    Modifier.weight(1f),
+                    contentPadding = PaddingValues(top = padding.calculateTopPadding() + 4.dp, bottom = 112.dp),
+                ) { item { dayPane() } }
+            }
+        } else {
+            LazyColumn(contentPadding = padding.listPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                item { header() }
+                item {
+                    Row(Modifier.fillMaxWidth()) {
+                        range.days.forEach { d ->
+                            WeekCell(d, loads[d.date] ?: 0, d.date == selected.date, Modifier.weight(1f)) { selectedEpoch = d.date.toEpochDay() }
+                        }
+                    }
+                }
+                item { dayPane() }
+            }
         }
     }
 }
 
+/** Ein Tag in der Wochenleiste (Handy): Wochentag, Datum, darunter ein kleiner Balken für die geplante Zeit. */
 @Composable
-private fun DayCard(
+private fun WeekCell(day: DayAgenda, minutes: Int, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val isToday = day.date == LocalDate.now()
+    val accent = MaterialTheme.colorScheme.primary
+    Column(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = "${day.date.dayOfWeek.longName()}, ${hoursText(minutes)} geplant" }
+            .padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            day.date.dayOfWeek.shortName(),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isToday) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Box(
+            Modifier.size(36.dp).background(if (selected) accent else androidx.compose.ui.graphics.Color.Transparent, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "${day.date.dayOfMonth}",
+                style = MaterialTheme.typography.titleSmall,
+                color = when {
+                    selected -> MaterialTheme.colorScheme.onPrimary
+                    day.isSchoolFree -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.onSurface
+                },
+            )
+        }
+        // Auslastung: volle Höhe = 3 Stunden
+        Box(Modifier.width(5.dp).height(26.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)), contentAlignment = Alignment.BottomCenter) {
+            Box(Modifier.fillMaxWidth().fillMaxHeight((minutes / 180f).coerceIn(0f, 1f)).clip(RoundedCornerShape(50)).background(accent))
+        }
+        Box(Modifier.size(5.dp).background(if (day.exams.isNotEmpty()) MaterialTheme.colorScheme.error else androidx.compose.ui.graphics.Color.Transparent, CircleShape))
+    }
+}
+
+/** Ein Tag in der Wochenliste (Tablet): Name, Datum, Auslastung als Balken. */
+@Composable
+private fun WeekRow(day: DayAgenda, minutes: Int, selected: Boolean, onClick: () -> Unit) {
+    val isToday = day.date == LocalDate.now()
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else androidx.compose.ui.graphics.Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(Modifier.width(92.dp)) {
+            Text(
+                day.date.dayOfWeek.longName(),
+                style = MaterialTheme.typography.titleSmall,
+                color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                day.date.format(dayFormatter) + if (day.exams.isNotEmpty()) " · Klausur" else "",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (day.exams.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+        app.lifedashboard.ui.components.Meter((minutes / 180f).coerceIn(0f, 1f), modifier = Modifier.weight(1f), height = 5.dp)
+        Text(
+            if (minutes == 0) "–" else hoursText(minutes),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+            modifier = Modifier.width(64.dp),
+        )
+    }
+}
+
+@Composable
+private fun DayPane(
     day: DayAgenda,
     range: AgendaRange,
     plan: List<app.lifedashboard.data.db.PlanBlockEntity>,
@@ -200,129 +335,85 @@ private fun DayCard(
     onOpenTimetable: () -> Unit,
 ) {
     val isToday = day.date == LocalDate.now()
-    SectionCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    val planned = plan.visible()
+    SectionCard(focus = false) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f)) {
+                Text("${day.date.dayOfWeek.longName()}, ${day.date.format(dayFormatter)}", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    day.date.dayOfWeek.longName(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    listOfNotNull(
+                        if (planned.isEmpty()) "nichts geplant" else "${hoursText(planned.sumOf { it.endMinute - it.startMinute })} geplant",
+                        planned.count { it.status == app.lifedashboard.data.db.PlanStatus.PROPOSED }.takeIf { it > 0 }?.let { "$it Vorschläge" },
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(day.date.format(dayFormatter), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             day.holiday?.let { Pill(it.take(22), LifeArea.SPORT.color) }
             if (isToday) Pill("Heute", MaterialTheme.colorScheme.primary)
             IconButton(onClick = { onAdd(day.date) }) { Icon(Icons.Rounded.Add, contentDescription = "Eintragen") }
         }
 
-        var empty = true
+        // Ganztägiges: Klausuren und Termine ohne Uhrzeit
         day.exams.forEach { exam ->
-            empty = false
             val subject = range.subjects[exam.subjectId]
-            AgendaLine(
-                time = "",
-                icon = Icons.Rounded.School,
-                color = androidx.compose.ui.graphics.Color(0xFFE53935),
-                title = "${exam.kind.name.lowercase().replaceFirstChar { it.uppercase() }}: ${subject?.name ?: exam.title}",
-                subtitle = exam.title.ifBlank { null } ?: "Antippen zum Bearbeiten oder Löschen",
+            AllDayLine(
+                Icons.Rounded.School, MaterialTheme.colorScheme.error,
+                "${exam.kind.name.lowercase().replaceFirstChar { it.uppercase() }}: ${subject?.name ?: exam.title}",
+                exam.title.ifBlank { null },
             ) { onEdit(EditRequest.Exam(exam)) }
         }
-        if (day.lessons.isNotEmpty()) {
-            empty = false
-            val first = day.lessons.mapNotNull { it.timeRange }.minOfOrNull { it.start }
-            val last = day.lessons.mapNotNull { it.timeRange }.maxOfOrNull { it.end }
-            AgendaLine(
-                time = first?.hhmm() ?: "",
-                icon = Icons.Rounded.School,
-                color = LifeArea.SCHOOL.color,
-                title = "Schule bis ${last?.hhmm() ?: ""}",
-                subtitle = day.lessons.joinToString(" · ") { it.subject.code },
-                onClick = onOpenTimetable,
-            )
-        }
         day.events.filter { it.startMinute == null }.forEach { event ->
-            empty = false
-            AgendaLine("ganzt.", Icons.Rounded.Event, event.area.color, event.title, event.location) {
-                onEdit(EditRequest.Event(event, day.date))
-            }
+            AllDayLine(Icons.Rounded.Event, event.area.color, event.title, event.location ?: "ganztägig") { onEdit(EditRequest.Event(event, day.date)) }
         }
         day.externalEvents.filter { it.startMinute == null }.forEach { event ->
-            empty = false
-            AgendaLine("ganzt.", Icons.Rounded.Event, androidx.compose.ui.graphics.Color(event.color), event.title, event.calendarName) {}
+            AllDayLine(Icons.Rounded.Event, androidx.compose.ui.graphics.Color(event.color), event.title, event.calendarName.ifBlank { "ganztägig" }) {}
         }
-        day.timeline()
-            .filter { it.kind == EntryKind.EVENT || it.kind == EntryKind.JOB || it.kind == EntryKind.ROUTINE }
-            .forEach { entry ->
-                empty = false
-                val color = entry.colorArgb?.let { androidx.compose.ui.graphics.Color(it) } ?: entry.area?.color ?: MaterialTheme.colorScheme.primary
-                AgendaLine(
-                    time = entry.range.start.hhmm(),
-                    icon = entry.area?.icon ?: Icons.Rounded.Event,
-                    color = color,
-                    title = entry.title,
-                    subtitle = "bis ${entry.range.end.hhmm()}" + (entry.subtitle?.let { " · $it" } ?: ""),
-                ) {
-                    val request = when (entry.kind) {
-                        EntryKind.EVENT -> day.events.firstOrNull { it.id == entry.refId }?.let { EditRequest.Event(it, day.date) }
-                        EntryKind.JOB -> day.shifts.firstOrNull { it.id == entry.refId }?.let { EditRequest.Shift(it, day.date) }
-                        else -> day.routines.firstOrNull { it.id == entry.refId }?.let { EditRequest.Routine(it) }
-                    }
-                    request?.let(onEdit)
+
+        val entries = day.timeline(plan).compactSchool()
+        if (entries.any { it.kind != EntryKind.FREE }) {
+            app.lifedashboard.ui.components.DayTimeline(
+                entries = entries,
+                now = if (isToday) java.time.LocalTime.now() else null,
+                actions = app.lifedashboard.ui.components.PlanActions(
+                    accept = viewModel::accept,
+                    done = viewModel::done,
+                    decline = viewModel::decline,
+                    later = viewModel::later,
+                ),
+                modifier = Modifier.padding(top = 12.dp),
+            ) { entry ->
+                when (entry.kind) {
+                    EntryKind.LESSON -> onOpenTimetable()
+                    EntryKind.EVENT -> day.events.firstOrNull { it.id == entry.refId }?.let { onEdit(EditRequest.Event(it, day.date)) }
+                    EntryKind.JOB -> day.shifts.firstOrNull { it.id == entry.refId }?.let { onEdit(EditRequest.Shift(it, day.date)) }
+                    EntryKind.ROUTINE -> day.routines.firstOrNull { it.id == entry.refId }?.let { onEdit(EditRequest.Routine(it)) }
+                    else -> Unit
                 }
             }
-        plan.filter { it.status == app.lifedashboard.data.db.PlanStatus.PROPOSED || it.status == app.lifedashboard.data.db.PlanStatus.ACCEPTED || it.status == app.lifedashboard.data.db.PlanStatus.DONE }
-            .forEach { block ->
-                empty = false
-                val area = when (block.type) {
-                    app.lifedashboard.planner.DemandType.ETSY -> LifeArea.ETSY
-                    app.lifedashboard.planner.DemandType.SPORT -> LifeArea.SPORT
-                    app.lifedashboard.planner.DemandType.TASK -> LifeArea.PRIVATE
-                    else -> LifeArea.SCHOOL
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        AgendaLine(
-                            time = "%02d:%02d".format(block.startMinute / 60, block.startMinute % 60),
-                            icon = area.icon,
-                            color = area.color,
-                            title = block.title,
-                            subtitle = when (block.status) {
-                                app.lifedashboard.data.db.PlanStatus.PROPOSED -> "Vorschlag · ${block.endMinute - block.startMinute} Min"
-                                app.lifedashboard.data.db.PlanStatus.ACCEPTED -> "Eingeplant ✓"
-                                else -> "Erledigt ✓"
-                            },
-                        ) {}
-                    }
-                    if (block.status == app.lifedashboard.data.db.PlanStatus.PROPOSED) {
-                        IconButton(onClick = { viewModel.accept(block) }) { Text("✓") }
-                        IconButton(onClick = { viewModel.decline(block) }) { Text("✕") }
-                    }
-                }
-            }
+        } else {
+            Text(
+                if (day.isSchoolFree) "Frei – genieß es." else "Nichts eingetragen.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 14.dp),
+            )
+        }
+
         // Sport-Zeitfenster – auch für Wochen ohne Tagesplan-Vorschläge
         trainings.filter { t -> plan.none { it.demandKey == t.session.key && it.status != app.lifedashboard.data.db.PlanStatus.DECLINED } }
             .forEach { t ->
-                empty = false
-                AgendaLine(
-                    time = "",
-                    icon = LifeArea.SPORT.icon,
-                    color = LifeArea.SPORT.color,
-                    title = t.session.title,
-                    subtitle = when {
-                        t.done -> "Erledigt ✓"
+                AllDayLine(
+                    LifeArea.SPORT.icon, LifeArea.SPORT.color, t.session.title,
+                    when {
+                        t.done -> "Erledigt"
                         t.skipped -> "Ausgefallen"
-                        else -> "${t.session.minutes} Min · was du machst, entscheidest du – Uhrzeit kommt mit dem Tagesplan"
+                        else -> "${t.session.minutes} Min · Uhrzeit kommt mit dem Tagesplan"
                     },
                 ) {}
             }
         if (day.tasksDue.isNotEmpty()) {
-            empty = false
-            Text(
-                "Fällig",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp),
-            )
+            app.lifedashboard.ui.components.SectionTitle("Fällig an diesem Tag", Modifier.padding(start = 0.dp))
             day.tasksDue.forEach { task ->
                 TaskRow(
                     task = task,
@@ -334,20 +425,12 @@ private fun DayCard(
                 )
             }
         }
-        if (empty) {
-            Text(
-                if (day.isSchoolFree) "Frei – genieß es" else "Nichts eingetragen",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 6.dp),
-            )
-        }
     }
 }
 
+/** Zeile ohne Uhrzeit (Klausur, ganztägiger Termin, Sport-Zeitfenster). */
 @Composable
-private fun AgendaLine(
-    time: String,
+private fun AllDayLine(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     color: androidx.compose.ui.graphics.Color,
     title: String,
@@ -357,20 +440,19 @@ private fun AgendaLine(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp)
+            .padding(top = 10.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(color.copy(alpha = 0.10f))
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(time, style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(48.dp))
-        IconBadge(icon, color, size = 30.dp)
-        Spacer(Modifier.width(10.dp))
+        Icon(icon, null, tint = color.readable(), modifier = Modifier.size(18.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             subtitle?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
         }
     }

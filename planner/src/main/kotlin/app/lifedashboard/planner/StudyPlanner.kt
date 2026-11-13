@@ -59,7 +59,7 @@ data class StudyAllocation(
  *
  * Regeln:
  * - Restaufwand = Σ Aufwand × (1 − Fortschritt) × Schwierigkeitsfaktor (leicht 0,8 … schwer 1,4)
- * - Gelernt wird in den [leadDays] Tagen vor der Klausur, mit Steigerung zum Ende hin
+ * - Gelernt wird in den [leadDays] Tagen vor der Klausur, gleichmäßig verteilt (wenig ausgelastete Tage zuerst)
  * - Der Tag direkt vor der Klausur ist nur Wiederholung (kurz, alle Themen)
  * - Pro Tag gibt es eine Obergrenze [dailyCapMinutes] über alle Klausuren
  * - Blöcke werden auf [blockMinutes] (Pomodoro) gerundet
@@ -96,6 +96,8 @@ object StudyPlanner {
         reviewMinutes: Int = 25,
         /** Längster Vorlauf, wenn die Zeit in [leadDays] nicht reicht */
         maxLeadDays: Int = 21,
+        /** Länge einer Lerneinheit (2 Pomodoros) */
+        sessionMinutes: Int = 50,
         /** Wie viele Minuten an diesem Tag realistisch zum Lernen frei sind (Training, Job, langer Schultag …) */
         capacity: (LocalDate) -> Int = { dailyCapMinutes },
     ): List<StudyAllocation> {
@@ -148,24 +150,34 @@ object StudyPlanner {
                 continue
             }
             val days = ChronoUnit.DAYS.between(firstDay, lastDay).toInt() + 1
-            var remaining = remainingMinutes(exam)
+            var remaining = roundToBlocks(remainingMinutes(exam), blockMinutes)
             if (remaining <= 0) continue
 
-            // Gewichte steigen linear: Tag 1 = 1, letzter Tag = 2
-            val weights = (0 until days).map { 1.0 + it.toDouble() / maxOf(1, days - 1) }
-            val openTopics = exam.topics.filter { it.progress < 100 }.toMutableList()
-            var topicIndex = 0
-
-            for (i in 0 until days) {
+            // Gleichmäßig verteilen: Die Lernzeit wird in Einheiten (meist 2 Pomodoros) geteilt. Jede Einheit bekommt
+            // einen Wunsch-Tag (in gleichen Abständen bis zur Klausur) und landet auf dem Tag in der Nähe,
+            // der danach am wenigsten ausgelastet ist. So entsteht kein Tag mit 15 Minuten neben einem mit 3 Stunden.
+            val sessions = (remaining + sessionMinutes - 1) / sessionMinutes
+            val mine = sortedMapOf<LocalDate, Int>()
+            for (i in 0 until sessions) {
                 if (remaining <= 0) break
-                val date = firstDay.plusDays(i.toLong())
-                val target = ceil(remaining * weights[i] / weights.drop(i).sum().coerceAtLeast(weights[i]))
-                    .let { roundToBlocks(it.toInt().coerceAtLeast(blockMinutes), blockMinutes) }
-                val free = cap(date) - (used[date] ?: 0)
-                val minutes = minOf(target, roundDownToBlocks(free, blockMinutes), roundToBlocks(remaining, blockMinutes))
-                if (minutes <= 0) continue
-                val topic = openTopics.getOrNull(topicIndex % maxOf(1, openTopics.size))
-                topicIndex++
+                val unit = minOf(sessionMinutes, remaining)
+                val ideal = (i + 0.5) / sessions * days - 0.5
+                val best = (0 until days).map { firstDay.plusDays(it.toLong()) to it }
+                    .filter { (d, _) -> cap(d) - (used[d] ?: 0) >= blockMinutes }
+                    .minByOrNull { (d, index) ->
+                        val fits = minOf(unit, roundDownToBlocks(cap(d) - (used[d] ?: 0), blockMinutes))
+                        val load = ((used[d] ?: 0) + fits).toDouble() / cap(d).coerceAtLeast(1)
+                        // lieber eine ganze Einheit als ein Rest, lieber nah am Wunsch-Tag
+                        load + kotlin.math.abs(index - ideal) * 0.08 + (if (fits < unit) 0.3 else 0.0)
+                    }?.first ?: break
+                val minutes = minOf(unit, roundDownToBlocks(cap(best) - (used[best] ?: 0), blockMinutes))
+                mine[best] = (mine[best] ?: 0) + minutes
+                used[best] = (used[best] ?: 0) + minutes
+                remaining -= minutes
+            }
+            val openTopics = exam.topics.filter { it.progress < 100 }
+            mine.entries.forEachIndexed { index, (date, minutes) ->
+                val topic = openTopics.getOrNull(index % maxOf(1, openTopics.size))
                 result += StudyAllocation(
                     date = date,
                     examId = exam.id,
@@ -174,8 +186,6 @@ object StudyPlanner {
                     minutes = minutes,
                     isReview = false,
                 )
-                used[date] = (used[date] ?: 0) + minutes
-                remaining -= minutes
             }
         }
         return result.sortedWith(compareBy({ it.date }, { it.isReview }))

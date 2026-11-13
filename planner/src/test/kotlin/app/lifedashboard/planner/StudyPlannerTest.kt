@@ -35,9 +35,30 @@ class StudyPlannerTest {
     }
 
     @Test
-    fun `mehr Zeit kurz vor der Klausur als am Anfang`() {
+fun `Lernzeit wird gleichmaessig verteilt statt gestapelt`() {
         val plan = StudyPlanner.plan(listOf(exam(1, today.plusDays(10), 3, 600)), today).filter { !it.isReview }
-        assertTrue(plan.first().minutes <= plan.last().minutes)
+        val perDay = plan.groupBy { it.date }.mapValues { (_, l) -> l.sumOf { it.minutes } }
+        assertEquals(600, perDay.values.sum())
+        assertTrue(perDay.size >= 8, "auf fast alle Tage verteilt: $perDay")
+        assertTrue(perDay.values.max() - perDay.values.min() <= 50, "kein Tag viel voller als ein anderer: $perDay")
+    }
+
+    @Test
+    fun `mehrere Klausuren - kein Tag mit sehr wenig neben einem vollen`() {
+        val exams = listOf(exam(1, today.plusDays(8), 3, 240), exam(2, today.plusDays(9), 3, 240), exam(3, today.plusDays(10), 3, 240))
+        val perDay = StudyPlanner.plan(exams, today, dailyCapMinutes = 150).filter { !it.isReview }
+            .groupBy { it.date }.mapValues { (_, l) -> l.sumOf { it.minutes } }
+        // 720 Min auf 7–9 Tage: überall rund 1,5 Std statt 2,5 Std am Anfang und nichts am Ende
+        assertTrue(perDay.values.max() <= 125, "zu voller Tag: $perDay")
+        assertTrue(perDay.values.max() - perDay.values.min() <= 75, "ungleich verteilt: $perDay")
+    }
+
+    @Test
+    fun `Tage mit wenig freier Zeit bekommen weniger`() {
+        val busy = today.plusDays(2)
+        val plan = StudyPlanner.plan(listOf(exam(1, today.plusDays(10), 3, 600)), today, capacity = { if (it == busy) 25 else 120 })
+        assertTrue(plan.filter { it.date == busy }.sumOf { it.minutes } <= 25)
+        assertEquals(600, plan.filter { !it.isReview }.sumOf { it.minutes })
     }
 
     @Test

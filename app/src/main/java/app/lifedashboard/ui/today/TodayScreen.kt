@@ -54,6 +54,8 @@ import app.lifedashboard.ui.components.IconBadge
 import app.lifedashboard.ui.components.LoadingState
 import app.lifedashboard.ui.components.OneUiScaffold
 import app.lifedashboard.ui.components.Pill
+import app.lifedashboard.ui.components.PlanActions
+import app.lifedashboard.ui.components.entryColor
 import app.lifedashboard.ui.components.ProgressRing
 import app.lifedashboard.ui.components.SectionCard
 import app.lifedashboard.ui.components.TileHeader
@@ -161,8 +163,8 @@ fun TodayScreen(
                                     done = viewModel::done,
                                     decline = viewModel::decline,
                                     later = viewModel::later,
-                                    replan = viewModel::replanNow,
                                 ),
+                                replan = viewModel::replanNow,
                             ) { entry ->
                                 editing = when (entry.kind) {
                                     EntryKind.EVENT -> s.events.firstOrNull { it.id == entry.refId }?.let { EditRequest.Event(it, LocalDate.now()) }
@@ -291,134 +293,21 @@ private fun TasksTile(
 }
 
 @Composable
-private fun entryColor(entry: TimelineEntry): Color = when (entry.kind) {
-    EntryKind.LESSON -> entry.colorArgb?.let { Color(it) } ?: LifeArea.SCHOOL.color
-    EntryKind.COMMUTE -> MaterialTheme.colorScheme.outline
-    EntryKind.FREE -> MaterialTheme.colorScheme.outlineVariant
-    EntryKind.EVENT -> entry.colorArgb?.let { Color(it) } ?: entry.area?.color ?: MaterialTheme.colorScheme.primary
-    else -> entry.area?.color ?: MaterialTheme.colorScheme.primary
-}
-
-private class PlanActions(
-    val accept: (app.lifedashboard.data.db.PlanBlockEntity) -> Unit,
-    val done: (app.lifedashboard.data.db.PlanBlockEntity) -> Unit,
-    val decline: (app.lifedashboard.data.db.PlanBlockEntity) -> Unit,
-    val later: (app.lifedashboard.data.db.PlanBlockEntity) -> Unit,
-    val replan: () -> Unit,
-)
-
-@Composable
-private fun TimelineCard(s: TodayUiState.Ready, actions: PlanActions, onEntryClick: (TimelineEntry) -> Unit) {
-    SectionCard {
+private fun TimelineCard(s: TodayUiState.Ready, actions: PlanActions, replan: () -> Unit, onEntryClick: (TimelineEntry) -> Unit) {
+    SectionCard(focus = false) {
         TileHeader(Icons.Rounded.Schedule, "Tagesplan", MaterialTheme.colorScheme.primary) {
             if (s.proposals > 0) Pill("${s.proposals} Vorschläge", LifeArea.ETSY.color)
-            IconButton(onClick = actions.replan) { Icon(Icons.Rounded.Refresh, contentDescription = "Neu planen") }
-        }
-        if (s.plannedBlocks > 0) {
-            Text(
-                "Vorschläge annehmen ✓, verschieben oder ablehnen ✕ – die App lernt, was zu dir passt.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 6.dp),
-            )
+            IconButton(onClick = replan) { Icon(Icons.Rounded.Refresh, contentDescription = "Neu planen") }
         }
         if (s.entries.isEmpty()) {
             Text("Keine Einträge", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        val time = s.now.toLocalTime()
-        s.entries.forEach { entry ->
-            TimelineRow(
-                entry = entry,
-                isNow = time in entry.range,
-                isPast = !entry.range.end.isAfter(time),
-                onClick = if (entry.refId != null && entry.plan == null) ({ onEntryClick(entry) }) else null,
-            )
-            entry.plan?.let { block -> PlanButtons(block, actions) }
-        }
-    }
-}
-
-@Composable
-private fun TimelineRow(entry: TimelineEntry, isNow: Boolean, isPast: Boolean, onClick: (() -> Unit)?) {
-    val accent = entryColor(entry)
-    val alpha = if (isPast) 0.45f else 1f
-    val rowBackground = when {
-        isNow -> accent.copy(alpha = 0.16f)
-        entry.kind == EntryKind.FREE -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-        else -> Color.Transparent
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 3.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(rowBackground)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .height(IntrinsicSize.Min)
-            .padding(horizontal = 8.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.width(50.dp)) {
-            Text(entry.range.start.hhmm(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha))
-            Text(entry.range.end.hhmm(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
-        }
-        Box(
-            Modifier
-                .padding(horizontal = 8.dp)
-                .width(5.dp)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(3.dp))
-                .background(accent.copy(alpha = alpha)),
+        app.lifedashboard.ui.components.DayTimeline(
+            entries = s.entries,
+            now = s.now.toLocalTime(),
+            actions = actions,
+            onEntryClick = onEntryClick,
         )
-        when (entry.kind) {
-            EntryKind.EVENT, EntryKind.JOB, EntryKind.ROUTINE, EntryKind.PLAN -> {
-                IconBadge(entry.area?.icon ?: Icons.Rounded.Event, accent.copy(alpha = alpha), size = 30.dp)
-                Spacer(Modifier.width(10.dp))
-            }
-            EntryKind.COMMUTE -> {
-                IconBadge(Icons.Rounded.DirectionsBus, accent.copy(alpha = alpha), size = 30.dp)
-                Spacer(Modifier.width(10.dp))
-            }
-            else -> Unit
-        }
-        Column(Modifier.weight(1f)) {
-            if (entry.kind == EntryKind.FREE) {
-                Text(
-                    "Frei · ${entry.range.duration.pretty()}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
-                )
-            } else {
-                Text(
-                    entry.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
-                )
-                entry.subtitle?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha))
-                }
-            }
-        }
-        if (isNow) Pill("jetzt", accent)
-    }
-}
-
-@Composable
-private fun PlanButtons(block: app.lifedashboard.data.db.PlanBlockEntity, actions: PlanActions) {
-    val status = block.status
-    if (status == app.lifedashboard.data.db.PlanStatus.DONE) return
-    Row(
-        Modifier.fillMaxWidth().padding(start = 66.dp, bottom = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        if (status == app.lifedashboard.data.db.PlanStatus.PROPOSED) {
-            FilledTonalButton(onClick = { actions.accept(block) }) { Text("Passt") }
-        } else {
-            FilledTonalButton(onClick = { actions.done(block) }) { Text("Erledigt") }
-        }
-        OutlinedButton(onClick = { actions.later(block) }) { Text("Später") }
-        IconButton(onClick = { actions.decline(block) }) { Icon(Icons.Rounded.Close, contentDescription = "Ablehnen", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
 

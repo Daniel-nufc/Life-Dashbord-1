@@ -55,14 +55,28 @@ class PlanningEngine @Inject constructor(
 ) {
     private val mutex = Mutex()
 
+    private companion object {
+        /** So weit im Voraus wird verteilt (heute + 13 Tage) */
+        const val HORIZON_DAYS = 14
+    }
+
     fun observeDay(date: LocalDate): Flow<List<PlanBlockEntity>> = dao.observeDay(date.toEpochDay())
 
-    suspend fun replan(date: LocalDate = LocalDate.now()) = mutex.withLock { replanLocked(date) }
+    /**
+     * Plant einen Tag neu. Für heute werden die nächsten zwei Tage gleich mitgeplant, weil sich die
+     * gleichmäßige Verteilung der Aufgaben verschieben kann, wenn heute weniger Zeit übrig ist.
+     */
+    suspend fun replan(date: LocalDate = LocalDate.now()) = mutex.withLock {
+        val balance = balance()
+        replanLocked(date, balance)
+        if (date == LocalDate.now()) (1L..2L).forEach { replanLocked(date.plusDays(it), balance) }
+    }
 
     /** Plant mehrere Tage nacheinander (z. B. die ganze Woche). Vergangene Tage werden übersprungen. */
     suspend fun planDays(from: LocalDate, days: Int) = mutex.withLock {
         val today = LocalDate.now()
-        (0 until days).map { from.plusDays(it.toLong()) }.filter { !it.isBefore(today) }.forEach { replanLocked(it) }
+        val balance = balance()
+        (0 until days).map { from.plusDays(it.toLong()) }.filter { !it.isBefore(today) }.forEach { replanLocked(it, balance) }
     }
 
     /** „Woche übernehmen“: alle Vorschläge im Zeitraum annehmen. */
@@ -75,7 +89,51 @@ class PlanningEngine @Inject constructor(
 
     fun observeRange(from: LocalDate, to: LocalDate): Flow<List<PlanBlockEntity>> = dao.observeBetween(from.toEpochDay(), to.toEpochDay())
 
-    private suspend fun replanLocked(date: LocalDate) {
+    /**
+     * Verteilt Hausaufgaben und Aufgaben mit Termin gleichmäßig auf die nächsten zwei Wochen:
+     * Jeder Block kommt auf den Tag (bis zur Abgabe), der danach am wenigsten ausgelastet ist.
+     * Lernplan, Sport-Zeitfenster und schon angenommene Blöcke zählen als vorhandene Last.
+     * Ergebnis: Schlüssel „task:ID“ → Minuten je Tag.
+     */
+    private suspend fun balance(): Map<String, Map<LocalDate, Int>> {
+        val today = LocalDate.now()
+        val range = agenda.observe(today, HORIZON_DAYS).first()
+        val overview = study.overview(today).first()
+        val settings = range.settings
+        val nowMinute = LocalTime.now().minuteOfDay()
+        val kept = dao.between(today.toEpochDay(), today.toEpochDay() + HORIZON_DAYS - 1)
+            .filter { it.status == PlanStatus.ACCEPTED || it.status == PlanStatus.DONE }
+        val keptByKey = kept.groupBy { it.demandKey }.mapValues { (_, l) -> l.sumOf { it.endMinute - it.startMinute } }
+
+        val days = range.days.map { day ->
+            val window = TimeRange(settings.dayStartFor(day.date, day.holiday != null), settings.dayEnd)
+            var free = freeSlots(window, day.timeline().filter { it.kind != EntryKind.FREE }.map { it.range }, Duration.ofMinutes(15))
+            if (day.date == today) free = DayPlanner.from(free, minuteToTime(((nowMinute + 4) / 5) * 5))
+            val totalFree = free.sumOf { it.duration.toMinutes() }.toInt()
+            val capacity = minOf(dailyLimit(day), totalFree - 60).coerceAtLeast(0)
+            val studyLoad = overview.plan.filter { it.date == day.date }.sumOf { it.minutes }
+            val sportLoad = runCatching { training.sessionsFor(day.date) }.getOrDefault(emptyList())
+                .filter { !it.done && !it.skipped }.sumOf { it.session.minutes }
+            val keptLoad = kept.filter { it.dateEpochDay == day.date.toEpochDay() && !it.demandKey.startsWith("study:") && !it.demandKey.startsWith("train:") }
+                .sumOf { it.endMinute - it.startMinute }
+            app.lifedashboard.planner.BalanceDay(day.date, capacity, studyLoad + sportLoad + keptLoad)
+        }
+        val items = range.allTasks.filter { !it.done && it.dueEpochDay != null && it.dueEpochDay <= today.toEpochDay() + 7 }
+            .mapNotNull { task ->
+                val remaining = task.estimatedMinutes - (keptByKey["task:${task.id}"] ?: 0)
+                if (remaining < 10) return@mapNotNull null
+                val due = LocalDate.ofEpochDay(task.dueEpochDay!!)
+                // Hausaufgaben sollen am Vortag fertig sein
+                val deadline = if (task.kind == TaskKind.HOMEWORK) due.minusDays(1) else due
+                app.lifedashboard.planner.BalanceItem("task:${task.id}", remaining, deadline)
+            }
+        return app.lifedashboard.planner.LoadBalancer.assign(days, items)
+    }
+
+    /** Tageslimit: werktags max. 3 Std, am Wochenende/in den Ferien 4 Std. */
+    private fun dailyLimit(day: DayAgenda) = if (day.isSchoolFree) 240 else 180
+
+    private suspend fun replanLocked(date: LocalDate, balance: Map<String, Map<LocalDate, Int>>) {
         val today = LocalDate.now()
         if (date.isBefore(today)) return
         val epoch = date.toEpochDay()
@@ -118,8 +176,12 @@ class PlanningEngine @Inject constructor(
             .groupBy { it.demandKey }.mapValues { (_, l) -> l.sumOf { it.endMinute - it.startMinute } }
 
         val trainings = runCatching { training.sessionsFor(date) }.getOrDefault(emptyList()).filter { !it.done && !it.skipped }
-        val extra = etsyDemands(date, day, range.allTasks, overview) + goalDemands(date, day)
-        val demands = (buildDemands(date, day, range.allTasks, overview, settings) + extra + trainings.map { t ->
+        val core = buildDemands(date, day, range.allTasks, overview, settings, balance)
+        // Etsy und Ziel-Schritte füllen nur leichte Tage auf – an vollen Tagen bleiben sie weg (gleichmäßige Wochen)
+        val coreMinutes = core.sumOf { it.minutes } + trainings.sumOf { it.session.minutes } + kept.sumOf { it.endMinute - it.startMinute }
+        val comfort = if (day.isSchoolFree) 150 else 100
+        val extra = if (coreMinutes >= comfort) emptyList() else etsyDemands(date, day, range.allTasks, overview) + goalDemands(date, day)
+        val demands = (core + extra + trainings.map { t ->
             Demand(
                 key = t.session.key,
                 type = DemandType.SPORT,
@@ -131,13 +193,14 @@ class PlanningEngine @Inject constructor(
             )
         })
             .filter { it.key !in declinedKeys }
-            .map { it.copy(minutes = it.minutes - (alreadyPlanned[it.key] ?: 0)) }
+            // Verteilte Aufgaben haben ihre Minuten für genau diesen Tag schon bekommen
+            .map { if (it.key in balance) it else it.copy(minutes = it.minutes - (alreadyPlanned[it.key] ?: 0)) }
             .filter { it.minutes >= 10 }
 
         // Tageslimit: werktags max. 3 Std, am Wochenende/in den Ferien 4 Std – und mind. 1 Std echte Freizeit bleibt
         val totalFree = free.sumOf { it.duration.toMinutes() }.toInt()
         val alreadyToday = kept.sumOf { it.endMinute - it.startMinute }
-        val cap = (if (day.isSchoolFree) 240 else 180) - alreadyToday
+        val cap = dailyLimit(day) - alreadyToday
         val budget = minOf(cap, totalFree - 60).coerceAtLeast(0)
 
         val config = PlannerConfig(typeWeight = typeWeights(settings, overview, date), preferences = preferenceModel())
@@ -316,20 +379,16 @@ class PlanningEngine @Inject constructor(
         allTasks: List<TaskEntity>,
         overview: StudyOverview,
         settings: AppSettings,
+        balance: Map<String, Map<LocalDate, Int>>,
     ): List<Demand> {
         val epoch = date.toEpochDay()
         val demands = mutableListOf<Demand>()
         val examPhase = isExamPhase(overview, date)
 
-        // 1) Hausaufgaben & Aufgaben, die bald fällig sind
+        // 1) Hausaufgaben & Aufgaben mit Termin – nur der Anteil, den die Wochen-Verteilung diesem Tag gibt
         allTasks.filter { !it.done }.forEach { task ->
+            val minutes = balance["task:${task.id}"]?.get(date) ?: return@forEach
             val due = task.dueEpochDay
-            val soon = due != null && due <= epoch + 3
-            // An einem zukünftigen Tag nur planen, solange die Abgabe noch bevorsteht
-            if (due != null && date.isAfter(LocalDate.now()) && due <= epoch) return@forEach
-            val isEtsy = task.area == LifeArea.ETSY
-            if (!soon && !(isEtsy && due == null)) return@forEach
-            if (isEtsy && due == null) return@forEach // Etsy ohne Datum läuft über den Etsy-Block
             val overdue = due != null && due < epoch
             val type = when {
                 task.kind == TaskKind.HOMEWORK -> DemandType.HOMEWORK
@@ -341,12 +400,12 @@ class PlanningEngine @Inject constructor(
                 key = "task:${task.id}",
                 type = type,
                 title = if (task.kind == TaskKind.HOMEWORK) "Hausaufgabe: ${task.title}" else task.title,
-                minutes = task.estimatedMinutes,
+                minutes = minutes,
                 priority = if (overdue) 1.3 else if (task.kind == TaskKind.HOMEWORK) 1.0 else 0.7,
                 // Hausaufgaben sollen am Vortag fertig sein
                 deadline = due?.let { LocalDate.ofEpochDay(if (task.kind == TaskKind.HOMEWORK) it - 1 else it) },
-                minChunk = minOf(25, task.estimatedMinutes),
-                maxChunk = 50,
+                minChunk = minOf(25, minutes),
+                maxChunk = 60,
                 refId = task.id,
             )
         }
@@ -366,17 +425,22 @@ class PlanningEngine @Inject constructor(
             )
         }
 
-        // 3) Fällige Wiederholungen (Spaced Repetition) – kurz, gut für die Bahn
-        overview.dueReviews.forEach { (exam, topic) ->
+        // 3) Fällige Wiederholungen (Spaced Repetition): nur heute und als EIN kurzer Block statt vieler kleiner
+        if (date == LocalDate.now() && overview.dueReviews.isNotEmpty()) {
+            val topics = overview.dueReviews
             demands += Demand(
-                key = "review:$epoch:${topic.id}",
+                key = "review:$epoch",
                 type = DemandType.REVIEW,
-                title = "Wiederholen: ${exam.subject?.code ?: ""} ${topic.title}".trim(),
-                minutes = 10,
+                title = if (topics.size == 1) {
+                    "Wiederholen: ${topics[0].first.subject?.code ?: ""} ${topics[0].second.title}".trim()
+                } else {
+                    "Wiederholen: ${topics.size} Themen (${topics.take(2).joinToString { it.second.title }}${if (topics.size > 2) " …" else ""})"
+                },
+                minutes = (topics.size * 10).coerceAtMost(30),
                 priority = 0.8,
                 minChunk = 10,
-                maxChunk = 15,
-                refId = topic.id,
+                maxChunk = 30,
+                refId = topics[0].second.id,
             )
         }
 
