@@ -88,4 +88,18 @@ class AgendaBuilderTest {
             assertEquals((0L..6L).map { monday.plusDays(it) }, week.map { it.date })
         }
     }
+
+    @Test
+    fun `eigener Ganztagstermin reserviert den Tag - nur bei naher Klausur etwas Zeit`() {
+        val day = LocalDate.of(2026, 11, 21) // Samstag, Spieltag
+        val match = app.lifedashboard.data.sync.ExternalEvent(1, "Spieltag", day, null, null, 0, "FamilyWall", blocksDay = true)
+        val birthday = match.copy(id = 2, title = "Geburtstag Peggy", blocksDay = false)
+        val reserved = AgendaBuilder.buildDays(day, 1, emptyList(), emptyList(), settings, emptyList(), external = listOf(match)).single()
+        val normal = AgendaBuilder.buildDays(day, 1, emptyList(), emptyList(), settings, emptyList(), external = listOf(birthday)).single()
+        assertEquals(true, reserved.reservedDay)
+        assertEquals(0, reserved.schoolCapMinutes())
+        assertEquals(60, reserved.schoolCapMinutes(examSoon = true))
+        assertEquals(false, normal.reservedDay)
+        assertEquals(120, normal.schoolCapMinutes())
+    }
 }

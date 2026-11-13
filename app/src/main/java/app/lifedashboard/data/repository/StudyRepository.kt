@@ -53,6 +53,7 @@ class StudyRepository @Inject constructor(
     private val routines: RoutineRepository,
     private val jobs: JobRepository,
     private val schoolCalendar: SchoolCalendarRepository,
+    private val agenda: AgendaRepository,
 ) {
     private companion object {
         val LATE_EVENING: java.time.LocalTime = java.time.LocalTime.of(21, 0)
@@ -64,7 +65,9 @@ class StudyRepository @Inject constructor(
         val weekStart = today.minusDays((today.dayOfWeek.value - 1).toLong())
         val fromMillis = weekStart.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
         // Was den Tag sonst füllt: feste Blöcke (Floorball …), Job-Schichten, Ferien
-        val busy = combine(routines.routines, jobs.between(today, today.plusDays(35)), schoolCalendar.ranges) { r, j, h -> Triple(r, j, h) }
+        val busy = combine(
+            routines.routines, jobs.between(today, today.plusDays(35)), schoolCalendar.ranges, agenda.reservedDays(today, today.plusDays(35)),
+        ) { r, j, h, reserved -> Busy(r, j, h, reserved) }
         return combine(
             dao.observeExams(),
             dao.observeTopics(),
@@ -73,7 +76,7 @@ class StudyRepository @Inject constructor(
             combine(dao.observeSessionsSince(fromMillis), busy) { s, b -> s to b },
         ) { exams, topics, grades, subjects, sessionsAndBusy ->
             val (sessions, busyDays) = sessionsAndBusy
-            val (routineBlocks, shifts, freeRanges) = busyDays
+            val (routineBlocks, shifts, freeRanges, reservedDays) = busyDays
             val targetPoints = app.lifedashboard.planner.Grades.pointsForGrade(TARGET_GRADE)
             val averageBySubject = grades.groupBy { it.subjectId }
                 .mapValues { (_, g) -> app.lifedashboard.planner.Grades.average(g.map { it.points to it.weight }) }
@@ -83,6 +86,8 @@ class StudyRepository @Inject constructor(
                 val busy = routineBlocks.any { it.active && it.area == app.lifedashboard.data.db.LifeArea.SPORT && date.dayOfWeek in it.days() } ||
                     shifts.any { it.dateEpochDay == date.toEpochDay() }
                 return when {
+                    // eigener Ganztagstermin: nur lernen, wenn die Klausur in 1–2 Tagen ist
+                    date in reservedDays -> if (exams.any { it.dateEpochDay - date.toEpochDay() in 1..2 }) 60 else 0
                     date.dayOfWeek == java.time.DayOfWeek.SUNDAY -> 0
                     date.dayOfWeek == java.time.DayOfWeek.SATURDAY -> 120
                     freeRanges.any { date in it } -> 150
@@ -172,3 +177,10 @@ class StudyRepository @Inject constructor(
     suspend fun recordSession(subjectId: Long?, minutes: Int, startedAt: Long) =
         dao.insertSession(StudySessionEntity(subjectId = subjectId, examId = null, topicId = null, startedAtMillis = startedAt, minutes = minutes))
 }
+
+private data class Busy(
+    val routines: List<app.lifedashboard.data.db.RoutineBlockEntity>,
+    val shifts: List<app.lifedashboard.data.db.JobShiftEntity>,
+    val freeRanges: List<app.lifedashboard.planner.DateRange>,
+    val reserved: Set<LocalDate>,
+)

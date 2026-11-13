@@ -86,6 +86,7 @@ class ConnectionsViewModel @Inject constructor(
     private val systemCalendar: SystemCalendarRepository,
     private val ical: IcalSyncRepository,
     private val settings: SettingsRepository,
+    private val titleChoices: app.lifedashboard.data.repository.TitleChoiceRepository,
 ) : ViewModel() {
     private val _calendars = MutableStateFlow<List<SystemCalendar>>(emptyList())
     val calendars: StateFlow<List<SystemCalendar>> = _calendars.asStateFlow()
@@ -106,18 +107,20 @@ class ConnectionsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            settings.settings.distinctUntilChanged { a, b ->
-                a.systemCalendarIds == b.systemCalendarIds && a.onlyMineCalendarIds == b.onlyMineCalendarIds &&
-                    a.userName == b.userName && a.mineTitles == b.mineTitles && a.notMineTitles == b.notMineTitles
-            }.collectLatest { refreshStats(it) }
+            kotlinx.coroutines.flow.combine(
+                settings.settings.distinctUntilChanged { a, b ->
+                    a.systemCalendarIds == b.systemCalendarIds && a.onlyMineCalendarIds == b.onlyMineCalendarIds && a.userName == b.userName
+                },
+                titleChoices.choices,
+            ) { s, c -> s to c }.collectLatest { (s, c) -> refreshStats(s, c) }
         }
     }
 
-    private suspend fun refreshStats(s: app.lifedashboard.data.settings.AppSettings) {
+    private suspend fun refreshStats(s: app.lifedashboard.data.settings.AppSettings, c: app.lifedashboard.data.repository.TitleChoices) {
         _stats.value = (s.systemCalendarIds intersect s.onlyMineCalendarIds)
-            .associateWith { systemCalendar.personStats(it, s.userName, s.mineTitles, s.notMineTitles) }
+            .associateWith { systemCalendar.personStats(it, s.userName, c.mine, c.notMine) }
         // offene Zuordnungsliste aktuell halten
-        titlesFor?.let { id -> _titles.value = systemCalendar.titles(id, s.userName, s.mineTitles, s.notMineTitles) }
+        titlesFor?.let { id -> _titles.value = systemCalendar.titles(id, s.userName, c.mine, c.notMine) }
     }
 
     fun hasCalendarPermission() = systemCalendar.hasPermission()
@@ -125,7 +128,7 @@ class ConnectionsViewModel @Inject constructor(
     fun loadCalendars() {
         viewModelScope.launch {
             _calendars.value = systemCalendar.calendars()
-            refreshStats(settings.settings.first())
+            refreshStats(settings.settings.first(), titleChoices.choices.first())
         }
     }
 
@@ -147,7 +150,8 @@ class ConnectionsViewModel @Inject constructor(
         titlesFor = calendarId
         viewModelScope.launch {
             val s = settings.settings.first()
-            _titles.value = systemCalendar.titles(calendarId, s.userName, s.mineTitles, s.notMineTitles)
+            val c = titleChoices.choices.first()
+            _titles.value = systemCalendar.titles(calendarId, s.userName, c.mine, c.notMine)
         }
     }
 
@@ -158,7 +162,7 @@ class ConnectionsViewModel @Inject constructor(
 
     /** Merkt sich die Wahl für den Titel – gilt für alle Termine mit diesem Titel, auch künftige. */
     fun choose(title: String, mine: Boolean?) {
-        viewModelScope.launch { settings.setTitleChoice(title, mine) }
+        viewModelScope.launch { titleChoices.set(title, mine) }
     }
 
     fun setOnlyMine(id: Long, on: Boolean) {

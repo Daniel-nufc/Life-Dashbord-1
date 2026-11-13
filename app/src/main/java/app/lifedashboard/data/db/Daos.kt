@@ -409,3 +409,21 @@ interface HolidayDao {
     @Query("DELETE FROM school_holidays WHERE id = :id")
     suspend fun delete(id: Long)
 }
+
+@Dao
+interface TitleChoiceDao {
+    @Query("SELECT * FROM calendar_title_choices")
+    fun observeAll(): Flow<List<TitleChoiceEntity>>
+
+    @Query("SELECT * FROM calendar_title_choices")
+    suspend fun all(): List<TitleChoiceEntity>
+
+    @Query("UPDATE calendar_title_choices SET mine = :mine WHERE titleKey = :key AND mine != :mine")
+    suspend fun update(key: String, mine: Boolean): Int
+
+    @Insert(onConflict = androidx.room.OnConflictStrategy.IGNORE)
+    suspend fun insert(choice: TitleChoiceEntity): Long
+
+    @Query("DELETE FROM calendar_title_choices WHERE titleKey = :key")
+    suspend fun delete(key: String)
+}

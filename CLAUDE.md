@@ -3,8 +3,8 @@
 Private Android-App **Life Dashboard** für Daniel (Schüler, 11. Klasse, OSZ Max Taut Berlin). Läuft auf Galaxy S25 (Android 17) und Galaxy Tab S8+ (Android 16).
 Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (vorher „Auto Blocker“ kurz ausschalten).
 
-**Aktueller Stand: Version 33** (FamilyWall: Termine nach Titel zuordnen, Datenbank-Version 13, alle Tests grün). Die Versionsnummer der APK ist die GitHub-Build-Nummer (`GITHUB_RUN_NUMBER`).
-**Code:** `main` = Version 29. Version 30–33 liegen auf `ccr-eb37e95e-gq983n` (noch nicht in `main`). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
+**Aktueller Stand: Version 34** (FamilyWall nach Titel zuordnen, reservierte Tage, Datenbank-Version 14, alle Tests grün). Die Versionsnummer der APK ist die GitHub-Build-Nummer (`GITHUB_RUN_NUMBER`).
+**Code:** `main` = Version 29. Version 30–34 liegen auf `ccr-eb37e95e-gq983n` (noch nicht in `main`). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
 
 ## Wie mit Daniel arbeiten
 - Immer **auf Deutsch**, einfach und kurz erklären. Daniel ist kein Entwickler und liest oft auf dem Handy.
@@ -73,10 +73,9 @@ Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (
 - **Noch nicht bestätigt**, ob FamilyWall die ausgewählten Personen als Teilnehmer in den Android-Kalender schreibt. Wenn 0 passen: Daniel soll Bescheid geben (Schalter aus = alle Familientermine).
 - **v31 bei Daniel: „nichts erkannt“** – Name stand weder in Teilnehmern noch Titel/Beschreibung. Seit **v32** prüft `IcsPersonFilter.mine` zusätzlich alle versteckten Felder (`Events.SYNC_DATA1–10`, `CUSTOM_APP_URI`, Ort, `ExtendedProperties`); Felder, in denen der Name bei ≥ 90 % der Termine steht (z. B. Konto „Daniel_Sohn“), werden ignoriert. Knopf **„Termine prüfen“** zeigt die Felder der nächsten 14 Tage (für Screenshots). Planung selbst war in Ordnung (rechnet bei Änderungen neu, `TodayViewModel`).
 - **Ergebnis v32 („Termine prüfen“):** FamilyWall schreibt in den Handy-Kalender **keine** Teilnehmer, keine Event-Farben (alle `#67740F`), nur eine interne Nummer in `SYNC_DATA1`. In FamilyWall selbst zeigt die **Farbe**, für wen ein Termin ist (grün = Daniel, gelb = „meistens dabei“), die kommt aber nicht an.
-- **Seit v33: Zuordnung nach Titel.** `AppSettings.mineTitles`/`notMineTitles` (DataStore, `IcsPersonFilter.titleKey`), Dialog „Termine zuordnen“ (Meins / Nicht meins, gilt für alle Termine mit dem Titel). Neue Titel: `IcsPersonFilter.guess` – Wörter nur aus eigenen Titeln („turnier“, „u17“) → meins, Wörter nur aus fremden („marie“, „papa“) → nicht meins, sonst offen (Karte zeigt „N Termine noch nicht zugeordnet“). Reihenfolge: eigene Wahl > Vermutung > Name im Text/Feldern.
-- Vorbelegung aus Daniels Screenshots (`SettingsRepository.ensureFamilyTitles`, einmalig, Flag `family_titles_seeded`). „Floorball Training“ = nicht meins, weil schon als festes Training (Routine) in der App.
-- Eigene **ganztägige** FamilyWall-Termine (`ExternalEvent.blocksDay`, z. B. „Daniel - Schülerreise“, Spieltag) belegen im Zeitstrahl den ganzen Tag → an dem Tag wird nichts geplant. Fremde ganztägige (Geburtstage, Ferien-Balken) blockieren nichts.
-- Zuordnungen sind pro Gerät (DataStore) – auf dem Tablet ggf. separat.
+- **Seit v33: Zuordnung nach Titel.** Seit **v34** in der Tabelle `calendar_title_choices` (`TitleChoiceRepository`, Migration 13→14, in `SyncSchema` mit `since = 14` → **zwischen Handy und Tablet abgeglichen**, Daniel nutzt denselben FamilyWall-Account auf beiden). Schlüssel `IcsPersonFilter.titleKey`, Dialog „Termine zuordnen“ (Meins / Nicht meins, gilt für alle Termine mit dem Titel). Neue Titel: `IcsPersonFilter.guess` – Wörter nur aus eigenen Titeln („turnier“, „u17“) → meins, Wörter nur aus fremden („marie“, „papa“) → nicht meins, sonst offen (Karte zeigt „N Termine noch nicht zugeordnet“). Reihenfolge: eigene Wahl > Vermutung > Name im Text/Feldern.
+- Vorbelegung aus Daniels Screenshots (`TitleChoiceRepository.ensureSeeded`, einmalig je Gerät, Flag `family_titles_seeded`; übernimmt auch v33-Zuordnungen aus dem DataStore, überschreibt nie Vorhandenes). „Floorball Training“ = nicht meins, weil schon als festes Training (Routine) in der App.
+- Eigene **ganztägige** FamilyWall-Termine (`ExternalEvent.blocksDay`, z. B. Spieltag, Turnier, Schülerreise) machen den Tag zum **reservierten Tag** (`DayAgenda.reservedDay`, Daniels Wunsch): kein Lernen/HA/Etsy/Extra-Sport (`schoolCapMinutes` 0, Lernplan-Kapazität 0), **außer Dringendem** – Hausaufgabe bis übermorgen fällig, Klausur in ≤ 2 Tagen (`PlanningEngine.urgent`, Lernplan 60 Min). Nicht Dringendes wandert auf andere Tage (LoadBalancer/StudyPlanner). Der Zeitstrahl bleibt frei. Fremde ganztägige Termine ändern nichts.
 
 ## Technik
 - Kotlin 2.2.21, AGP 8.13.0, Gradle 8.14.3, compileSdk/targetSdk 36, minSdk 34, KSP, Hilt 2.57.2, Compose BOM 2025.05.00, Material 3.
@@ -103,7 +102,7 @@ Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (
 - Die Tabelle `sync_meta` (Kennung `gid`, `updatedAt`, `deleted`) wird von **SQLite-Triggern** gepflegt (`SyncSchema.createTriggers`, angelegt im Callback `AppDatabase.SYNC_CALLBACK`).
 - `SyncEngine`: Schnappschuss und Zusammenführen. Kennungen werden aus Merkmalen gebildet (`naturalKey`), damit Startdaten nicht doppelt werden. Verweise laufen über die Kennungen (`refs`). Bei Konflikten gewinnt die neuere Änderung, Löschen wird übertragen.
 - Übertragung: verschlüsselte Datei per SAF (z. B. Google Drive) **und** WLAN (NSD `_lifedash._tcp` + Socket, `LanSyncManager`). Ein Abgleich startet etwa 2 bzw. 10 Sekunden nach jeder Änderung.
-- **Neue Tabelle mit Nutzerdaten → in `SyncSchema.tables` eintragen** (mit naturalKey/refs), sonst wird sie nicht abgeglichen.
+- **Neue Tabelle mit Nutzerdaten → in `SyncSchema.tables` eintragen** (mit naturalKey/refs und `since` = DB-Version, ab der es sie gibt – sonst scheitert `backfill` in Migration 11→12), sonst wird sie nicht abgeglichen.
 - Netzwerk nur auf `Dispatchers.IO` (bereits einmal `NetworkOnMainThreadException`, behoben in v23).
 
 ## Bauen & Testen (Cloud-Container)

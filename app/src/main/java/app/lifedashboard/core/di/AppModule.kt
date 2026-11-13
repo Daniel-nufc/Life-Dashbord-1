@@ -77,6 +77,9 @@ object AppModule {
 
     @Provides
     fun provideIcalSourceDao(db: AppDatabase): app.lifedashboard.data.db.IcalSourceDao = db.icalSourceDao()
+
+    @Provides
+    fun provideTitleChoiceDao(db: AppDatabase): app.lifedashboard.data.db.TitleChoiceDao = db.titleChoiceDao()
 }
 
 /**

@@ -96,19 +96,4 @@ class DayTimelineBuilderTest {
         assertEquals(1, entries.size)
         assertEquals(EntryKind.FREE, entries.single().kind)
     }
-
-    @Test
-    fun eigenerGanztaegigerTerminBelegtDenTag() {
-        val trip = app.lifedashboard.data.sync.ExternalEvent(
-            id = 7, title = "Daniel - Schülerreise", date = java.time.LocalDate.of(2027, 1, 25),
-            startMinute = null, endMinute = null, color = 0, calendarName = "FamilyWall Familie Friedrich", blocksDay = true,
-        )
-        val birthday = trip.copy(id = 8, title = "Geburtstag Peggy", blocksDay = false)
-        val entries = DayTimelineBuilder.build(
-            lessons = emptyList(), routines = emptyList(), externalEvents = listOf(trip, birthday),
-            dayStart = LocalTime.of(9, 30), dayEnd = LocalTime.of(22, 0), commuteMinutes = 30,
-        )
-        assertEquals(emptyList<TimeRange>(), entries.filter { it.kind == EntryKind.FREE }.map { it.range })
-        assertEquals(listOf("Daniel - Schülerreise"), entries.map { it.title }) // Geburtstag blockiert nichts
-    }
 }

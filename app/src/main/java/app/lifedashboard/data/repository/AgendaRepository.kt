@@ -80,8 +80,15 @@ data class DayAgenda(
         lessons.filter { subjectId == null || it.subject.id == subjectId }.mapNotNull { it.timeRange?.start }.minOrNull()
             ?: lessons.mapNotNull { it.timeRange?.start }.minOrNull()
 
+    /**
+     * Reservierter Tag: Daniel hat einen eigenen ganztägigen Termin (Spieltag, Turnier, Schülerreise).
+     * Dann wird nichts geplant – außer was morgen/übermorgen fällig ist.
+     */
+    val reservedDay: Boolean get() = externalEvents.any { it.blocksDay }
+
     /** Schul-Pensum (Lernen + Hausaufgaben) für diesen Tag: werktags 2 Std, mit Training/Job 1 Std, Samstag 2 Std, Sonntag frei. */
     fun schoolCapMinutes(examSoon: Boolean = false): Int = when {
+        reservedDay -> if (examSoon) 60 else 0
         date.dayOfWeek == DayOfWeek.SUNDAY -> if (examSoon) 60 else 0
         date.dayOfWeek == DayOfWeek.SATURDAY -> 120
         holiday != null -> 150
@@ -159,21 +166,23 @@ class AgendaRepository @Inject constructor(
     private val tasks: TaskRepository,
     private val settingsRepository: app.lifedashboard.data.settings.SettingsRepository,
     private val systemCalendar: SystemCalendarRepository,
+    private val titleChoices: TitleChoiceRepository,
     private val schoolCalendar: SchoolCalendarRepository,
     private val studyDao: StudyDao,
 ) {
     private fun externalEvents(from: LocalDate, to: LocalDate): Flow<List<ExternalEvent>> =
         combine(
-            settingsRepository.settings.map { listOf(it.systemCalendarIds, it.onlyMineCalendarIds, it.userName, it.mineTitles, it.notMineTitles) }
-                .distinctUntilChanged(),
+            settingsRepository.settings.map { Triple(it.systemCalendarIds, it.onlyMineCalendarIds, it.userName) }.distinctUntilChanged(),
+            titleChoices.choices,
             systemCalendar.changes(),
-        ) { config, _ -> config }
-            .mapLatest { c ->
-                @Suppress("UNCHECKED_CAST")
-                runCatching {
-                    systemCalendar.events(from, to, c[0] as Set<Long>, c[1] as Set<Long>, c[2] as String, c[3] as Set<String>, c[4] as Set<String>)
-                }.getOrDefault(emptyList())
+        ) { config, choices, _ -> config to choices }
+            .mapLatest { (c, choices) ->
+                runCatching { systemCalendar.events(from, to, c.first, c.second, c.third, choices.mine, choices.notMine) }.getOrDefault(emptyList())
             }
+
+    /** Reservierte Tage (eigene ganztägige Termine) im Zeitraum – für den Lernplan. */
+    fun reservedDays(from: LocalDate, to: LocalDate): Flow<Set<LocalDate>> =
+        externalEvents(from, to).map { list -> list.filter { it.blocksDay }.map { it.date }.toSet() }.distinctUntilChanged()
 
     fun observe(from: LocalDate, days: Int): Flow<AgendaRange> {
         val to = from.plusDays((days - 1).toLong())

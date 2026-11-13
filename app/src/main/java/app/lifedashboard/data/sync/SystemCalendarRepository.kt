@@ -54,7 +54,7 @@ data class ExternalEvent(
     val endMinute: Int?,
     val color: Int,
     val calendarName: String,
-    /** Ganztägiger eigener Termin (z. B. Schülerreise, Spieltag): an dem Tag wird nichts geplant. */
+    /** Ganztägiger eigener Termin (z. B. Schülerreise, Spieltag): reservierter Tag, nur Dringendes wird geplant. */
     val blocksDay: Boolean = false,
 )
 

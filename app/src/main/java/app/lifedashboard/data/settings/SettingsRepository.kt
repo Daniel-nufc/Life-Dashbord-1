@@ -37,9 +37,6 @@ data class AppSettings(
     val systemCalendarIds: Set<Long>,
     /** Handy-Kalender, aus denen nur Termine für [userName] kommen (z. B. der FamilyWall-Familienkalender). */
     val onlyMineCalendarIds: Set<Long> = emptySet(),
-    /** Termin-Titel (klein geschrieben), die Daniel als „meins“ bzw. „nicht meins“ markiert hat – gilt auch für künftige Termine. */
-    val mineTitles: Set<String> = emptySet(),
-    val notMineTitles: Set<String> = emptySet(),
     /** Reihenfolge der Bereiche bei Konflikten, Standard: Schule > Sport > Etsy. */
     val priorityOrder: List<String>,
     /** Geschützter Puffer (Notgroschen) in Cent – wird nie als „verfügbar“ gezählt. */
@@ -175,8 +172,6 @@ class SettingsRepository @Inject constructor(
                 priorityOrder = (p[PRIORITY_ORDER] ?: "SCHOOL,SPORT,ETSY").split(',').filter { it.isNotBlank() },
                 systemCalendarIds = p[SYSTEM_CALENDARS].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
                 onlyMineCalendarIds = p[ONLY_MINE_CALENDARS].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
-                mineTitles = p[MINE_TITLES].orEmpty(),
-                notMineTitles = p[NOT_MINE_TITLES].orEmpty(),
             )
         }
 
@@ -257,37 +252,21 @@ class SettingsRepository @Inject constructor(
     }
 
     /**
-     * Einmalig Daniels FamilyWall-Titel vorbelegen (aus seinen Screenshots vom 13.11.2026: grün = Daniel,
-     * gelb = meistens dabei). „Floorball Training“ steht schon als festes Training in der App → nicht doppelt.
+     * FamilyWall-Zuordnungen liegen seit v34 in der Datenbank (abgeglichen mit dem Tablet).
+     * Liefert einmalig, was v33 noch auf dem Gerät gespeichert hatte, und ob schon vorbelegt wurde – und räumt auf.
      */
-    suspend fun ensureFamilyTitles() {
-        val key = app.lifedashboard.planner.IcsPersonFilter::titleKey
+    suspend fun takeLegacyTitleChoices(): Triple<Set<String>, Set<String>, Boolean> {
+        var result = Triple(emptySet<String>(), emptySet<String>(), false)
         dataStore.edit {
-            if (it[FAMILY_TITLES_SEEDED] == true) return@edit
-            it[MINE_TITLES] = it[MINE_TITLES].orEmpty() + listOf(
-                "Spieltag", "Spieltag Kleinfeld", "Turnier", "Floorball Mixed Turnier Falken", "Spieltag Daniel U17 KF",
-                "Friseur", "Vieleicht Hetha", "Daniel - Schülerreise", "Sponsoring TSC", "Augenärztin - alle mit Tropfen",
-                "Treff mit Karin und Familie?",
-            ).map(key)
-            it[NOT_MINE_TITLES] = it[NOT_MINE_TITLES].orEmpty() + listOf(
-                "Augentropfen Papa", "Training bei den Eisbären", "Sunshine - Essen vorbestellen", "Amtstag", "Kosmetik",
-                "Hochzeitstag Oma&Opa", "Hochzeitstag A&M", "Spieltag Marie W", "Spieltag Marie GF", "Spieltag Marie U13",
-                "Kurzurlaub mit Mandy und Konstanze", "Hüttenzauber Marie", "Kammermusik-Matinee", "Floorball Training",
-                "Weihnachtsferien 2026 Berlin", "Herbstferien 2026 Berlin", "Reiterferien Barlin",
-                "Winter - Berlin - Ferien im Schuljahr 2026/2027", "Maries Geburtstag", "Marie - Schule Staatsoper",
-                "Abteilungsversammlung TSC", "QS-Weihnachtsfeier", "Kinderarzt Kontrolle Größe",
-            ).map(key)
-            it[FAMILY_TITLES_SEEDED] = true
+            result = Triple(it[MINE_TITLES].orEmpty(), it[NOT_MINE_TITLES].orEmpty(), it[FAMILY_TITLES_SEEDED] == true)
+            it.remove(MINE_TITLES)
+            it.remove(NOT_MINE_TITLES)
         }
+        return result
     }
 
-    /** Termin-Titel als meins (true), nicht meins (false) oder offen (null) merken. */
-    suspend fun setTitleChoice(title: String, mine: Boolean?) {
-        val key = app.lifedashboard.planner.IcsPersonFilter.titleKey(title)
-        dataStore.edit {
-            it[MINE_TITLES] = it[MINE_TITLES].orEmpty() - key + (if (mine == true) setOf(key) else emptySet())
-            it[NOT_MINE_TITLES] = it[NOT_MINE_TITLES].orEmpty() - key + (if (mine == false) setOf(key) else emptySet())
-        }
+    suspend fun markFamilyTitlesSeeded() {
+        dataStore.edit { it[FAMILY_TITLES_SEEDED] = true }
     }
 
     suspend fun setPriorityOrder(order: List<String>) {

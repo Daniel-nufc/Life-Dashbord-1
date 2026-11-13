@@ -428,3 +428,15 @@ data class SyncMetaEntity(
     val updatedAt: Long,
     val deleted: Boolean,
 )
+
+/**
+ * Daniels Zuordnung eines Familienkalender-Titels (FamilyWall): meins / nicht meins.
+ * Gilt für alle Termine mit diesem Titel und wird zwischen Handy und Tablet abgeglichen.
+ */
+@Entity(tableName = "calendar_title_choices", indices = [Index(value = ["titleKey"], unique = true)])
+data class TitleChoiceEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /** Titel klein geschrieben, Leerzeichen vereinheitlicht ([app.lifedashboard.planner.IcsPersonFilter.titleKey]) */
+    val titleKey: String,
+    val mine: Boolean,
+)

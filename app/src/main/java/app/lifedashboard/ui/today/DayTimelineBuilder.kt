@@ -107,18 +107,6 @@ object DayTimelineBuilder {
         }
 
         externalEvents.forEach { event ->
-            if (event.startMinute == null && event.blocksDay) {
-                // eigener ganztägiger Termin (Schülerreise, Spieltag): der ganze Tag ist belegt
-                fixed += TimelineEntry(
-                    range = TimeRange(dayStart, dayEnd),
-                    title = event.title,
-                    subtitle = "ganztägig · ${event.calendarName}".trimEnd(' ', '·'),
-                    kind = EntryKind.EVENT,
-                    colorArgb = event.color.toLong() and 0xFFFFFFFFL,
-                    area = LifeArea.PRIVATE,
-                )
-                return@forEach
-            }
             val start = event.startMinute ?: return@forEach
             fixed += TimelineEntry(
                 range = TimeRange.ofMinutes(start, (event.endMinute ?: (start + 60)).coerceAtLeast(start)),

@@ -46,8 +46,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SchoolHolidayEntity::class,
         TrainingResultEntity::class,
         SyncMetaEntity::class,
+        TitleChoiceEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -57,6 +58,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
     abstract fun jobShiftDao(): JobShiftDao
     abstract fun icalSourceDao(): IcalSourceDao
+    abstract fun titleChoiceDao(): TitleChoiceDao
     abstract fun studyDao(): StudyDao
     abstract fun planDao(): PlanDao
     abstract fun sportDao(): SportDao
@@ -293,7 +295,7 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `sync_meta` (`tbl` TEXT NOT NULL, `localId` INTEGER NOT NULL, `gid` TEXT, `updatedAt` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`tbl`, `localId`))")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_sync_meta_tbl_gid` ON `sync_meta` (`tbl`, `gid`)")
-                app.lifedashboard.data.devicesync.SyncSchema.backfill(db)
+                app.lifedashboard.data.devicesync.SyncSchema.backfill(db, version = 12)
             }
         }
 
@@ -306,9 +308,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Update 34: FamilyWall-Zuordnungen (meins / nicht meins) als Tabelle – wird mit dem Tablet abgeglichen. */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `calendar_title_choices` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `titleKey` TEXT NOT NULL, `mine` INTEGER NOT NULL)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_calendar_title_choices_titleKey` ON `calendar_title_choices` (`titleKey`)")
+            }
+        }
+
         val ALL_MIGRATIONS = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-            MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
+            MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14,
         )
 
         /** Legt beim Öffnen die Abgleich-Trigger an (neue Installation und nach Updates). */

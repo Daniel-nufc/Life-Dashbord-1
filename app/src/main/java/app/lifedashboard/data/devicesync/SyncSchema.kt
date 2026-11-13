@@ -21,6 +21,8 @@ data class SyncTable(
     val preferKey: String? = null,
     /** Spalte mit automatischer ID (wird beim Einfügen neu vergeben) */
     val autoId: String? = "id",
+    /** Datenbank-Version, ab der es die Tabelle gibt (für Migrationen) */
+    val since: Int = 12,
 )
 
 object SyncSchema {
@@ -60,6 +62,7 @@ object SyncSchema {
         SyncTable("etsy_sales", listOf("dateEpochDay", "title", "priceCents"), preferKey = "orderRef"),
         SyncTable("etsy_stats", listOf("monthKey")),
         SyncTable("school_holidays", listOf("startEpochDay", "name")),
+        SyncTable("calendar_title_choices", listOf("titleKey"), since = 14),
     )
 
     val byName = tables.associateBy { it.name }
@@ -96,8 +99,8 @@ object SyncSchema {
     }
 
     /** Für bestehende Daten (Update von Version 11): alle Einträge einmal registrieren. */
-    fun backfill(db: SupportSQLiteDatabase) {
-        tables.forEach { t ->
+    fun backfill(db: SupportSQLiteDatabase, version: Int = Int.MAX_VALUE) {
+        tables.filter { it.since <= version }.forEach { t ->
             db.execSQL("INSERT OR IGNORE INTO sync_meta(tbl, localId, gid, updatedAt, deleted) SELECT '${t.name}', rowid, NULL, 0, 0 FROM `${t.name}`")
         }
     }
