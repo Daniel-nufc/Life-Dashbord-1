@@ -43,14 +43,17 @@ data class PersonFilterResult(
 object IcsPersonFilter {
     fun apply(events: List<IcsEvent>, name: String): PersonFilterResult {
         val people = events.flatMap { it.attendees }.toSortedSet(String.CASE_INSENSITIVE_ORDER)
-        val token = name.trim().split(Regex("\\s+")).firstOrNull()?.lowercase().orEmpty()
-        if (token.isBlank()) return PersonFilterResult(events, events.size, people)
-        val word = Regex("(^|[^\\p{L}])" + Regex.escape(token) + "($|[^\\p{L}])", RegexOption.IGNORE_CASE)
-        val kept = events.filter { e ->
-            e.attendees.any { word.containsMatchIn(it) } ||
-                word.containsMatchIn(e.summary) || (e.description?.let(word::containsMatchIn) ?: false)
-        }
+        if (name.isBlank()) return PersonFilterResult(events, events.size, people)
+        val kept = events.filter { e -> matches(name, e.summary, e.description, e.attendees) }
         return PersonFilterResult(kept, events.size, people)
+    }
+
+    /** Gehört der Termin zu [name]? Teilnehmer, Titel oder Beschreibung enthalten den Vornamen als ganzes Wort. */
+    fun matches(name: String, title: String, description: String?, attendees: List<String>): Boolean {
+        val token = name.trim().split(Regex("\\s+")).firstOrNull().orEmpty()
+        if (token.isBlank()) return true
+        val word = Regex("(^|[^\\p{L}])" + Regex.escape(token) + "($|[^\\p{L}])", RegexOption.IGNORE_CASE)
+        return attendees.any { word.containsMatchIn(it) } || word.containsMatchIn(title) || (description?.let(word::containsMatchIn) ?: false)
     }
 }
 

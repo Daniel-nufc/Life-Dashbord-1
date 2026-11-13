@@ -3,8 +3,8 @@
 Private Android-App **Life Dashboard** für Daniel (Schüler, 11. Klasse, OSZ Max Taut Berlin). Läuft auf Galaxy S25 (Android 17) und Galaxy Tab S8+ (Android 16).
 Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (vorher „Auto Blocker“ kurz ausschalten).
 
-**Aktueller Stand: Version 30** (FamilyWall-Anbindung, Datenbank-Version 13, alle Tests grün). Die Versionsnummer der APK ist die GitHub-Build-Nummer (`GITHUB_RUN_NUMBER`).
-**Code:** `main` = Version 29. Version 30 liegt auf `ccr-eb37e95e-gq983n` (noch nicht in `main`). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
+**Aktueller Stand: Version 31** (FamilyWall über den Handy-Kalender, Datenbank-Version 13, alle Tests grün). Die Versionsnummer der APK ist die GitHub-Build-Nummer (`GITHUB_RUN_NUMBER`).
+**Code:** `main` = Version 29. Version 30/31 liegen auf `ccr-eb37e95e-gq983n` (noch nicht in `main`). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
 
 ## Wie mit Daniel arbeiten
 - Immer **auf Deutsch**, einfach und kurz erklären. Daniel ist kein Entwickler und liest oft auf dem Handy.
@@ -65,6 +65,12 @@ Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (
 - **Nur Daniels Termine** (`ical_sources.filterName`, Standard = Name aus den Einstellungen): `planner.IcsPersonFilter` behält Termine, bei denen die Person als Teilnehmer (`ATTENDEE`, CN oder E-Mail) ausgewählt ist oder im Titel steht (nur Vorname, ganzes Wort). Ob FamilyWall `ATTENDEE` mitschickt, ist **nicht bestätigt** – `lastNote` zeigt „X von Y Terminen sind für dich“ und die gefundenen Personen bzw. den Hinweis, dass keine Teilnehmer mitkommen.
 - FamilyWall-Einträge haben die feste Kennung `familywall:` (statt `ical<id>:`), damit Handy und Tablet keine Doppel erzeugen.
 - Abos werden alle 2 Std (`IcalSyncWorker`, Policy UPDATE) und beim Öffnen der App (älter als 30 Min, `RootViewModel`) geholt. Test: `FamilyWallSyncTest` (echter lokaler HTTP-Server).
+
+## FamilyWall über den Handy-Kalender (seit Version 31)
+- Daniels Test mit v30: Der FamilyWall-**iCal-Link enthielt nur 1 Termin** (von Andrea) – der Link exportiert nicht alles. Die FamilyWall-App überträgt aber selbst alle Termine in den Android-Kalender („FamilyWall Familie Friedrich“, Konto „Daniel_Sohn“). **Das ist jetzt der Hauptweg**, der iCal-Link nur noch Notlösung.
+- `SystemCalendar.isFamilyWall`, Karte „FamilyWall“ → „Übernehmen – nur meine Termine“ (wählt den Kalender, setzt „nur meine“, entfernt einen alten FamilyWall-iCal-Link gegen Doppel).
+- Einstellung `onlyMineCalendarIds` (DataStore, pro Gerät): `SystemCalendarRepository.events(…, onlyMineIds, name)` behält nur Termine, bei denen `userName` in Teilnehmern (`CalendarContract.Attendees`), Titel oder Beschreibung steht (`IcsPersonFilter.matches`). `personStats` zeigt „Nächste 31 Tage: X von Y Terminen sind für dich“ + Personen.
+- **Noch nicht bestätigt**, ob FamilyWall die ausgewählten Personen als Teilnehmer in den Android-Kalender schreibt. Wenn 0 passen: Daniel soll Bescheid geben (Schalter aus = alle Familientermine).
 
 ## Technik
 - Kotlin 2.2.21, AGP 8.13.0, Gradle 8.14.3, compileSdk/targetSdk 36, minSdk 34, KSP, Hilt 2.57.2, Compose BOM 2025.05.00, Material 3.

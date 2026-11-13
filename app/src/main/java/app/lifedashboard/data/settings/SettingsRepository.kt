@@ -34,6 +34,8 @@ data class AppSettings(
     val seedVersion: Int,
     /** IDs der Handy-Kalender, die angezeigt werden sollen (leer = aus). */
     val systemCalendarIds: Set<Long>,
+    /** Handy-Kalender, aus denen nur Termine für [userName] kommen (z. B. der FamilyWall-Familienkalender). */
+    val onlyMineCalendarIds: Set<Long> = emptySet(),
     /** Reihenfolge der Bereiche bei Konflikten, Standard: Schule > Sport > Etsy. */
     val priorityOrder: List<String>,
     /** Geschützter Puffer (Notgroschen) in Cent – wird nie als „verfügbar“ gezählt. */
@@ -168,6 +170,7 @@ class SettingsRepository @Inject constructor(
                 ),
                 priorityOrder = (p[PRIORITY_ORDER] ?: "SCHOOL,SPORT,ETSY").split(',').filter { it.isNotBlank() },
                 systemCalendarIds = p[SYSTEM_CALENDARS].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
+                onlyMineCalendarIds = p[ONLY_MINE_CALENDARS].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
             )
         }
 
@@ -243,6 +246,10 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[SYSTEM_CALENDARS] = ids.sorted().joinToString(",") }
     }
 
+    suspend fun setOnlyMineCalendarIds(ids: Set<Long>) {
+        dataStore.edit { it[ONLY_MINE_CALENDARS] = ids.sorted().joinToString(",") }
+    }
+
     suspend fun setPriorityOrder(order: List<String>) {
         dataStore.edit { it[PRIORITY_ORDER] = order.joinToString(",") }
     }
@@ -310,6 +317,7 @@ class SettingsRepository @Inject constructor(
         val WEEKEND_START = intPreferencesKey("weekend_day_start_minute")
         val SEED_VERSION = intPreferencesKey("seed_version")
         val SYSTEM_CALENDARS = stringPreferencesKey("system_calendar_ids")
+        val ONLY_MINE_CALENDARS = stringPreferencesKey("only_mine_calendar_ids")
         val PRIORITY_ORDER = stringPreferencesKey("priority_order")
         val BUFFER = androidx.datastore.preferences.core.longPreferencesKey("buffer_cents")
         val JOB_WAGE = androidx.datastore.preferences.core.longPreferencesKey("job_wage_cents")

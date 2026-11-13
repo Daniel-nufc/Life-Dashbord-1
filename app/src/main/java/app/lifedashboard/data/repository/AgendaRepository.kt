@@ -163,8 +163,11 @@ class AgendaRepository @Inject constructor(
     private val studyDao: StudyDao,
 ) {
     private fun externalEvents(from: LocalDate, to: LocalDate): Flow<List<ExternalEvent>> =
-        combine(settingsRepository.settings.map { it.systemCalendarIds }.distinctUntilChanged(), systemCalendar.changes()) { ids, _ -> ids }
-            .mapLatest { ids -> runCatching { systemCalendar.events(from, to, ids) }.getOrDefault(emptyList()) }
+        combine(
+            settingsRepository.settings.map { Triple(it.systemCalendarIds, it.onlyMineCalendarIds, it.userName) }.distinctUntilChanged(),
+            systemCalendar.changes(),
+        ) { config, _ -> config }
+            .mapLatest { (ids, onlyMine, name) -> runCatching { systemCalendar.events(from, to, ids, onlyMine, name) }.getOrDefault(emptyList()) }
 
     fun observe(from: LocalDate, days: Int): Flow<AgendaRange> {
         val to = from.plusDays((days - 1).toLong())

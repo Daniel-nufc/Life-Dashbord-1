@@ -55,6 +55,7 @@ import app.lifedashboard.data.db.LifeArea
 import app.lifedashboard.data.settings.SettingsRepository
 import app.lifedashboard.data.sync.IcalSyncRepository
 import app.lifedashboard.data.sync.isFamilyWall
+import app.lifedashboard.data.sync.PersonStats
 import app.lifedashboard.data.sync.SystemCalendar
 import app.lifedashboard.data.sync.SystemCalendarRepository
 import app.lifedashboard.ui.components.OneUiScaffold
@@ -70,6 +71,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -88,19 +92,56 @@ class ConnectionsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val userName: StateFlow<String> = settings.settings.map { it.userName }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+    val onlyMineIds: StateFlow<Set<Long>> = settings.settings.map { it.onlyMineCalendarIds }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
     private val _syncing = MutableStateFlow(false)
     val syncing: StateFlow<Boolean> = _syncing.asStateFlow()
+
+    /** „Nur meine Termine“: Auswertung der nächsten 31 Tage je Kalender. */
+    private val _stats = MutableStateFlow<Map<Long, PersonStats>>(emptyMap())
+    val stats: StateFlow<Map<Long, PersonStats>> = _stats.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            settings.settings.map { Triple(it.systemCalendarIds, it.onlyMineCalendarIds, it.userName) }
+                .distinctUntilChanged()
+                .collectLatest { refreshStats(it.first, it.second, it.third) }
+        }
+    }
+
+    private suspend fun refreshStats(selected: Set<Long>, onlyMine: Set<Long>, name: String) {
+        _stats.value = (selected intersect onlyMine).associateWith { systemCalendar.personStats(it, name) }
+    }
 
     fun hasCalendarPermission() = systemCalendar.hasPermission()
 
     fun loadCalendars() {
-        viewModelScope.launch { _calendars.value = systemCalendar.calendars() }
+        viewModelScope.launch {
+            _calendars.value = systemCalendar.calendars()
+            val s = settings.settings.first()
+            refreshStats(s.systemCalendarIds, s.onlyMineCalendarIds, s.userName)
+        }
     }
 
     fun toggleCalendar(id: Long, enabled: Boolean) {
         viewModelScope.launch {
             val current = selectedIds.value
             settings.setSystemCalendarIds(if (enabled) current + id else current - id)
+            // FamilyWall-Familienkalender: standardmäßig nur meine Termine
+            if (enabled && _calendars.value.any { it.id == id && it.isFamilyWall }) settings.setOnlyMineCalendarIds(onlyMineIds.value + id)
+        }
+    }
+
+    fun setOnlyMine(id: Long, on: Boolean) {
+        viewModelScope.launch { settings.setOnlyMineCalendarIds(if (on) onlyMineIds.value + id else onlyMineIds.value - id) }
+    }
+
+    /** FamilyWall über den Handy-Kalender (vollständig, immer aktuell). Ein alter iCal-Link wird entfernt, damit nichts doppelt ist. */
+    fun useFamilyWallCalendar(calendar: SystemCalendar) {
+        viewModelScope.launch {
+            settings.setSystemCalendarIds(selectedIds.value + calendar.id)
+            settings.setOnlyMineCalendarIds(onlyMineIds.value + calendar.id)
+            sources.value.filter(::isFamilyWall).forEach { ical.delete(it) }
         }
     }
 
@@ -149,6 +190,9 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
     val selected by viewModel.selectedIds.collectAsStateWithLifecycle()
     val sources by viewModel.sources.collectAsStateWithLifecycle()
     val syncing by viewModel.syncing.collectAsStateWithLifecycle()
+    val onlyMine by viewModel.onlyMineIds.collectAsStateWithLifecycle()
+    val stats by viewModel.stats.collectAsStateWithLifecycle()
+    val userName by viewModel.userName.collectAsStateWithLifecycle()
     var permission by remember { mutableStateOf(viewModel.hasCalendarPermission()) }
     var showAdd by remember { mutableStateOf(false) }
     var showFamilyWall by remember { mutableStateOf(false) }
@@ -190,6 +234,9 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
                                     if (cal.account.isNotBlank()) {
                                         Text(cal.account, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
+                                    if (cal.id in selected && cal.id in onlyMine) {
+                                        Text("Nur Termine für $userName", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                    }
                                 }
                             }
                         }
@@ -197,23 +244,68 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
                 }
                 item {
                     val family = sources.firstOrNull(::isFamilyWall)
+                    val fwCalendar = calendars.firstOrNull { it.isFamilyWall }
+                    val usingDevice = fwCalendar != null && fwCalendar.id in selected
+                    val hint = @Composable { text: String ->
+                        Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                    }
                     SectionCard {
                         TileHeader(Icons.Rounded.FamilyRestroom, "FamilyWall", LifeArea.PRIVATE.color) {
-                            if (family != null) IconButton(onClick = viewModel::syncAll, enabled = !syncing) { Icon(Icons.Rounded.Sync, "Jetzt aktualisieren") }
+                            if (family != null && !usingDevice) IconButton(onClick = viewModel::syncAll, enabled = !syncing) { Icon(Icons.Rounded.Sync, "Jetzt aktualisieren") }
                         }
                         Text(
                             "Deine Termine aus dem Familienkalender erscheinen automatisch in „Heute“ und im Kalender, auch Serien wie Geburtstage. Die App plant nichts in diese Zeiten. Sie liest nur, in FamilyWall ändert sich nichts.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (family == null) {
-                            Button(onClick = { showFamilyWall = true }, modifier = Modifier.padding(top = 12.dp)) { Text("FamilyWall verbinden") }
-                        } else {
+                        when {
+                            usingDevice -> {
+                                Text(
+                                    "Verbunden über den Handy-Kalender „${fwCalendar!!.name}“ · immer aktuell",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 10.dp),
+                                )
+                                val mine = fwCalendar.id in onlyMine
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                                    Text("Nur Termine für $userName", modifier = Modifier.weight(1f))
+                                    Switch(checked = mine, onCheckedChange = { viewModel.setOnlyMine(fwCalendar.id, it) })
+                                }
+                                val st = stats[fwCalendar.id]
+                                if (mine && st != null) {
+                                    hint(
+                                        "Nächste 31 Tage: ${st.kept} von ${st.total} Terminen sind für dich." +
+                                            if (st.people.isNotEmpty()) " Personen in FamilyWall: ${st.people.joinToString(", ")}" else "",
+                                    )
+                                    if (st.total > 0 && st.kept == 0) {
+                                        hint("Keiner passt? FamilyWall gibt die ausgewählten Personen evtl. nicht weiter. Dann den Schalter ausschalten (alle Familientermine) und mir Bescheid sagen.")
+                                    }
+                                }
+                                TextButton(onClick = { viewModel.toggleCalendar(fwCalendar.id, false) }) { Text("Nicht mehr anzeigen") }
+                            }
+                            fwCalendar != null -> {
+                                hint("Auf diesem Gerät gefunden: „${fwCalendar.name}“. Die FamilyWall-App überträgt dorthin alle Termine – vollständig und immer aktuell, ohne Link.")
+                                Button(onClick = { viewModel.useFamilyWallCalendar(fwCalendar) }, modifier = Modifier.padding(top = 10.dp)) {
+                                    Text("Übernehmen – nur meine Termine")
+                                }
+                            }
+                            !permission -> {
+                                hint("FamilyWall überträgt die Termine in den Handy-Kalender. Erlaube den Zugriff, dann findet die App sie.")
+                                Button(onClick = { launcher.launch(Manifest.permission.READ_CALENDAR) }, modifier = Modifier.padding(top = 10.dp)) {
+                                    Text("Zugriff auf Kalender erlauben")
+                                }
+                            }
+                            family == null -> {
+                                hint("Kein FamilyWall-Kalender auf diesem Gerät. Schalte in FamilyWall die Übertragung in den Handy-Kalender ein – oder nutze den iCal-Link (enthält evtl. nicht alle Termine).")
+                                OutlinedButton(onClick = { showFamilyWall = true }, modifier = Modifier.padding(top = 10.dp)) { Text("Mit iCal-Link verbinden") }
+                            }
+                        }
+                        if (family != null) {
                             val status = when {
-                                syncing -> "Wird aktualisiert …"
-                                family.lastError != null -> "Fehler: ${family.lastError}"
-                                family.lastSyncMillis != null -> "Verbunden · zuletzt " + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(family.lastSyncMillis))
-                                else -> "Verbunden"
+                                syncing -> "iCal-Link: wird aktualisiert …"
+                                family.lastError != null -> "iCal-Link: Fehler: ${family.lastError}"
+                                family.lastSyncMillis != null -> "iCal-Link verbunden · zuletzt " + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(family.lastSyncMillis))
+                                else -> "iCal-Link verbunden"
                             }
                             Text(
                                 status,
@@ -221,22 +313,11 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
                                 color = if (family.lastError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(top = 10.dp),
                             )
-                            Text(
-                                family.filterName?.let { "Nur Termine für $it" } ?: "Alle Termine der Familie",
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                            if (family.lastError == null && family.lastNote != null) {
-                                Text(
-                                    family.lastNote,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
-                            }
+                            family.filterName?.let { hint("Nur Termine für $it") }
+                            if (family.lastError == null && family.lastNote != null) hint(family.lastNote)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
                                 OutlinedButton(onClick = { showFamilyWall = true }) { Text("Ändern") }
-                                TextButton(onClick = { viewModel.delete(family) }) { Text("Trennen") }
+                                TextButton(onClick = { viewModel.delete(family) }) { Text("Link trennen") }
                             }
                         }
                     }

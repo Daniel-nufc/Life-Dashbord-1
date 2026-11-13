@@ -270,4 +270,11 @@ class IcsParserTest {
     fun `ohne Namen bleibt alles`() {
         assertEquals(5, IcsPersonFilter.apply(IcsParser.parse(family, berlin), " ").kept.size)
     }
+
+    @Test
+    fun `Handy-Kalender - FamilyWall-Konto Daniel_Sohn und Beschreibung zaehlen`() {
+        assertEquals(true, IcsPersonFilter.matches("Daniel", "Arzt", null, listOf("Daniel_Sohn")))
+        assertEquals(true, IcsPersonFilter.matches("Daniel", "Arzt", "Teilnehmer: Andrea, Daniel", emptyList()))
+        assertEquals(false, IcsPersonFilter.matches("Daniel", "Arzt", null, listOf("Andrea")))
+    }
 }
