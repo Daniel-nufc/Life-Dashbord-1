@@ -4,7 +4,7 @@ Private Android-App **Life Dashboard** für Daniel (Schüler, 11. Klasse, OSZ Ma
 Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (vorher „Auto Blocker“ kurz ausschalten).
 
 **Aktueller Stand: Version 29** (versionCode 29, Datenbank-Version 12 – unverändert, alle Tests grün).
-**Arbeits-Branch:** `ccr-4b9f7b2a-x8cb8a` (Version 29, baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Dort liegt der ganze Code. `main` enthält nur den ersten, leeren Commit.
+**Code:** `main` enthält den aktuellen Stand (Version 29, auf Daniels Wunsch übernommen). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
 
 ## Wie mit Daniel arbeiten
 - Immer **auf Deutsch**, einfach und kurz erklären. Daniel ist kein Entwickler und liest oft auf dem Handy.
