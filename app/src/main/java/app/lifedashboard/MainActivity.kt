@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.map
 import app.lifedashboard.core.security.AppLockManager
 import app.lifedashboard.ui.lock.LockScreen
 import app.lifedashboard.ui.navigation.LifeDashboardRoot
@@ -23,6 +24,8 @@ class MainActivity : FragmentActivity() {
 
     @Inject lateinit var appLock: AppLockManager
 
+    @Inject lateinit var settings: app.lifedashboard.data.settings.SettingsRepository
+
     @Inject lateinit var lanSync: app.lifedashboard.data.devicesync.LanSyncManager
 
     private var promptShowing = false
@@ -31,7 +34,13 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            LifeDashboardTheme {
+            val themeMode by settings.settings.map { it.themeMode }.collectAsStateWithLifecycle("SYSTEM")
+            val dark = when (themeMode) {
+                "LIGHT" -> false
+                "DARK" -> true
+                else -> androidx.compose.foundation.isSystemInDarkTheme()
+            }
+            LifeDashboardTheme(darkTheme = dark) {
                 val locked by appLock.locked.collectAsStateWithLifecycle()
                 if (locked) {
                     LockScreen(onUnlockRequest = ::authenticate)

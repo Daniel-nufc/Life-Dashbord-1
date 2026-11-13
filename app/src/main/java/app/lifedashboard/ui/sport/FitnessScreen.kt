@@ -109,6 +109,7 @@ private val HEART = Color(0xFFE5486A)
 @Composable
 fun FitnessScreen(onBack: () -> Unit, viewModel: FitnessViewModel = hiltViewModel()) {
     val overview by viewModel.overview.collectAsStateWithLifecycle()
+    val progress by viewModel.progress.collectAsStateWithLifecycle()
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
     val healthState by viewModel.healthState.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
@@ -140,6 +141,10 @@ fun FitnessScreen(onBack: () -> Unit, viewModel: FitnessViewModel = hiltViewMode
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item { TodayHero(snapshot, overview, settings.stepGoal) }
+                progress?.let { p ->
+                    item { app.lifedashboard.ui.progress.ProgressCard(p, onClick = {}) }
+                    item { app.lifedashboard.ui.progress.IronmanPathCard(p.ironman) }
+                }
                 if (snapshot != null) item { StatTiles(snapshot!!) }
                 message?.let { msg -> item { SectionCard { Text(msg) } } }
                 overview?.let { o ->
@@ -165,7 +170,7 @@ fun FitnessScreen(onBack: () -> Unit, viewModel: FitnessViewModel = hiltViewMode
                     )
                 }
                 // Feste Trainings
-                item { Text("Feste Trainings", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp)) }
+                item { app.lifedashboard.ui.components.SectionTitle("Feste Trainings") }
                 items(routines, key = { "r${it.id}" }) { routine ->
                     SectionCard(onClick = { editing = EditRequest.Routine(routine) }) {
                         TileHeader(routine.area.icon, routine.title, routine.area.color) {
@@ -184,7 +189,7 @@ fun FitnessScreen(onBack: () -> Unit, viewModel: FitnessViewModel = hiltViewMode
                 }
                 item { TextButton(onClick = { editing = EditRequest.Routine(null) }) { Text("+ Festes Training hinzufügen") } }
                 // Log
-                item { Text("Trainings-Log", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp)) }
+                item { app.lifedashboard.ui.components.SectionTitle("Trainings-Log") }
                 if (workouts.isEmpty()) {
                     item {
                         SectionCard {
@@ -238,10 +243,10 @@ private fun TodayHero(s: FitnessSnapshot?, o: TrainingOverview?, stepGoal: Int) 
                 )
                 Spacer(Modifier.height(6.dp))
                 val bits = listOfNotNull(
-                    today?.sleep?.let { "😴 ${it.hm()}" },
-                    today?.activeKcal?.let { "🔥 $it kcal aktiv" },
-                    s?.avgHeartRateToday?.let { "❤️ Ø $it" },
-                    o?.let { "🏃 ${it.minutesThisWeek} Min Sport diese Woche" },
+                    today?.sleep?.let { "${it.hm()} Schlaf" },
+                    today?.activeKcal?.let { "$it kcal aktiv" },
+                    s?.avgHeartRateToday?.let { "Puls Ø $it" },
+                    o?.let { "${it.minutesThisWeek} Min Sport diese Woche" },
                 )
                 if (bits.isNotEmpty()) Text(bits.joinToString("  ·  "), color = Color.White, style = MaterialTheme.typography.bodySmall)
             }
@@ -330,7 +335,7 @@ private fun WindowsCard(
         )
         if (o.sleepWarning) {
             Text(
-                "😴 Du hast kurz geschlafen. Willst du das Zeitfenster heute kürzer machen?",
+                "Du hast kurz geschlafen. Willst du das Zeitfenster heute kürzer machen?",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp),
             )
@@ -492,7 +497,7 @@ private fun TrainingMinutesCard(workouts: List<WorkoutWithSets>, o: TrainingOver
             Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.Flag, null, tint = SPORT)
                 Text(
-                    "  Ironman-Weg: " + (o.nextGoalStep?.let { "nächster Schritt „$it“" } ?: "alle Schritte erledigt 🎉") +
+                    " Ironman-Weg: " + (o.nextGoalStep?.let { "nächster Schritt „$it“" } ?: "alle Schritte erledigt") +
                         (if (o.longestRunKm > 0) " · längster Lauf %.1f km".format(o.longestRunKm) else ""),
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -509,7 +514,7 @@ private val CONNECTORS = listOf(
     Connector(
         "Samsung Health",
         "Schritte, Schlaf, Puls, Trainings, Kalorien, Gewicht, Wasser, Ernährung",
-        "Samsung Health öffnen → ☰/⋮ → Einstellungen → Health Connect → Berechtigungen → alles erlauben.",
+        "Samsung Health öffnen → Menü (⋮) → Einstellungen → Health Connect → Berechtigungen → alles erlauben.",
     ),
     Connector(
         "MyFitnessPal",

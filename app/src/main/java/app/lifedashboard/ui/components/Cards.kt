@@ -1,5 +1,6 @@
 package app.lifedashboard.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -21,31 +22,35 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.lifedashboard.ui.theme.LocalAppColors
 
-/** Abgerundete Karte im One-UI-Stil. */
+/** Flache Karte mit feinem Rand. Am Bildschirmrand tritt sie beim Scrollen leicht zurück. */
 @Composable
 fun SectionCard(
     modifier: Modifier = Modifier,
     title: String? = null,
     onClick: (() -> Unit)? = null,
+    focus: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val colors = CardDefaults.cardColors(containerColor = LocalAppColors.current.card)
+    val app = LocalAppColors.current
+    val colors = CardDefaults.cardColors(containerColor = app.card, contentColor = MaterialTheme.colorScheme.onSurface)
+    val border = BorderStroke(1.dp, app.hairline)
     val body: @Composable ColumnScope.() -> Unit = {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
             if (title != null) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 8.dp),
+                    modifier = Modifier.padding(bottom = 10.dp),
                 )
             }
             content()
         }
     }
+    val cardModifier = modifier.fillMaxWidth().focusOnScroll(focus)
     if (onClick != null) {
-        Card(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, colors = colors, content = body)
+        Card(onClick = onClick, modifier = cardModifier, shape = MaterialTheme.shapes.large, colors = colors, border = border, content = body)
     } else {
-        Card(modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, colors = colors, content = body)
+        Card(modifier = cardModifier, shape = MaterialTheme.shapes.large, colors = colors, border = border, content = body)
     }
 }
 
@@ -60,11 +65,11 @@ fun EmptyState(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 32.dp),
+            .padding(horizontal = 28.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+        Icon(icon, contentDescription = null, modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(title, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
         Text(
             message,
@@ -82,6 +87,6 @@ fun LoadingState(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        CircularProgressIndicator()
+        CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
     }
 }

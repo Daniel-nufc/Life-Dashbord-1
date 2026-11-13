@@ -13,11 +13,11 @@ import app.lifedashboard.data.db.LifeArea
 /** Jeder Lebensbereich hat eine feste Farbe, ein Symbol und einen Namen – überall gleich. */
 val LifeArea.color: Color
     get() = when (this) {
-        LifeArea.SCHOOL -> Color(0xFF3D7BF7)
-        LifeArea.SPORT -> Color(0xFF1DB370)
-        LifeArea.ETSY -> Color(0xFFF26B1D)
-        LifeArea.JOB -> Color(0xFFE5A400)
-        LifeArea.PRIVATE -> Color(0xFF9B59D9)
+        LifeArea.SCHOOL -> Color(0xFF5B8DEF)
+        LifeArea.SPORT -> Color(0xFF3DBE8B)
+        LifeArea.ETSY -> Color(0xFFE8894A)
+        LifeArea.JOB -> Color(0xFFD4A63A)
+        LifeArea.PRIVATE -> Color(0xFFA28BE0)
     }
 
 val LifeArea.icon: ImageVector

@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
@@ -138,27 +139,38 @@ class ScreenshotTest {
 
     @Test
     @Config(qualifiers = "w384dp-h832dp-xxhdpi")
-    fun handy() = tour("handy")
+    fun handy() = tour("handy", dark = false)
+
+    @Test
+    @Config(qualifiers = "w384dp-h832dp-xxhdpi")
+    fun handyDunkel() = tour("handy-dunkel", dark = true)
 
     @Test
     @Config(qualifiers = "w1138dp-h712dp-land-xhdpi")
-    fun tablet() = tour("tablet")
+    fun tablet() = tour("tablet", dark = false)
 
-    private fun tour(device: String) {
-        compose.setContent { LifeDashboardTheme { LifeDashboardRoot() } }
+    @Test
+    @Config(qualifiers = "w1138dp-h712dp-land-xhdpi")
+    fun tabletDunkel() = tour("tablet-dunkel", dark = true)
+
+    private fun tour(device: String, dark: Boolean) {
+        compose.setContent { LifeDashboardTheme(darkTheme = dark) { LifeDashboardRoot() } }
         settle()
+        assertText("Fortschritt")
         shot(device, "01_heute")
         scrollDown(); shot(device, "02_heute_unten")
 
         tab("Kalender"); shot(device, "03_kalender")
         tab("Aufgaben"); shot(device, "04_aufgaben")
-        tab("Lernen"); shot(device, "05_lernen_klausuren"); assertText("Analysis"); shot(device, "05b_lernen_mathe")
-        tab("Mehr"); shot(device, "06_mehr")
+        tab("Lernen"); shot(device, "05_lernen_klausuren"); assertText("Analysis"); assertText("Plan passt"); shot(device, "05b_lernen_mathe")
 
-        open("Fitness"); shot(device, "07_fitness"); assertText("Sport-Zeitfenster diese Woche"); shot(device, "08_fitness_zeitfenster")
+        tab("Fitness"); shot(device, "07_fitness"); assertText("Ironman-Weg"); shot(device, "07b_fitness_ironman")
+        assertText("Sport-Zeitfenster diese Woche"); shot(device, "08_fitness_zeitfenster")
         scrollDown(); shot(device, "08b_fitness_unten")
-        back()
-        open("Finanzen"); shot(device, "09_finanzen"); back()
+        tab("Finanzen"); shot(device, "09_finanzen")
+
+        tab("Mehr"); shot(device, "06_mehr")
+        open("Fortschritt & Abzeichen"); assertText("Abzeichen"); shot(device, "13_fortschritt"); scrollDown(); shot(device, "13b_fortschritt_abzeichen"); back()
         open("Etsy-Shop"); assertText("Motiv-Pipeline"); shot(device, "10_etsy"); back()
         open("Ziele & Gewohnheiten"); shot(device, "11_ziele"); back()
         open("Handy ↔ Tablet"); assertText("Abgleich-Passwort"); shot(device, "12_abgleich"); back()
@@ -175,8 +187,16 @@ class ScreenshotTest {
         compose.waitForIdle()
     }
 
+    /** Die Liste des Bildschirms (größte scrollbare Fläche) – nicht Dock oder Seitenleiste. */
+    private fun mainList(): androidx.compose.ui.test.SemanticsNodeInteraction {
+        val nodes = compose.onAllNodes(hasScrollAction()).fetchSemanticsNodes()
+        val index = nodes.indices.maxByOrNull { nodes[it].size.width.toLong() * nodes[it].size.height } ?: 0
+        return compose.onAllNodes(hasScrollAction())[index]
+    }
+
     private fun tab(label: String) {
-        compose.onAllNodes(hasText(label) and hasClickAction(), useUnmergedTree = false).onFirst().performClick()
+        compose.onAllNodes((hasText(label) or androidx.compose.ui.test.hasContentDescription(label)) and hasClickAction(), useUnmergedTree = false)
+            .onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         settle()
     }
 
@@ -184,11 +204,11 @@ class ScreenshotTest {
         // Eintrag in der Liste suchen (scrollt bei Bedarf) und öffnen
         val target = hasText(label) and hasClickAction()
         if (compose.onAllNodes(target).fetchSemanticsNodes().isEmpty()) {
-            repeat(6) { compose.onAllNodes(hasScrollAction()).onFirst().performTouchInput { swipeDown() } }
+            runCatching { mainList().performScrollToIndex(0) }
             settle()
         }
         if (compose.onAllNodes(target).fetchSemanticsNodes().isEmpty()) {
-            compose.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText(label))
+            mainList().performScrollToNode(hasText(label))
             settle()
         }
         compose.onAllNodes(target).onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
@@ -201,19 +221,30 @@ class ScreenshotTest {
     }
 
     private fun scrollDown() {
-        val scrollables = compose.onAllNodes(hasScrollAction()).fetchSemanticsNodes()
-        if (scrollables.isNotEmpty()) {
-            compose.onAllNodes(hasScrollAction()).onFirst().performTouchInput { swipeUp() }
+        if (compose.onAllNodes(hasScrollAction()).fetchSemanticsNodes().isNotEmpty()) {
+            mainList().performTouchInput { swipeUp() }
             settle()
         }
     }
 
     private fun assertText(text: String) {
-        fun present() = compose.onAllNodes(hasText(text, substring = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        fun present() = compose.onAllNodes(hasText(text, substring = true, ignoreCase = true), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        // gezielt zur Karte rollen (Wischen kann sie bei langen Seiten überspringen)
+        if (!present()) {
+            runCatching { mainList().performScrollToNode(hasText(text, substring = true, ignoreCase = true)) }
+            settle()
+        }
         var tries = 0
-        while (!present() && tries++ < 4) scrollDown()
-        check(present()) { "Erwarteter Text fehlt: $text" }
+        while (!present() && tries++ < 6) scrollDown()
+        check(present()) {
+            val visible = compose.onAllNodes(androidx.compose.ui.test.isRoot(), useUnmergedTree = true).fetchSemanticsNodes()
+                .flatMap { root -> allTexts(root) }.joinToString(" | ").take(1500)
+            "Erwarteter Text fehlt: $text – sichtbar: $visible"
+        }
     }
+
+    private fun allTexts(node: androidx.compose.ui.semantics.SemanticsNode): List<String> =
+        node.config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.Text) { emptyList() }.map { it.text } + node.children.flatMap { allTexts(it) }
 
     private fun shot(device: String, name: String) {
         compose.waitForIdle()

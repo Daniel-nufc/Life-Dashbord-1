@@ -89,7 +89,7 @@ class GoalsViewModel @Inject constructor(
 
     fun toggleHabit(id: Long, done: Boolean) = launch { repo.toggleHabit(id, LocalDate.now(), done) }
     fun addHabit(title: String, emoji: String, area: LifeArea) = launch {
-        repo.saveHabit(HabitEntity(title = title, emoji = emoji.ifBlank { "⭐" }, area = area, active = true, sortOrder = 99))
+        repo.saveHabit(HabitEntity(title = title, emoji = emoji.trim(), area = area, active = true, sortOrder = 99))
     }
     fun archiveHabit(habit: HabitEntity) = launch { repo.saveHabit(habit.copy(active = false)) }
     fun toggleMilestone(m: MilestoneEntity) = launch { repo.saveMilestone(m.copy(done = !m.done)) }
@@ -210,7 +210,7 @@ fun GoalsScreen(onBack: () -> Unit, viewModel: GoalsViewModel = hiltViewModel())
 private fun HabitRow(status: HabitStatus, viewModel: GoalsViewModel) {
     val color = status.habit.area.color
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-        Checkbox(checked = status.doneToday, onCheckedChange = { viewModel.toggleHabit(status.habit.id, it) })
+        app.lifedashboard.ui.components.CheckMark(checked = status.doneToday, onCheckedChange = { viewModel.toggleHabit(status.habit.id, it) }, color = color)
         Column(Modifier.weight(1f)) {
             Text("${status.habit.emoji} ${status.habit.title}", style = MaterialTheme.typography.bodyLarge)
             status.habit.autoRule?.let { rule ->
@@ -236,7 +236,7 @@ private fun HabitRow(status: HabitStatus, viewModel: GoalsViewModel) {
                 }
             }
         }
-        if (status.streak.current > 0) Pill("🔥 ${status.streak.current}", color)
+        if (status.streak.current > 0) Pill("${status.streak.current} Tage", color)
         IconButton(onClick = { viewModel.archiveHabit(status.habit) }) {
             Icon(Icons.Rounded.Delete, "Gewohnheit entfernen", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -256,7 +256,7 @@ private fun GoalCard(item: GoalWithMilestones, viewModel: GoalsViewModel) {
                 Text(item.goal.title, style = MaterialTheme.typography.titleMedium)
                 val next = item.nextStep
                 Text(
-                    if (next != null) "Nächster Schritt: ${next.title}" else "Geschafft! 🎉",
+                    if (next != null) "Nächster Schritt: ${next.title}" else "Geschafft!",
                     style = MaterialTheme.typography.bodyMedium,
                     color = color,
                     fontWeight = FontWeight.Medium,
@@ -264,18 +264,14 @@ private fun GoalCard(item: GoalWithMilestones, viewModel: GoalsViewModel) {
             }
             Pill("${(item.progress * 100).toInt()} %", color)
         }
-        LinearProgressIndicator(
-            progress = { item.progress },
-            color = color,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
-        )
+        app.lifedashboard.ui.components.Meter(item.progress, color = color, modifier = Modifier.padding(vertical = 10.dp))
         item.goal.description?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (expanded) {
             item.milestones.forEach { m ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = m.done, onCheckedChange = { viewModel.toggleMilestone(m) })
+                    app.lifedashboard.ui.components.CheckMark(checked = m.done, onCheckedChange = { viewModel.toggleMilestone(m) }, color = color)
                     Text(
                         m.title,
                         textDecoration = if (m.done) TextDecoration.LineThrough else null,

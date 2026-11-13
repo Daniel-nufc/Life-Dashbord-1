@@ -88,10 +88,10 @@ fun ReviewScreen(onBack: () -> Unit, viewModel: ReviewViewModel = hiltViewModel(
                         Text("Woche ab ${r.weekStart.friendly()}", color = Color.White.copy(alpha = 0.85f))
                         Text("${r.done} von ${r.planned} Blöcken erledigt", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         listOf(
-                            "📚 ${r.studyMinutes} Min Fokus · ${r.homeworkDone} Hausaufgaben",
-                            "🏃 ${r.workouts} Trainings · ${r.workoutMinutes} Min",
-                            "🔥 Gewohnheiten ${r.habitRate} %",
-                            "💶 Ausgaben ${r.spentCents.euro()} · 🛍️ Etsy ${r.etsyRevenueCents.euro()}",
+                            "${r.studyMinutes} Min Fokus · ${r.homeworkDone} Hausaufgaben",
+                            "${r.workouts} Trainings · ${r.workoutMinutes} Min",
+                            "Gewohnheiten ${r.habitRate} %",
+                            "Ausgaben ${r.spentCents.euro()} · Etsy ${r.etsyRevenueCents.euro()}",
                         ).forEach { Text(it, color = Color.White) }
                     }
                 }

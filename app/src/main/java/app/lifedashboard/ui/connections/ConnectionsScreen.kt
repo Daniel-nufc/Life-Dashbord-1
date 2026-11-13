@@ -162,7 +162,7 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
                         }
                         calendars.forEach { cal ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(checked = cal.id in selected, onCheckedChange = { viewModel.toggleCalendar(cal.id, it) })
+                                app.lifedashboard.ui.components.CheckMark(checked = cal.id in selected, onCheckedChange = { viewModel.toggleCalendar(cal.id, it) })
                                 Box(Modifier.size(12.dp).background(Color(cal.color), CircleShape))
                                 Column(Modifier.padding(start = 10.dp)) {
                                     Text(cal.name, style = MaterialTheme.typography.bodyLarge)

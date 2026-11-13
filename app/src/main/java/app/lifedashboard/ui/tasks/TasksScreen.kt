@@ -137,7 +137,7 @@ fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
                 if (sections.isEmpty()) {
                     item {
                         SectionCard {
-                            EmptyState(Icons.Rounded.TaskAlt, "Nichts offen 🎉", "Neue Hausaufgabe oder Aufgabe? Tippe unten auf „Neu“.")
+                            EmptyState(Icons.Rounded.TaskAlt, "Nichts offen", "Neue Hausaufgabe oder Aufgabe? Tippe unten auf „Neu“.")
                         }
                     }
                 }

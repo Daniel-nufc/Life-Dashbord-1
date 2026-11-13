@@ -21,7 +21,28 @@ data class StudyExam(
     /** 1 = leicht … 5 = schwer */
     val difficulty: Int,
     val topics: List<StudyTopic>,
+    /** Lernzeit, wenn (noch) keine Themen eingetragen sind – ein Test braucht weniger als eine Klausur. */
+    val defaultMinutes: Int = StudyPlanner.DEFAULT_MINUTES_WITHOUT_TOPICS,
+    /** Zuschlag, wenn das Fach bisher unter dem Ziel liegt (1,0 = kein Zuschlag). */
+    val effortFactor: Double = 1.0,
 )
+
+/** Wie realistisch ist der Lernplan einer Klausur? */
+enum class PlanHealth { DONE, ON_TRACK, TIGHT, SHORT }
+
+data class StudyForecast(
+    val examId: Long,
+    /** Lernzeit, die noch nötig ist */
+    val neededMinutes: Int,
+    /** Davon bis zur Klausur eingeplant */
+    val plannedMinutes: Int,
+    val firstDay: LocalDate?,
+    /** Minuten pro Tag (inkl. Wiederholung) – für die kleine Vorschau */
+    val perDay: List<Pair<LocalDate, Int>>,
+    val health: PlanHealth,
+) {
+    val missingMinutes: Int get() = (neededMinutes - plannedMinutes).coerceAtLeast(0)
+}
 
 /** Eine geplante Lerneinheit an einem Tag. */
 data class StudyAllocation(
@@ -57,10 +78,14 @@ object StudyPlanner {
     const val DEFAULT_MINUTES_WITHOUT_TOPICS = 240
 
     fun remainingMinutes(exam: StudyExam): Int = if (exam.topics.isEmpty()) {
-        (DEFAULT_MINUTES_WITHOUT_TOPICS * difficultyFactor(exam.difficulty)).roundToInt()
+        (exam.defaultMinutes * difficultyFactor(exam.difficulty) * exam.effortFactor).roundToInt()
     } else exam.topics.sumOf { topic ->
         topic.effortMinutes * (100 - topic.progress.coerceIn(0, 100)) / 100.0
-    }.let { (it * difficultyFactor(exam.difficulty)).roundToInt() }
+    }.let { (it * difficultyFactor(exam.difficulty) * exam.effortFactor).roundToInt() }
+
+    /** Liegt der Schnitt unter dem Ziel, gibt es bis zu 30 % mehr Lernzeit (pro fehlendem Punkt 6 %). */
+    fun effortFactor(averagePoints: Double?, targetPoints: Double): Double =
+        if (averagePoints == null) 1.0 else (1.0 + (targetPoints - averagePoints).coerceIn(0.0, 5.0) * 0.06)
 
     fun plan(
         exams: List<StudyExam>,
@@ -69,7 +94,12 @@ object StudyPlanner {
         dailyCapMinutes: Int = 120,
         blockMinutes: Int = 25,
         reviewMinutes: Int = 25,
+        /** Längster Vorlauf, wenn die Zeit in [leadDays] nicht reicht */
+        maxLeadDays: Int = 21,
+        /** Wie viele Minuten an diesem Tag realistisch zum Lernen frei sind (Training, Job, langer Schultag …) */
+        capacity: (LocalDate) -> Int = { dailyCapMinutes },
     ): List<StudyAllocation> {
+        fun cap(date: LocalDate) = minOf(dailyCapMinutes, capacity(date)).coerceAtLeast(0)
         val upcoming = exams.filter { it.date.isAfter(today) }.sortedBy { it.date }
         val used = mutableMapOf<LocalDate, Int>()
         val result = mutableListOf<StudyAllocation>()
@@ -79,7 +109,7 @@ object StudyPlanner {
             val dayBefore = exam.date.minusDays(1)
             // 1) Wiederholung am Vortag (falls nicht heute schon der Vortag vorbei ist)
             if (!dayBefore.isBefore(today)) {
-                val minutes = minOf(reviewMinutes, dailyCapMinutes - (used[dayBefore] ?: 0))
+                val minutes = minOf(reviewMinutes, maxOf(cap(dayBefore), reviewMinutes) - (used[dayBefore] ?: 0))
                 if (minutes > 0) {
                     result += StudyAllocation(dayBefore, exam.id, null, "Wiederholung ${exam.subjectName}", minutes, isReview = true)
                     used[dayBefore] = (used[dayBefore] ?: 0) + minutes
@@ -87,12 +117,27 @@ object StudyPlanner {
             }
 
             // 2) Lerntage: von max(heute, Klausur − leadDays) bis Vortag − 1
-            val firstDay = maxOf(today, exam.date.minusDays(leadDays.toLong()))
+            var firstDay = maxOf(today, exam.date.minusDays(leadDays.toLong()))
             val lastDay = dayBefore.minusDays(1)
+            // Reicht die freie Zeit im normalen Vorlauf nicht, fängt der Plan früher an (statt Lernzeit zu streichen)
+            if (!lastDay.isBefore(firstDay)) {
+                val needed = remainingMinutes(exam)
+                fun room(from: LocalDate): Int {
+                    var sum = 0
+                    var d = from
+                    while (!d.isAfter(lastDay)) {
+                        sum += roundDownToBlocks(cap(d) - (used[d] ?: 0), blockMinutes).coerceAtLeast(0)
+                        d = d.plusDays(1)
+                    }
+                    return sum
+                }
+                val earliest = maxOf(today, exam.date.minusDays(maxLeadDays.toLong()))
+                while (firstDay.isAfter(earliest) && room(firstDay) < needed) firstDay = firstDay.minusDays(1)
+            }
             if (lastDay.isBefore(firstDay)) {
                 // Zu knapp (Klausur morgen): heute = Vortag → so viel lernen wie das Tageslimit erlaubt
                 if (!dayBefore.isBefore(today)) {
-                    val left = roundDownToBlocks(dailyCapMinutes - (used[dayBefore] ?: 0), blockMinutes)
+                    val left = roundDownToBlocks(maxOf(cap(dayBefore), blockMinutes * 2) - (used[dayBefore] ?: 0), blockMinutes)
                     val minutes = minOf(left, roundToBlocks(remainingMinutes(exam), blockMinutes))
                     if (minutes > 0) {
                         val topic = exam.topics.firstOrNull { it.progress < 100 }
@@ -116,7 +161,7 @@ object StudyPlanner {
                 val date = firstDay.plusDays(i.toLong())
                 val target = ceil(remaining * weights[i] / weights.drop(i).sum().coerceAtLeast(weights[i]))
                     .let { roundToBlocks(it.toInt().coerceAtLeast(blockMinutes), blockMinutes) }
-                val free = dailyCapMinutes - (used[date] ?: 0)
+                val free = cap(date) - (used[date] ?: 0)
                 val minutes = minOf(target, roundDownToBlocks(free, blockMinutes), roundToBlocks(remaining, blockMinutes))
                 if (minutes <= 0) continue
                 val topic = openTopics.getOrNull(topicIndex % maxOf(1, openTopics.size))
@@ -135,6 +180,24 @@ object StudyPlanner {
         }
         return result.sortedWith(compareBy({ it.date }, { it.isReview }))
     }
+
+    /** Einschätzung je Klausur: passt der Plan, wird es eng, oder fehlt Zeit? */
+    fun forecast(exams: List<StudyExam>, plan: List<StudyAllocation>, today: LocalDate, blockMinutes: Int = 25): Map<Long, StudyForecast> =
+        exams.filter { it.date.isAfter(today) }.associate { exam ->
+            val mine = plan.filter { it.examId == exam.id }
+            val learn = mine.filter { !it.isReview }
+            val needed = remainingMinutes(exam)
+            val planned = learn.sumOf { it.minutes }
+            val perDay = mine.groupBy { it.date }.map { (d, l) -> d to l.sumOf { it.minutes } }.sortedBy { it.first }
+            val health = when {
+                needed <= 0 -> PlanHealth.DONE
+                // weniger als ein Block Unterschied ist nur Rundung
+                needed - planned >= blockMinutes -> PlanHealth.SHORT
+                learn.isNotEmpty() && planned / learn.map { it.date }.toSet().size >= 75 -> PlanHealth.TIGHT
+                else -> PlanHealth.ON_TRACK
+            }
+            exam.id to StudyForecast(exam.id, needed, planned, mine.minOfOrNull { it.date }, perDay, health)
+        }
 
     private fun roundToBlocks(minutes: Int, block: Int): Int = ((minutes + block - 1) / block) * block
     private fun roundDownToBlocks(minutes: Int, block: Int): Int = (minutes / block) * block

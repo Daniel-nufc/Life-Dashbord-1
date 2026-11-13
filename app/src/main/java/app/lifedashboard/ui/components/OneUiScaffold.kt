@@ -17,7 +17,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.lifedashboard.ui.theme.LocalAppColors
+
+/** Höhe des schwebenden Docks am Handy – damit „Neu“-Knöpfe darüber sitzen (Tablet: 0). */
+val LocalDockInset = androidx.compose.runtime.compositionLocalOf { 0.dp }
+
+/** Bereiche, die direkt im Dock liegen, brauchen keinen Zurück-Pfeil. */
+val LocalHideBack = androidx.compose.runtime.compositionLocalOf { false }
 
 /**
  * Bildschirm im One-UI-Stil: große Überschrift oben (viel Platz, damit der Inhalt mit dem
@@ -41,7 +48,7 @@ fun OneUiScaffold(
             .nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        floatingActionButton = floatingActionButton,
+        floatingActionButton = { Box(Modifier.padding(bottom = LocalDockInset.current)) { floatingActionButton() } },
         topBar = {
             LargeTopAppBar(
                 title = {
@@ -49,11 +56,13 @@ fun OneUiScaffold(
                         text = title,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
+                        letterSpacing = (-0.3).sp,
                     )
                 },
-                navigationIcon = navigationIcon,
+                navigationIcon = { if (!LocalHideBack.current) navigationIcon() },
                 actions = actions,
-                expandedHeight = 200.dp,
+                expandedHeight = 148.dp,
                 scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.largeTopAppBarColors(
                     containerColor = background,
@@ -77,9 +86,10 @@ fun PaddingValues.listPadding(): PaddingValues = PaddingValues(
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp),
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        letterSpacing = 1.1.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.padding(start = 8.dp, top = 12.dp, bottom = 2.dp),
     )
 }

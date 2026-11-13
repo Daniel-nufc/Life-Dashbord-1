@@ -38,6 +38,8 @@ data class StudyOverview(
     val plan: List<StudyAllocation>,
     val dueReviews: List<Pair<ExamWithTopics, TopicEntity>>,
     val sessionsThisWeek: List<StudySessionEntity>,
+    /** Einschätzung je Klausur (passt / eng / Zeit fehlt), Schlüssel = Klausur-ID */
+    val forecasts: Map<Long, app.lifedashboard.planner.StudyForecast> = emptyMap(),
 ) {
     /** Schnitt über alle Fächer mit Noten (jedes Fach gleich gewichtet). */
     val overallAverage: Double? get() = grades.mapNotNull { it.average }.takeIf { it.isNotEmpty() }?.average()
@@ -48,37 +50,63 @@ data class StudyOverview(
 class StudyRepository @Inject constructor(
     private val dao: StudyDao,
     private val timetable: TimetableRepository,
+    private val routines: RoutineRepository,
+    private val jobs: JobRepository,
+    private val schoolCalendar: SchoolCalendarRepository,
 ) {
     private companion object {
         val LATE_EVENING: java.time.LocalTime = java.time.LocalTime.of(21, 0)
+        /** Ziel-Abischnitt – liegt ein Fach darunter, bekommt es etwas mehr Lernzeit. */
+        const val TARGET_GRADE = 1.7
     }
 
     fun overview(today: LocalDate = LocalDate.now()): Flow<StudyOverview> {
         val weekStart = today.minusDays((today.dayOfWeek.value - 1).toLong())
         val fromMillis = weekStart.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        // Was den Tag sonst füllt: feste Blöcke (Floorball …), Job-Schichten, Ferien
+        val busy = combine(routines.routines, jobs.between(today, today.plusDays(35)), schoolCalendar.ranges) { r, j, h -> Triple(r, j, h) }
         return combine(
             dao.observeExams(),
             dao.observeTopics(),
             dao.observeGrades(),
             timetable.subjects,
-            dao.observeSessionsSince(fromMillis),
-        ) { exams, topics, grades, subjects, sessions ->
+            combine(dao.observeSessionsSince(fromMillis), busy) { s, b -> s to b },
+        ) { exams, topics, grades, subjects, sessionsAndBusy ->
+            val (sessions, busyDays) = sessionsAndBusy
+            val (routineBlocks, shifts, freeRanges) = busyDays
+            val targetPoints = app.lifedashboard.planner.Grades.pointsForGrade(TARGET_GRADE)
+            val averageBySubject = grades.groupBy { it.subjectId }
+                .mapValues { (_, g) -> app.lifedashboard.planner.Grades.average(g.map { it.points to it.weight }) }
+            /** Realistische Lernzeit an einem Tag: an Trainings- und Arbeitstagen weniger, an freien Tagen mehr. */
+            fun capacity(date: LocalDate): Int {
+                val free = date.dayOfWeek.value >= 6 || freeRanges.any { date in it }
+                val routineMinutes = routineBlocks.filter { it.active && date.dayOfWeek in it.days() }.sumOf { it.endMinute - it.startMinute }
+                val shiftMinutes = shifts.filter { it.dateEpochDay == date.toEpochDay() }.sumOf { it.endMinute - it.startMinute }
+                val base = if (free) 150 else 120
+                return (base - (routineMinutes / 2).coerceAtMost(60) - shiftMinutes * 2 / 5).coerceAtLeast(25)
+            }
             val subjectById = subjects.associateBy { it.id }
             val topicsByExam = topics.groupBy { it.examId }
             val withTopics = exams.map { ExamWithTopics(it, subjectById[it.subjectId], topicsByExam[it.id].orEmpty()) }
-            val plan = StudyPlanner.plan(
-                exams = withTopics.map { e ->
-                    StudyExam(
-                        id = e.exam.id,
-                        subjectName = e.subject?.name ?: e.exam.title,
-                        date = e.date,
-                        difficulty = e.subject?.difficulty ?: 3,
-                        topics = e.topics.map { StudyTopic(it.id, it.title, it.effortMinutes, it.progress) },
-                    )
-                },
-                // Ab 21 Uhr passt heute nichts mehr hinein → Lernplan startet morgen (sonst ginge die Zeit verloren)
-                today = if (today == LocalDate.now() && java.time.LocalTime.now().isAfter(LATE_EVENING)) today.plusDays(1) else today,
-            )
+            val studyExams = withTopics.map { e ->
+                StudyExam(
+                    id = e.exam.id,
+                    subjectName = e.subject?.name ?: e.exam.title,
+                    date = e.date,
+                    difficulty = e.subject?.difficulty ?: 3,
+                    topics = e.topics.map { StudyTopic(it.id, it.title, it.effortMinutes, it.progress) },
+                    defaultMinutes = when (e.exam.kind) {
+                        app.lifedashboard.data.db.ExamKind.KLAUSUR -> 240
+                        app.lifedashboard.data.db.ExamKind.TEST -> 120
+                        else -> 180
+                    },
+                    effortFactor = StudyPlanner.effortFactor(averageBySubject[e.exam.subjectId], targetPoints),
+                )
+            }
+            // Ab 21 Uhr passt heute nichts mehr hinein → Lernplan startet morgen (sonst ginge die Zeit verloren)
+            val planFrom = if (today == LocalDate.now() && java.time.LocalTime.now().isAfter(LATE_EVENING)) today.plusDays(1) else today
+            val plan = StudyPlanner.plan(exams = studyExams, today = planFrom, dailyCapMinutes = 150, capacity = ::capacity)
+            val forecasts = StudyPlanner.forecast(studyExams, plan, today)
             val todayEpoch = today.toEpochDay()
             val due = withTopics.filter { it.daysLeft(today) >= 0 }.flatMap { e ->
                 e.topics.filter { t -> t.nextReviewEpochDay != null && t.nextReviewEpochDay <= todayEpoch }.map { e to it }
@@ -90,6 +118,7 @@ class StudyRepository @Inject constructor(
                 plan = plan,
                 dueReviews = due,
                 sessionsThisWeek = sessions,
+                forecasts = forecasts,
             )
         }
     }

@@ -47,6 +47,10 @@ data class AppSettings(
     val hiddenTodayCards: Set<String>,
     /** Trainingsplan: längster Lauf (km), lockeres Tempo (min/km), Einheiten, Ausstattung, Planstart */
     val training: TrainingSettings = TrainingSettings(),
+    /** Zuletzt gefeiertes Level (0 = noch nie angezeigt) – damit der Level-Aufstieg nur einmal erscheint */
+    val lastSeenLevel: Int = 0,
+    /** Erscheinungsbild: SYSTEM, LIGHT oder DARK */
+    val themeMode: String = "SYSTEM",
 ) {
     /**
      * A/B-Woche als Zählung der Schulwochen ab dem Ankerdatum (KW 46/2026 = A).
@@ -73,9 +77,10 @@ data class TrainingSettings(
 )
 
 /** Alle Karten, die auf „Heute“ angezeigt werden können. */
-val ALL_TODAY_CARDS = listOf("NOW", "TASKS", "EXAM", "TIMELINE", "HABITS", "MONEY", "ETSY")
+val ALL_TODAY_CARDS = listOf("PROGRESS", "NOW", "TASKS", "EXAM", "TIMELINE", "HABITS", "MONEY", "ETSY")
 
 fun todayCardLabel(key: String) = when (key) {
+    "PROGRESS" -> "Level, Serie & Wochenziele"
     "NOW" -> "Jetzt & Als Nächstes"
     "TASKS" -> "Hausaufgaben & Aufgaben"
     "EXAM" -> "Nächste Klausur"
@@ -108,8 +113,13 @@ class SettingsRepository @Inject constructor(
                 bufferCents = p[BUFFER] ?: 0L,
                 jobWageCents = p[JOB_WAGE] ?: 1390L,
                 todayCards = (p[TODAY_CARDS]?.split(',')?.filter { it.isNotBlank() } ?: emptyList()).let { saved ->
-                    saved.filter { it in ALL_TODAY_CARDS } + ALL_TODAY_CARDS.filter { it !in saved }
+                    // Neue Karten kommen an ihren Standard-Platz, die eigene Reihenfolge bleibt erhalten
+                    val known = saved.filter { it in ALL_TODAY_CARDS }.toMutableList()
+                    ALL_TODAY_CARDS.forEachIndexed { index, key -> if (key !in known) known.add(minOf(index, known.size), key) }
+                    known
                 },
+                lastSeenLevel = p[LAST_LEVEL] ?: 0,
+                themeMode = p[THEME_MODE] ?: "SYSTEM",
                 hiddenTodayCards = p[HIDDEN_CARDS]?.split(',')?.filter { it.isNotBlank() }?.toSet() ?: emptySet(),
                 training = TrainingSettings(
                     windowsPerWeek = p[T_WINDOWS] ?: 3,
@@ -128,6 +138,14 @@ class SettingsRepository @Inject constructor(
                 systemCalendarIds = p[SYSTEM_CALENDARS].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
             )
         }
+
+    suspend fun setLastSeenLevel(level: Int) {
+        dataStore.edit { it[LAST_LEVEL] = level }
+    }
+
+    suspend fun setThemeMode(mode: String) {
+        dataStore.edit { it[THEME_MODE] = mode }
+    }
 
     suspend fun setAppLockEnabled(enabled: Boolean) {
         dataStore.edit { it[APP_LOCK] = enabled }
@@ -203,6 +221,8 @@ class SettingsRepository @Inject constructor(
     }
 
     private companion object {
+        val LAST_LEVEL = intPreferencesKey("last_seen_level")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
         val APP_LOCK = booleanPreferencesKey("app_lock_enabled")
         val LOCK_TIMEOUT = intPreferencesKey("lock_timeout_minutes")
         val AB_REFERENCE = stringPreferencesKey("ab_reference_monday")

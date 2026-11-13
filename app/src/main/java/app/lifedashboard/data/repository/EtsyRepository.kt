@@ -50,7 +50,7 @@ fun DesignStatus.nextStepHint(): String = when (this) {
     DesignStatus.TEST_PRINT -> "Mockup (Motiv auf Tasse) + Titelbild"
     DesignStatus.MOCKUP -> "Listing schreiben: Titel, Tags, KI-Hinweis"
     DesignStatus.LISTING -> "Hochladen: KI-Häkchen + „Designed by“ setzen"
-    DesignStatus.ONLINE -> "Online 🎉"
+    DesignStatus.ONLINE -> "Online"
 }
 
 @Singleton

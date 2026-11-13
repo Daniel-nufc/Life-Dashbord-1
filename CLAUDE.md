@@ -3,8 +3,8 @@
 Private Android-App **Life Dashboard** für Daniel (Schüler, 11. Klasse, OSZ Max Taut Berlin). Läuft auf Galaxy S25 (Android 17) und Galaxy Tab S8+ (Android 16).
 Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (vorher „Auto Blocker“ kurz ausschalten).
 
-**Aktueller Stand: Version 23** (versionCode 23, Datenbank-Version 12, 104 Tests grün).
-**Arbeits-Branch:** `claude/life-dashboard-android-1h4pmk`. Dort liegt der ganze Code. `main` enthält nur den ersten, leeren Commit.
+**Aktueller Stand: Version 24** (versionCode 24, Datenbank-Version 12 – unverändert, alle Tests grün).
+**Arbeits-Branch:** `ccr-4b9f7b2a-x8cb8a` (Version 24, baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Dort liegt der ganze Code. `main` enthält nur den ersten, leeren Commit.
 
 ## Wie mit Daniel arbeiten
 - Immer **auf Deutsch**, einfach und kurz erklären. Daniel ist kein Entwickler und liest oft auf dem Handy.
@@ -22,6 +22,13 @@ Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (
 - Notenpunkte 0–15, Ziel Abi 1,7. Fächer u. a. TuMM = Management, TuMT = Technik, PM = Projektmanagement, BIO-Pro = Bio, DS = Darstellendes Spiel.
 - Ziel Ironman (zuerst 10 km). Minijob als Baustellenhelfer. Taschengeld 20 € am 21. (DKB) + 20 € bar vom Opa. Erspartes = geschützter **Puffer**. Sparziele: Führerschein, Feriencamp.
 - Etsy-Shop mit digitalen Downloads (Motiv-Pipeline). Die Etsy-API kommt später, sobald der Shop live ist (`docs/ETSY_API.md`).
+
+## Design & Motivation (seit Version 24)
+- Look „ruhig & edel“: feste Farben in `ui/theme/Theme.kt` (kein Dynamic Color mehr), eine Akzentfarbe (Grün), Bereichsfarben nur als kleine Markierung, feine Kartenränder statt Schatten. **Keine Emojis in App-Texten**, keine bunten Verläufe. Hell/Dunkel/Automatisch unter Mehr → Erscheinungsbild.
+- Bausteine in `ui/components/`: `SectionCard`, `GradientCard` (= dunkle Kopfkarte), `TileHeader`, `Pill`, `ProgressRing`, `Meter`, `CheckMark` (animierter Haken statt Checkbox), `Modifier.focusOnScroll()` (Rubriken am Bildschirmrand werden leicht kleiner). Nicht `val app = …` als lokalen Namen nehmen (verdeckt das Paket `app.`).
+- Navigation `ui/navigation/`: Handy = schwebendes Dock unten (`FloatingDock`) + Seitenleiste per Wisch von links; Tablet = Dock links (`SideDock`), aufklappbar. Fitness und Finanzen liegen direkt im Dock.
+- Motivation: `planner/Progress.kt` (Punkte, Level, Serie mit Joker, Wochenringe, Ironman-Weg in 7 Etappen, Abzeichen, Abend-Erinnerung) + `data/repository/ProgressRepository.kt`. **Alles wird aus vorhandenen Tabellen berechnet – keine neue Tabelle, keine Migration.** Anzeige: `ui/progress/`. Weiterhin gilt: keine Sportart vorschreiben.
+- Lernplan: `StudyPlanner.plan` rechnet mit der echten freien Zeit pro Tag (Training, Job, Ferien), fängt früher an, wenn es knapp wird (bis 21 Tage), gibt schwachen Fächern mehr Zeit; `StudyPlanner.forecast` liefert „Plan passt / Wird eng / Zeit fehlt“ (Anzeige in der Klausur-Karte unter Lernen).
 
 ## Technik
 - Kotlin 2.2.21, AGP 8.13.0, Gradle 8.14.3, compileSdk/targetSdk 36, minSdk 34, KSP, Hilt 2.57.2, Compose BOM 2025.05.00, Material 3.
@@ -64,11 +71,11 @@ Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (
    - `lifedashboard-release.jks` (Alias `lifedashboard`, Store- und Key-Passwort sind gleich), Passwort in `1_SIGNING_STORE_PASSWORD.txt`
    - alternativ `2_SIGNING_KEYSTORE_BASE64.txt` → `base64 -d > lifedashboard-release.jks`
    - SHA-256 des Zertifikats: `b32c0d0261e207b39411391dd7a6a4f3df17c81f81239220d47c4b445f836134`. **Muss gleich bleiben**, sonst lässt sich das Update nicht installieren.
-3. Bauen (nächste Version = 24):
+3. Bauen (nächste Version = 25):
    ```bash
-   export SIGNING_KEYSTORE_PATH=/pfad/lifedashboard-release.jks SIGNING_STORE_PASSWORD='…' GITHUB_RUN_NUMBER=24
+   export SIGNING_KEYSTORE_PATH=/pfad/lifedashboard-release.jks SIGNING_STORE_PASSWORD='…' GITHUB_RUN_NUMBER=25
    ./gradlew --max-workers=2 :planner:test :app:testDebugUnitTest :app:assembleRelease
-   # → app/build/outputs/apk/release/app-release.apk  (als LifeDashboard-24.apk schicken)
+   # → app/build/outputs/apk/release/app-release.apk  (als LifeDashboard-25.apk schicken)
    ```
    Prüfen: `apksigner verify --print-certs …apk` muss den SHA-256 oben zeigen.
 - Maven Central antwortet manchmal mit **429** → mit Pause wiederholen.

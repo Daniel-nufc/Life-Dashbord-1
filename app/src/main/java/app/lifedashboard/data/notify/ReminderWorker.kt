@@ -39,6 +39,7 @@ class ReminderWorker @AssistedInject constructor(
     private val finance: FinanceRepository,
     private val automation: app.lifedashboard.data.repository.AutomationRepository,
     private val training: app.lifedashboard.data.repository.TrainingRepository,
+    private val progress: app.lifedashboard.data.repository.ProgressRepository,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -74,7 +75,7 @@ class ReminderWorker @AssistedInject constructor(
             }
             notifier.send(
                 "morning", Channel.PLAN,
-                "Guten Morgen, $name ☀️",
+                "Guten Morgen, $name",
                 (if (parts.isEmpty()) "Heute ist viel frei." else parts.joinToString(" · ")) + " – schau kurz in deinen Tagesplan.",
                 ignoreLimit = true,
             )
@@ -87,7 +88,7 @@ class ReminderWorker @AssistedInject constructor(
                 notifier.send(
                     "block:${block.id}", Channel.PLAN,
                     "Um ${minutesToTimeText(block.startMinute)}: ${block.title}",
-                    "Nur anfangen – 5 Minuten reichen für den Start. Der Rest kommt von allein. 💪",
+                    "Nur anfangen – 5 Minuten reichen für den Start. Der Rest kommt von allein.",
                 )
             }
 
@@ -123,7 +124,17 @@ class ReminderWorker @AssistedInject constructor(
 
         // 5) Training heute (ca. 1–2 Std vorher)
         day.routines.filter { it.area == LifeArea.SPORT && it.startMinute - nowMin in 60..120 }.forEach { r ->
-            notifier.send("training:${r.id}", Channel.SPORT, "Heute ${r.title} um ${minutesToTimeText(r.startMinute)}", "Tasche packen, was trinken – los geht's! 🏑")
+            notifier.send("training:${r.id}", Channel.SPORT, "Heute ${r.title} um ${minutesToTimeText(r.startMinute)}", "Tasche packen, was trinken – los geht's!")
+        }
+
+        // 5b) Motivation am frühen Abend: Serie retten, knapp vor dem nächsten Level oder Wochenziel in Reichweite.
+        //     Höchstens eine pro Tag – und nur, wenn wirklich etwas auf dem Spiel steht.
+        if (now.hour in 17..20) {
+            runCatching { progress.observe(today).first() }.getOrNull()?.let { state ->
+                app.lifedashboard.planner.Progress.nudge(state, today)?.let { (title, text) ->
+                    notifier.send("motivation", Channel.SPORT, title, text)
+                }
+            }
         }
 
         // 6) Budget zu 80 % erreicht (einmal pro Kategorie und Monat)
@@ -141,8 +152,8 @@ class ReminderWorker @AssistedInject constructor(
         // 7) Wochenrückblick + automatischer Wochenentwurf sonntags ab 18 Uhr
         if (today.dayOfWeek == DayOfWeek.SUNDAY && now.hour in 18..21) {
             runCatching { engine.planDays(today.plusDays(1), 7) }
-            notifier.send("weekplan", Channel.PLAN, "Dein Wochenplan-Entwurf ist fertig 🗓️", "Im Kalender ansehen und mit einem Tipp übernehmen – oder einzelne Blöcke ändern.", ignoreLimit = true)
-            notifier.send("review", Channel.REVIEW, "Dein Wochenrückblick ist da 📊", "Was lief gut, was nicht – und ein Plan für die neue Woche. Dauert 2 Minuten.", ignoreLimit = true)
+            notifier.send("weekplan", Channel.PLAN, "Dein Wochenplan-Entwurf ist fertig", "Im Kalender ansehen und mit einem Tipp übernehmen – oder einzelne Blöcke ändern.", ignoreLimit = true)
+            notifier.send("review", Channel.REVIEW, "Dein Wochenrückblick ist da", "Was lief gut, was nicht – und ein Plan für die neue Woche. Dauert 2 Minuten.", ignoreLimit = true)
         }
     }
 

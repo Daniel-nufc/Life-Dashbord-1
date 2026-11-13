@@ -68,6 +68,7 @@ import app.lifedashboard.data.db.TopicEntity
 import app.lifedashboard.data.repository.ExamWithTopics
 import app.lifedashboard.data.repository.StudyOverview
 import app.lifedashboard.planner.Grades
+import app.lifedashboard.ui.components.readable
 import app.lifedashboard.planner.ReviewRating
 import app.lifedashboard.ui.components.GradientCard
 import app.lifedashboard.ui.components.LoadingState
@@ -232,7 +233,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.examsTab(
         }
     }
     items(data.upcoming, key = { it.exam.id }) { exam ->
-        ExamCard(exam, viewModel, onEdit)
+        ExamCard(exam, data.forecasts[exam.exam.id], viewModel, onEdit)
     }
     val past = data.exams.filter { it.daysLeft() < 0 }
     if (past.isNotEmpty()) {
@@ -252,13 +253,13 @@ private fun NextExamHero(next: ExamWithTopics) {
     GradientCard(ExamGradient) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Nächste Klausur", color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.labelLarge)
-                Text(next.subject?.name ?: next.exam.title, color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("NÄCHSTE KLAUSUR", color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.labelMedium, letterSpacing = 1.1.sp)
+                Text(next.subject?.name ?: next.exam.title, color = Color.White, style = MaterialTheme.typography.headlineSmall)
                 Text(next.date.friendly() + (next.exam.title.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""), color = Color.White)
                 Spacer(Modifier.height(8.dp))
                 Text(
                     when {
-                        days == 0 -> "Heute! Du packst das. 💪"
+                        days == 0 -> "Heute! Du packst das."
                         days == 1 -> "Morgen – heute nur noch wiederholen und früh schlafen."
                         days <= 7 -> "Noch $days Tage. Jeden Tag ein Stück – keine Ausreden."
                         else -> "Noch $days Tage. Jetzt anfangen = später entspannt."
@@ -267,9 +268,9 @@ private fun NextExamHero(next: ExamWithTopics) {
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            ProgressRing(next.progress / 100f, Color.White, size = 84.dp, trackColor = Color.White.copy(alpha = 0.25f)) {
+            ProgressRing(next.progress / 100f, Color(0xFF6FD3A6), size = 84.dp, stroke = 5.dp, trackColor = Color.White.copy(alpha = 0.12f)) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("$days", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                    Text("$days", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
                     Text(if (days == 1) "Tag" else "Tage", color = Color.White, style = MaterialTheme.typography.labelSmall)
                 }
             }
@@ -277,8 +278,66 @@ private fun NextExamHero(next: ExamWithTopics) {
     }
 }
 
+/**
+ * Lernplan einer Klausur auf einen Blick: passt die Zeit, wird es eng oder fehlt etwas?
+ * Darunter ein Balken pro Tag bis zur Klausur (Höhe = geplante Minuten).
+ */
 @Composable
-private fun ExamCard(exam: ExamWithTopics, viewModel: LearnViewModel, onEdit: (ExamEntity) -> Unit) {
+private fun PlanStrip(forecast: app.lifedashboard.planner.StudyForecast, examDate: LocalDate, accent: Color) {
+    val tones = app.lifedashboard.ui.theme.LocalAppColors.current
+    val today = LocalDate.now()
+    fun hours(min: Int) = if (min >= 60) "%d:%02d Std".format(min / 60, min % 60) else "$min Min"
+    val (dot, headline, detail) = when (forecast.health) {
+        app.lifedashboard.planner.PlanHealth.DONE -> Triple(tones.positive, "Alles gelernt", "Bis zur Klausur nur noch kurz wiederholen.")
+        app.lifedashboard.planner.PlanHealth.ON_TRACK -> Triple(
+            tones.positive, "Plan passt",
+            "${hours(forecast.plannedMinutes)} verteilt" + (forecast.firstDay?.let { " · Start ${it.friendly(today)}" } ?: ""),
+        )
+        app.lifedashboard.planner.PlanHealth.TIGHT -> Triple(
+            tones.warning, "Wird eng",
+            "${hours(forecast.plannedMinutes)} in wenigen Tagen. Lieber heute schon anfangen.",
+        )
+        app.lifedashboard.planner.PlanHealth.SHORT -> Triple(
+            MaterialTheme.colorScheme.error, "Zeit fehlt",
+            "${hours(forecast.missingMinutes)} passen nicht mehr hinein. Heute anfangen oder Themen kürzen.",
+        )
+    }
+    Column(Modifier.padding(bottom = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.size(8.dp).background(dot, CircleShape))
+            Text(headline, style = MaterialTheme.typography.labelLarge)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        }
+        val days = java.time.temporal.ChronoUnit.DAYS.between(today, examDate).toInt().coerceIn(0, 21)
+        if (days >= 2 && forecast.perDay.isNotEmpty()) {
+            val byDay = forecast.perDay.toMap()
+            val max = (forecast.perDay.maxOf { it.second }).coerceAtLeast(60)
+            val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+            val bar = accent.readable()
+            androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().padding(top = 10.dp).height(34.dp)) {
+                val gap = 3.dp.toPx()
+                val w = (size.width - gap * (days - 1)) / days
+                val radius = androidx.compose.ui.geometry.CornerRadius(minOf(w / 2, 3.dp.toPx()))
+                for (i in 0 until days) {
+                    val minutes = byDay[today.plusDays(i.toLong())] ?: 0
+                    val x = i * (w + gap)
+                    drawRoundRect(track, androidx.compose.ui.geometry.Offset(x, size.height - 3.dp.toPx()), androidx.compose.ui.geometry.Size(w, 3.dp.toPx()), radius)
+                    if (minutes > 0) {
+                        val h = (size.height * minutes / max).coerceAtLeast(5.dp.toPx())
+                        drawRoundRect(bar, androidx.compose.ui.geometry.Offset(x, size.height - h), androidx.compose.ui.geometry.Size(w, h), radius)
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("heute", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Klausur", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExamCard(exam: ExamWithTopics, forecast: app.lifedashboard.planner.StudyForecast?, viewModel: LearnViewModel, onEdit: (ExamEntity) -> Unit) {
     var newTopic by remember(exam.exam.id) { mutableStateOf("") }
     var confirmDelete by remember(exam.exam.id) { mutableStateOf(false) }
     val accent = exam.subject?.let { Color(it.colorArgb) } ?: LifeArea.SCHOOL.color
@@ -307,11 +366,8 @@ private fun ExamCard(exam: ExamWithTopics, viewModel: LearnViewModel, onEdit: (E
                 dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Abbrechen") } },
             )
         }
-        LinearProgressIndicator(
-            progress = { exam.progress / 100f },
-            color = accent,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp).height(6.dp).clip(RoundedCornerShape(3.dp)),
-        )
+        app.lifedashboard.ui.components.Meter(exam.progress / 100f, color = accent, modifier = Modifier.padding(vertical = 10.dp))
+        forecast?.let { PlanStrip(it, exam.date, accent) }
         exam.topics.forEach { topic -> TopicRow(topic, accent, viewModel) }
         Row(verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.material3.OutlinedTextField(
@@ -404,7 +460,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.gradesTab(
                     Text(
                         when {
                             avg == null -> "Trag deine ersten Noten ein, dann siehst du, wo du stehst."
-                            avg >= target -> "Du liegst auf Kurs. Weiter so! 🔥"
+                            avg >= target -> "Du liegst auf Kurs. Weiter so!"
                             else -> "Noch %.1f Punkte bis zum Ziel. Die schwächsten Fächer bringen am meisten.".format(target - avg)
                         },
                         color = Color.White,

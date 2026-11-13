@@ -123,7 +123,7 @@ class PlanningEngine @Inject constructor(
             Demand(
                 key = t.session.key,
                 type = DemandType.SPORT,
-                title = "🏃 Sport · ${t.session.minutes} Min (du entscheidest was)",
+                title = "Sport · ${t.session.minutes} Min (du entscheidest was)",
                 minutes = t.session.minutes,
                 priority = 0.9,
                 minChunk = t.session.minutes,

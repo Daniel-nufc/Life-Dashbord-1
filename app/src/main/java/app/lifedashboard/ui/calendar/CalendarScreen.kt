@@ -220,7 +220,7 @@ private fun DayCard(
             empty = false
             val subject = range.subjects[exam.subjectId]
             AgendaLine(
-                time = "📝",
+                time = "",
                 icon = Icons.Rounded.School,
                 color = androidx.compose.ui.graphics.Color(0xFFE53935),
                 title = "${exam.kind.name.lowercase().replaceFirstChar { it.uppercase() }}: ${subject?.name ?: exam.title}",
@@ -304,7 +304,7 @@ private fun DayCard(
             .forEach { t ->
                 empty = false
                 AgendaLine(
-                    time = "🏃",
+                    time = "",
                     icon = LifeArea.SPORT.icon,
                     color = LifeArea.SPORT.color,
                     title = t.session.title,
@@ -336,7 +336,7 @@ private fun DayCard(
         }
         if (empty) {
             Text(
-                if (day.isSchoolFree) "Frei – genieß es 😎" else "Nichts eingetragen",
+                if (day.isSchoolFree) "Frei – genieß es" else "Nichts eingetragen",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 6.dp),

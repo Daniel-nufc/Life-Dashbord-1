@@ -105,6 +105,7 @@ class TodayViewModel @Inject constructor(
     private val finance: app.lifedashboard.data.repository.FinanceRepository,
     private val etsy: app.lifedashboard.data.repository.EtsyRepository,
     private val automation: app.lifedashboard.data.repository.AutomationRepository,
+    progressRepository: app.lifedashboard.data.repository.ProgressRepository,
 ) : ViewModel() {
 
     /** Tickt jede Minute, damit „Jetzt“ und „Als Nächstes“ aktuell bleiben. */
@@ -122,6 +123,10 @@ class TodayViewModel @Inject constructor(
         val extra = combine(finance.overview(d), etsy.overview(d)) { m, e -> Extra(m, e) }
         combine(agenda.observe(d, 2), engine.observeDay(d), study.overview(d), goals.habits(d), extra) { r, p, s, h, x -> Inputs(r, p, s, h, x) }
     }
+
+    /** Level, Serie und Wochenziele für die Fortschritts-Karte */
+    val progress: StateFlow<app.lifedashboard.planner.ProgressState?> = date.flatMapLatest { progressRepository.observe(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val state: StateFlow<TodayUiState> = inputs
         .combine(clock) { input, now -> build(input, now) }
@@ -182,13 +187,13 @@ class TodayViewModel @Inject constructor(
 
         val coach = when {
             overdue.isNotEmpty() -> "${overdue.size} ${if (overdue.size == 1) "Aufgabe ist" else "Aufgaben sind"} überfällig. Heute weg damit – fang mit 5 Minuten an."
-            nextExam != null && nextExam.daysLeft(today.date) in 1..3 -> "${nextExam.subject?.name ?: "Klausur"} in ${nextExam.daysLeft(today.date)} ${if (nextExam.daysLeft(today.date) == 1) "Tag" else "Tagen"}. Heute zählt. 💪"
-            homeworkTomorrow > 0 -> "$homeworkTomorrow ${if (homeworkTomorrow == 1) "Hausaufgabe" else "Hausaufgaben"} bis morgen. Jetzt 5 Minuten anfangen, nicht später. 💪"
+            nextExam != null && nextExam.daysLeft(today.date) in 1..3 -> "${nextExam.subject?.name ?: "Klausur"} in ${nextExam.daysLeft(today.date)} ${if (nextExam.daysLeft(today.date) == 1) "Tag" else "Tagen"}. Heute zählt."
+            homeworkTomorrow > 0 -> "$homeworkTomorrow ${if (homeworkTomorrow == 1) "Hausaufgabe" else "Hausaufgaben"} bis morgen. Jetzt 5 Minuten anfangen, nicht später."
             current != null && current.kind == EntryKind.LESSON -> "Konzentrier dich – um ${"%02d:%02d".format(current.range.end.hour, current.range.end.minute)} ist der Block vorbei."
             nextPlan != null -> "Als Nächstes geplant: ${nextPlan.title}. Nur anfangen – der Rest kommt von allein."
             freeLeft >= Duration.ofHours(1) -> "Noch ${freeLeft.pretty()} frei heute. Nutz sie für etwas, das dich weiterbringt."
-            tomorrow != null && tomorrow.lessons.isNotEmpty() && time.hour >= 21 -> "Ab ins Bett – morgen ist Schule. 😴"
-            else -> "Läuft. Bleib dran. 💪"
+            tomorrow != null && tomorrow.lessons.isNotEmpty() && time.hour >= 21 -> "Ab ins Bett – morgen ist Schule."
+            else -> "Läuft. Bleib dran."
         }
 
         val hour = now.hour

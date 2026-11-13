@@ -155,7 +155,7 @@ fun EtsyScreen(onBack: () -> Unit, onOpenTasks: () -> Unit, viewModel: EtsyViewM
                             fontWeight = FontWeight.Medium,
                         )
                         Spacer(Modifier.height(8.dp))
-                        Text("💡 ${d.tip}", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                        Text(d.tip, color = Color.White, style = MaterialTheme.typography.bodySmall)
                     }
                 }
                 item {
@@ -168,7 +168,7 @@ fun EtsyScreen(onBack: () -> Unit, onOpenTasks: () -> Unit, viewModel: EtsyViewM
                         if (current == null) {
                             Text("Noch nichts eingetragen – Zahlen aus der Etsy-Statistik übernehmen (bis die API verbunden ist).", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         } else {
-                            Text("👁 ${current.views} Aufrufe · ❤️ ${current.favorites} Favoriten" + (previous?.let { " (Vormonat ${it.views} / ${it.favorites})" } ?: ""))
+                            Text("${current.views} Aufrufe · ${current.favorites} Favoriten" + (previous?.let { " (Vormonat ${it.views} / ${it.favorites})" } ?: ""))
                             if (current.views > 0) {
                                 Text(
                                     "Conversion: %.1f %% der Aufrufe kaufen".format(d.thisMonth.orders * 100.0 / current.views),
@@ -213,7 +213,7 @@ fun EtsyScreen(onBack: () -> Unit, onOpenTasks: () -> Unit, viewModel: EtsyViewM
                 item {
                     SectionCard {
                         TileHeader(Icons.Rounded.Checklist, "Upload-Checkliste", LifeArea.SCHOOL.color)
-                        uploadChecklist.forEach { Text("☐  $it", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 2.dp)) }
+                        uploadChecklist.forEach { Text("·  $it", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 2.dp)) }
                     }
                 }
                 if (d.top.isNotEmpty()) {
@@ -240,7 +240,7 @@ fun EtsyScreen(onBack: () -> Unit, onOpenTasks: () -> Unit, viewModel: EtsyViewM
                 }
                 item { Text("Verkäufe", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp)) }
                 if (d.sales.isEmpty()) {
-                    item { SectionCard { Text("Noch keine Verkäufe – das erste kommt! 🎉", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+                    item { SectionCard { Text("Noch keine Verkäufe – das erste kommt!", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
                 }
                 items(d.sales.take(50), key = { it.id }) { sale ->
                     SectionCard(onClick = { saleDialog = sale }) {

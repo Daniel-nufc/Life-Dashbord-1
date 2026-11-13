@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.ChecklistRtl
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DirectionsBus
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Euro
@@ -69,16 +70,18 @@ import app.lifedashboard.ui.tasks.TaskRow
 import app.lifedashboard.data.repository.euro
 import java.time.LocalDate
 
-private val HeroColors = listOf(Color(0xFF3D7BF7), Color(0xFF7B5CF0), Color(0xFFC04FD8))
+private val HeroColors = listOf(Color(0xFF6FD3A6))
 
 @Composable
 fun TodayScreen(
     onOpenTasks: () -> Unit,
     onOpenGoals: () -> Unit,
     onOpenReview: () -> Unit,
+    onOpenProgress: () -> Unit = {},
     viewModel: TodayViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val progress by viewModel.progress.collectAsStateWithLifecycle()
     var showAdd by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<EditRequest?>(null) }
 
@@ -96,7 +99,7 @@ fun TodayScreen(
                 if (s.now.dayOfWeek == java.time.DayOfWeek.SUNDAY || s.now.dayOfWeek == java.time.DayOfWeek.SATURDAY) {
                     item(span = StaggeredGridItemSpan.FullLine) {
                         SectionCard(onClick = onOpenReview) {
-                            TileHeader(Icons.Rounded.AutoAwesome, "Dein Wochenrückblick 📊", LifeArea.SCHOOL.color)
+                            TileHeader(Icons.Rounded.AutoAwesome, "Dein Wochenrückblick", LifeArea.SCHOOL.color)
                             Text("Was lief gut, was nicht – und Vorschläge für die neue Woche. 2 Minuten.", style = MaterialTheme.typography.bodyMedium)
                         }
                     }
@@ -126,6 +129,9 @@ fun TodayScreen(
                 }
                 s.cards.forEach { card ->
                     when (card) {
+                        "PROGRESS" -> progress?.let { p ->
+                            item(key = card) { app.lifedashboard.ui.progress.ProgressCard(p, onClick = onOpenProgress) }
+                        }
                         "NOW" -> item(key = card) { NowTile(s) }
                         "TASKS" -> item(key = card) {
                             TasksTile(
@@ -190,7 +196,7 @@ private fun Hero(s: TodayUiState.Ready) {
     GradientCard(HeroColors) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(s.dateLabel, color = Color.White, style = MaterialTheme.typography.titleLarge)
+                Text(s.dateLabel, color = Color.White, style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Pill("Woche ${s.weekType.name}", Color.White.copy(alpha = 0.25f))
@@ -198,13 +204,13 @@ private fun Hero(s: TodayUiState.Ready) {
                 }
                 Spacer(Modifier.height(12.dp))
                 if (s.examsToday.isNotEmpty()) {
-                    Text("📝 Heute: Klausur ${s.examsToday.joinToString()} – du schaffst das!", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("Heute: Klausur ${s.examsToday.joinToString()} – du schaffst das!", color = Color.White, fontWeight = FontWeight.Bold)
                 }
-                Text(s.coachLine, color = Color.White, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                Text(s.coachLine, color = Color.White.copy(alpha = 0.78f), style = MaterialTheme.typography.bodyMedium)
             }
             Spacer(Modifier.width(12.dp))
             val progress = if (s.freeTimeTotal.isZero) 0f else s.freeTimeLeft.toMinutes().toFloat() / s.freeTimeTotal.toMinutes()
-            ProgressRing(progress = progress, color = Color.White, size = 88.dp, stroke = 9.dp, trackColor = Color.White.copy(alpha = 0.25f)) {
+            ProgressRing(progress = progress, color = Color(0xFF6FD3A6), size = 84.dp, stroke = 5.dp, trackColor = Color.White.copy(alpha = 0.12f)) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         "%d:%02d".format(s.freeTimeLeft.toHours(), s.freeTimeLeft.toMinutesPart()),
@@ -265,7 +271,7 @@ private fun TasksTile(
             if (s.openTaskCount > 0) Pill("${s.openTaskCount} offen", LifeArea.SCHOOL.color)
         }
         if (s.focusTasks.isEmpty()) {
-            Text("Alles erledigt. Stark! 🎉", style = MaterialTheme.typography.bodyLarge)
+            Text("Alles erledigt. Stark!", style = MaterialTheme.typography.bodyLarge)
             Text(
                 "Neue Hausaufgabe? Unten auf „Neu“ tippen.",
                 style = MaterialTheme.typography.bodySmall,
@@ -310,7 +316,7 @@ private fun TimelineCard(s: TodayUiState.Ready, actions: PlanActions, onEntryCli
         }
         if (s.plannedBlocks > 0) {
             Text(
-                "Vorschläge annehmen ✓, verschieben ⏭ oder ablehnen ✕ – die App lernt, was zu dir passt.",
+                "Vorschläge annehmen ✓, verschieben oder ablehnen ✕ – die App lernt, was zu dir passt.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 6.dp),
@@ -378,7 +384,7 @@ private fun TimelineRow(entry: TimelineEntry, isNow: Boolean, isPast: Boolean, o
         Column(Modifier.weight(1f)) {
             if (entry.kind == EntryKind.FREE) {
                 Text(
-                    "✨ Frei · ${entry.range.duration.pretty()}",
+                    "Frei · ${entry.range.duration.pretty()}",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
                 )
@@ -407,12 +413,12 @@ private fun PlanButtons(block: app.lifedashboard.data.db.PlanBlockEntity, action
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (status == app.lifedashboard.data.db.PlanStatus.PROPOSED) {
-            FilledTonalButton(onClick = { actions.accept(block) }) { Text("✓ Passt") }
+            FilledTonalButton(onClick = { actions.accept(block) }) { Text("Passt") }
         } else {
-            FilledTonalButton(onClick = { actions.done(block) }) { Text("✓ Erledigt") }
+            FilledTonalButton(onClick = { actions.done(block) }) { Text("Erledigt") }
         }
-        OutlinedButton(onClick = { actions.later(block) }) { Text("⏭ Später") }
-        TextButton(onClick = { actions.decline(block) }) { Text("✕") }
+        OutlinedButton(onClick = { actions.later(block) }) { Text("Später") }
+        IconButton(onClick = { actions.decline(block) }) { Icon(Icons.Rounded.Close, contentDescription = "Ablehnen", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
 
@@ -455,9 +461,9 @@ private fun HabitsTile(s: TodayUiState.Ready, onToggle: (Long, Boolean) -> Unit,
         }
         s.habits.forEach { h ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                androidx.compose.material3.Checkbox(checked = h.doneToday, onCheckedChange = { onToggle(h.habit.id, it) })
-                Text("${h.habit.emoji} ${h.habit.title}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                if (h.streak.current > 1) Text("🔥${h.streak.current}", style = MaterialTheme.typography.labelLarge)
+                app.lifedashboard.ui.components.CheckMark(checked = h.doneToday, onCheckedChange = { onToggle(h.habit.id, it) }, color = LifeArea.ETSY.color)
+                Text(h.habit.title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                if (h.streak.current > 1) Text("${h.streak.current} Tage", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         TextButton(onClick = onOpen, modifier = Modifier.align(Alignment.End)) { Text("Ziele ansehen") }
@@ -468,14 +474,15 @@ private fun HabitsTile(s: TodayUiState.Ready, onToggle: (Long, Boolean) -> Unit,
 private fun MoneyTile(s: TodayUiState.Ready) {
     SectionCard {
         TileHeader(Icons.Rounded.Euro, "Geld diesen Monat", LifeArea.JOB.color)
-        Text("Verfügbar: ${s.availableCents.euroText()}", style = MaterialTheme.typography.titleLarge)
+        Text(s.availableCents.euroText(), style = MaterialTheme.typography.headlineMedium)
+        Text("verfügbar", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
         if (s.budgetTotalCents > 0) {
             val ratio = (s.monthSpentCents.toFloat() / s.budgetTotalCents).coerceAtMost(1f)
             Text("Ausgegeben ${s.monthSpentCents.euroText()} von ${s.budgetTotalCents.euroText()} Budget", style = MaterialTheme.typography.bodyMedium)
-            androidx.compose.material3.LinearProgressIndicator(
-                progress = { ratio },
-                color = if (ratio >= 0.8f) Color(0xFFF2A21D) else LifeArea.SPORT.color,
-                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            app.lifedashboard.ui.components.Meter(
+                ratio,
+                color = if (ratio >= 0.8f) app.lifedashboard.ui.theme.LocalAppColors.current.warning else MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 10.dp),
             )
         } else {
             Text("Ausgegeben: ${s.monthSpentCents.euroText()} · Budgets unter Mehr → Finanzen", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

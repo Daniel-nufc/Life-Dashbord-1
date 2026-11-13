@@ -16,6 +16,7 @@ import androidx.compose.material.icons.rounded.AttachMoney
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.BeachAccess
+import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
@@ -87,6 +88,10 @@ class MoreViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setAppLockEnabled(enabled) }
     }
 
+    fun setThemeMode(mode: String) {
+        viewModelScope.launch { settingsRepository.setThemeMode(mode) }
+    }
+
     fun setThisWeek(type: WeekType) {
         viewModelScope.launch { settingsRepository.setWeekType(LocalDate.now(), type) }
     }
@@ -134,7 +139,7 @@ class MoreViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoals: () -> Unit, onOpenFinance: () -> Unit, onOpenEtsy: () -> Unit, onOpenReview: () -> Unit, onOpenBackup: () -> Unit, onOpenHolidays: () -> Unit, onOpenSync: () -> Unit = {}, viewModel: MoreViewModel = hiltViewModel()) {
+fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoals: () -> Unit, onOpenFinance: () -> Unit, onOpenEtsy: () -> Unit, onOpenReview: () -> Unit, onOpenBackup: () -> Unit, onOpenHolidays: () -> Unit, onOpenSync: () -> Unit = {}, onOpenProgress: () -> Unit = {}, viewModel: MoreViewModel = hiltViewModel()) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val freeRanges by viewModel.freeRanges.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -150,6 +155,7 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoa
                 item { SectionTitle("Bereiche") }
                 item {
                     SectionCard {
+                        AreaItem(Icons.Rounded.EmojiEvents, LifeArea.SPORT.color, "Fortschritt & Abzeichen", "Level, Serie, Wochenziele, Ironman-Weg", onOpenProgress)
                         AreaItem(Icons.Rounded.Sync, LifeArea.SCHOOL.color, "Handy ↔ Tablet", "Automatischer Abgleich über Cloud-Ordner oder WLAN", onOpenSync)
                         AreaItem(Icons.Rounded.Insights, LifeArea.SCHOOL.color, "Wochenrückblick", "Was lief gut, was nicht, Vorschläge", onOpenReview)
                         AreaItem(Icons.Rounded.BeachAccess, LifeArea.SPORT.color, "Ferien & freie Tage", "Berliner Ferien 2026/27, eigene Studientage", onOpenHolidays)
@@ -172,13 +178,28 @@ fun MoreScreen(onOpenSport: () -> Unit, onOpenConnections: () -> Unit, onOpenGoa
                             colors = transparentItem(),
                         )
                         ListItem(
+                            headlineContent = { Text("Erscheinungsbild") },
+                            supportingContent = { Text("Hell, dunkel oder wie das Gerät") },
+                            colors = transparentItem(),
+                        )
+                        val modes = listOf("SYSTEM" to "Automatisch", "LIGHT" to "Hell", "DARK" to "Dunkel")
+                        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                            modes.forEachIndexed { index, (key, label) ->
+                                SegmentedButton(
+                                    selected = s.themeMode == key,
+                                    onClick = { viewModel.setThemeMode(key) },
+                                    shape = SegmentedButtonDefaults.itemShape(index, modes.size),
+                                ) { Text(label) }
+                            }
+                        }
+                        ListItem(
                             headlineContent = { Text("Karten auf „Heute“") },
                             supportingContent = {
                                 Column {
                                     Text("Ein-/ausblenden und mit ↑ nach oben holen.")
                                     s.todayCards.forEachIndexed { index, key ->
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            androidx.compose.material3.Checkbox(checked = key !in s.hiddenTodayCards, onCheckedChange = { viewModel.toggleCard(key) })
+                                            app.lifedashboard.ui.components.CheckMark(checked = key !in s.hiddenTodayCards, onCheckedChange = { viewModel.toggleCard(key) }, size = 20.dp)
                                             Text(app.lifedashboard.data.settings.todayCardLabel(key), modifier = Modifier.weight(1f))
                                             if (index > 0) {
                                                 IconButton(onClick = { viewModel.moveCardUp(key) }) { Icon(Icons.Rounded.KeyboardArrowUp, "nach oben") }

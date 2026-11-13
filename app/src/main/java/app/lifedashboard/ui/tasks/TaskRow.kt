@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.getValue
+import app.lifedashboard.ui.components.CheckMark
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,26 +47,27 @@ fun TaskRow(
         add("${task.estimatedMinutes} Min")
     }.joinToString(" · ")
 
+    val titleColor by animateColorAsState(
+        if (task.done) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface,
+        tween(260),
+        label = "title",
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 2.dp),
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Checkbox(
-            checked = task.done,
-            onCheckedChange = onToggle,
-            colors = CheckboxDefaults.colors(checkedColor = accent, uncheckedColor = accent),
-        )
+        CheckMark(checked = task.done, onCheckedChange = onToggle, color = accent)
         Column(Modifier.weight(1f)) {
             Text(
                 task.title,
                 style = MaterialTheme.typography.bodyLarge,
                 textDecoration = if (task.done) TextDecoration.LineThrough else null,
-                color = if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                color = titleColor,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )

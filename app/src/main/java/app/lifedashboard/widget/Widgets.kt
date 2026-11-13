@@ -103,7 +103,7 @@ private fun TodayContent(data: TodayData) {
         Spacer(GlanceModifier.height(4.dp))
         data.now?.let { Text(it, style = TextStyle(color = GlanceTheme.colors.onSurface, fontWeight = FontWeight.Medium, fontSize = 15.sp), maxLines = 1) }
         if (data.lines.isEmpty() && data.now == null) {
-            Text("Nichts mehr geplant – genieß den Tag 😎", style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 14.sp))
+            Text("Nichts mehr geplant – genieß den Tag", style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 14.sp))
         }
         data.lines.forEach { line ->
             Row(GlanceModifier.fillMaxWidth().padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -115,7 +115,7 @@ private fun TodayContent(data: TodayData) {
         if (data.homework > 0) {
             Spacer(GlanceModifier.height(6.dp))
             Text(
-                "📚 ${data.homework} Aufgabe(n) bis morgen fällig",
+                "${data.homework} Aufgabe(n) bis morgen fällig",
                 style = TextStyle(color = ColorProvider(Color(0xFFE53935)), fontSize = 13.sp, fontWeight = FontWeight.Medium),
             )
         }

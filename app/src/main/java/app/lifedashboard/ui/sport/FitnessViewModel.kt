@@ -35,7 +35,13 @@ class FitnessViewModel @Inject constructor(
     private val training: TrainingRepository,
     private val settingsRepository: SettingsRepository,
     private val engine: PlanningEngine,
+    progressRepository: app.lifedashboard.data.repository.ProgressRepository,
 ) : ViewModel() {
+
+    /** Level, Wochenziele und Ironman-Weg */
+    val progress: StateFlow<app.lifedashboard.planner.ProgressState?> = progressRepository.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
 
     enum class HealthState { UNKNOWN, NOT_AVAILABLE, NEEDS_PERMISSION, PARTIAL, READY, ERROR }
 

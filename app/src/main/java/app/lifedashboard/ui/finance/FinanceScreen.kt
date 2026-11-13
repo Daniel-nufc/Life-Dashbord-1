@@ -195,7 +195,7 @@ fun FinanceScreen(onBack: () -> Unit, viewModel: FinanceViewModel = hiltViewMode
                             fontWeight = FontWeight.Medium,
                         )
                         if (d.forecastCents < d.bufferCents) {
-                            Text("⚠️ So würdest du an deinen Puffer gehen – etwas weniger ausgeben.", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text("So würdest du an deinen Puffer gehen – etwas weniger ausgeben.", color = Color.White, fontWeight = FontWeight.Bold)
                         }
                         Text(
                             "Diesen Monat: +${d.monthIncomeCents.euro()} / −${d.monthSpentCents.euro()}",
@@ -251,11 +251,7 @@ fun FinanceScreen(onBack: () -> Unit, viewModel: FinanceViewModel = hiltViewMode
                                     Text(b.category, modifier = Modifier.weight(1f))
                                     Text("${b.spentCents.euro()} / ${b.limitCents.euro()}", color = color)
                                 }
-                                LinearProgressIndicator(
-                                    progress = { b.ratio.coerceAtMost(1f) },
-                                    color = color,
-                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(8.dp).clip(RoundedCornerShape(4.dp)),
-                                )
+                                app.lifedashboard.ui.components.Meter(b.ratio.coerceAtMost(1f), color = color, modifier = Modifier.padding(top = 6.dp))
                             }
                         }
                         if (d.byCategory.isNotEmpty()) {
@@ -341,7 +337,7 @@ fun FinanceScreen(onBack: () -> Unit, viewModel: FinanceViewModel = hiltViewMode
                                     Text(g.title, modifier = Modifier.weight(1f))
                                     Text("${g.savedCents.euro()} / ${g.targetCents.euro()}")
                                 }
-                                LinearProgressIndicator(progress = { ratio.coerceAtMost(1f) }, color = LifeArea.PRIVATE.color, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                                app.lifedashboard.ui.components.Meter(ratio.coerceAtMost(1f), color = LifeArea.PRIVATE.color, modifier = Modifier.padding(vertical = 8.dp))
                                 g.deadlineEpochDay?.let { dl ->
                                     val months = java.time.temporal.ChronoUnit.MONTHS.between(java.time.YearMonth.now(), java.time.YearMonth.from(LocalDate.ofEpochDay(dl))).coerceAtLeast(1)
                                     val perMonth = ((g.targetCents - g.savedCents).coerceAtLeast(0) / months)

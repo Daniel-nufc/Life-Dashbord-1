@@ -91,12 +91,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 internal val workoutLabels = listOf(
-    WorkoutType.FLOORBALL to "🏑 Floorball",
-    WorkoutType.RUN to "🏃 Laufen",
-    WorkoutType.STRENGTH to "🏋️ Kraft",
-    WorkoutType.SWIM to "🏊 Schwimmen",
-    WorkoutType.BIKE to "🚴 Rad",
-    WorkoutType.OTHER to "⭐ Sonstiges",
+    WorkoutType.FLOORBALL to "Floorball",
+    WorkoutType.RUN to "Laufen",
+    WorkoutType.STRENGTH to "Kraft",
+    WorkoutType.SWIM to "Schwimmen",
+    WorkoutType.BIKE to "Rad",
+    WorkoutType.OTHER to "Sonstiges",
 )
 
 fun WorkoutType.label() = workoutLabels.first { it.first == this }.second
