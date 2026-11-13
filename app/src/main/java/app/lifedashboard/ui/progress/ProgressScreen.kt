@@ -1,5 +1,6 @@
 package app.lifedashboard.ui.progress
 
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +41,9 @@ import app.lifedashboard.ui.navigation.RootViewModel
 fun ProgressScreen(onBack: () -> Unit, viewModel: RootViewModel = hiltViewModel()) {
     val state by viewModel.progress.collectAsStateWithLifecycle()
     val name by viewModel.userName.collectAsStateWithLifecycle()
+    val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
+    var editGoals by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var confirmRestart by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     OneUiScaffold(
         title = "Fortschritt",
@@ -55,7 +60,18 @@ fun ProgressScreen(onBack: () -> Unit, viewModel: RootViewModel = hiltViewModel(
                 contentPadding = padding.listPadding(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                item { ProgressCard(s, onClick = {}, onRedeem = viewModel::redeemGaming) }
+                item { ProgressCard(s, onClick = {}, onRedeem = viewModel::redeemGaming, onEditGoals = { editGoals = true }) }
+                item {
+                    app.lifedashboard.ui.components.SectionCard(onClick = { confirmRestart = true }) {
+                        TileHeader(Icons.Rounded.RestartAlt, "Neu starten", MaterialTheme.colorScheme.primary)
+                        Text(
+                            "Rückstand, Strafpunkte und Zockzeit-Sperre vergessen – ab heute zählt es. Level, Serie und Abzeichen bleiben." +
+                                (appSettings?.coachStart?.let { " Letzter Start: " + it.format(java.time.format.DateTimeFormatter.ofPattern("d.M.yyyy")) } ?: ""),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 item {
                     app.lifedashboard.ui.components.SectionCard(onClick = { WeeklyReport.share(context, s, name) }) {
                         TileHeader(Icons.Rounded.Share, "Wochenbericht teilen", MaterialTheme.colorScheme.primary)
@@ -95,6 +111,25 @@ fun ProgressScreen(onBack: () -> Unit, viewModel: RootViewModel = hiltViewModel(
                 }
             }
         }
+    }
+    val st = appSettings
+    val p = state
+    if (editGoals && st != null && p != null) {
+        GoalsDialog(
+            stepGoal = st.training.stepGoal, sportWeek = st.goalSportWeek, studyWeek = st.goalStudyWeek,
+            autoSport = p.sportWeek.goalMinutes, autoStudy = p.studyWeek.goalMinutes,
+            onSave = { a, b, c -> viewModel.setGoals(a, b, c); editGoals = false },
+            onDismiss = { editGoals = false },
+        )
+    }
+    if (confirmRestart) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmRestart = false },
+            title = { Text("Neu starten?") },
+            text = { Text("Ab heute zählt jeder verpasste Block wieder. Kein Neustart als Ausrede – nutz ihn für einen echten Anfang.") },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { viewModel.restartCoach(); confirmRestart = false }) { Text("Ab heute") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmRestart = false }) { Text("Abbrechen") } },
+        )
     }
 }
 

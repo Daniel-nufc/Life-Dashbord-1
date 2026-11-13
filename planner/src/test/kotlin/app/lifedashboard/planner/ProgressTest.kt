@@ -178,6 +178,18 @@ class StrictCoachTest {
     }
 
     @Test
+    fun `fresh start forgets older missed blocks`() {
+        val old = listOf(BlockLog(today.minusDays(2), 300, BlockOutcome.MISSED), BlockLog(today.minusDays(1), 420, BlockOutcome.MISSED))
+        val before = Progress.compute(input(old))
+        assertEquals(720, before.backlogMinutes)
+        assertTrue(before.reward.locked)
+        val after = Progress.compute(input(old).copy(coachStart = today))
+        assertEquals(0, after.backlogMinutes)
+        assertEquals(0, after.penaltyXp)
+        assertFalse(after.reward.locked)
+    }
+
+    @Test
     fun `gaming time is earned and locked by backlog`() {
         val done = (0..3).map { BlockLog(today.minusDays(it.toLong()), 50, BlockOutcome.DONE) }
         val free = Progress.compute(input(done, activities = listOf(ActivityLog(today, Discipline.RUN, 45, 6000)), redeemed = 30))

@@ -42,7 +42,15 @@ class ProgressRepository @Inject constructor(
     private val study: StudyRepository,
     private val settings: SettingsRepository,
     private val planDao: app.lifedashboard.data.db.PlanDao,
+    private val health: app.lifedashboard.data.sync.HealthRepository,
 ) {
+    /** Schritte heute aus Health Connect (alle 15 Min neu, null ohne Freigabe) */
+    private fun stepsToday(): Flow<Long?> = kotlinx.coroutines.flow.flow {
+        while (true) {
+            emit(runCatching { health.snapshot(1)?.today?.steps }.getOrNull())
+            kotlinx.coroutines.delay(15 * 60_000L)
+        }
+    }
     private fun Long.toDate(): LocalDate = Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDate()
 
     private fun WorkoutType.discipline() = when (this) {
@@ -61,7 +69,8 @@ class ProgressRepository @Inject constructor(
                 habitDays = h.map { LocalDate.ofEpochDay(it.dateEpochDay) },
             )
         }
-        val goals = combine(settings.settings.map { it.training }.distinctUntilChanged(), routines.routines, study.overview(today)) { training, routineBlocks, overview ->
+        val goals = combine(settings.settings.distinctUntilChanged(), routines.routines, study.overview(today)) { s, routineBlocks, overview ->
+            val training = s.training
             // Sport-Wochenziel = feste Trainings (Floorball …) + freie Sport-Zeitfenster
             val fixed = routineBlocks.filter { it.active && it.area == LifeArea.SPORT }.sumOf { (it.endMinute - it.startMinute) * it.days().size }
             val sportGoal = fixed + training.windowsPerWeek * training.windowMinutes
@@ -69,7 +78,8 @@ class ProgressRepository @Inject constructor(
             val sunday = Progress.weekStart(today).plusDays(6)
             val plannedRest = overview.plan.filter { !it.date.isBefore(today) && !it.date.isAfter(sunday) }.sumOf { it.minutes }
             val doneWeek = overview.sessionsThisWeek.sumOf { it.minutes }
-            sportGoal to maxOf(MIN_STUDY_GOAL, doneWeek + plannedRest)
+            // Eigene Ziele haben Vorrang vor den automatischen
+            (if (s.goalSportWeek > 0) s.goalSportWeek else sportGoal) to (if (s.goalStudyWeek > 0) s.goalStudyWeek else maxOf(MIN_STUDY_GOAL, doneWeek + plannedRest))
         }
         // Vergangene Schul-Blöcke der letzten 8 Wochen: erledigt oder verpasst (heute nur, was schon vorbei ist)
         val nowMinute = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
@@ -86,17 +96,21 @@ class ProgressRepository @Inject constructor(
                     BlockLog(LocalDate.ofEpochDay(b.dateEpochDay), b.endMinute - b.startMinute, outcome)
                 }
         }
-        val prefs = settings.settings.map { it.strictCoach to it.redeemedThisWeek(today) }.distinctUntilChanged()
+        val prefs = combine(settings.settings, stepsToday()) { s, steps -> Prefs(s.strictCoach, s.redeemedThisWeek(today), s.coachStart, s.training.stepGoal, steps) }
+            .distinctUntilChanged()
         return combine(logs, goals, blocks, prefs) { l, g, b, p ->
             Progress.compute(
                 ProgressInput(
                     today, l.activities, l.study, l.tasksDone, l.habitDays,
                     weeklySportGoalMinutes = g.first, weeklyStudyGoalMinutes = g.second,
-                    blocks = b, strict = p.first, redeemedMinutes = p.second,
+                    blocks = b, strict = p.strict, redeemedMinutes = p.redeemed,
+                    stepsToday = p.steps, stepGoal = p.stepGoal, coachStart = p.coachStart,
                 ),
             )
         }.distinctUntilChanged()
     }
+
+    private data class Prefs(val strict: Boolean, val redeemed: Int, val coachStart: LocalDate?, val stepGoal: Int, val steps: Long?)
 
     private data class Logs(
         val activities: List<ActivityLog>,

@@ -3,8 +3,8 @@
 Private Android-App **Life Dashboard** für Daniel (Schüler, 11. Klasse, OSZ Max Taut Berlin). Läuft auf Galaxy S25 (Android 17) und Galaxy Tab S8+ (Android 16).
 Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (vorher „Auto Blocker“ kurz ausschalten).
 
-**Aktueller Stand: Version 27** (versionCode 27, Datenbank-Version 12 – unverändert, alle Tests grün).
-**Arbeits-Branch:** `ccr-4b9f7b2a-x8cb8a` (Version 27, baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Dort liegt der ganze Code. `main` enthält nur den ersten, leeren Commit.
+**Aktueller Stand: Version 28** (versionCode 28, Datenbank-Version 12 – unverändert, alle Tests grün).
+**Arbeits-Branch:** `ccr-4b9f7b2a-x8cb8a` (Version 28, baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Dort liegt der ganze Code. `main` enthält nur den ersten, leeren Commit.
 
 ## Wie mit Daniel arbeiten
 - Immer **auf Deutsch**, einfach und kurz erklären. Daniel ist kein Entwickler und liest oft auf dem Handy.
@@ -50,6 +50,11 @@ Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (
 - Hausaufgaben werden **spätestens am Vortag** eingeplant (LoadBalancer-Deadline = Abgabe − 1). Ist sie **heute** fällig, nur noch **vor der Stunde** des Fachs (`DayAgenda.homeworkCutoff`: Stundenbeginn, bei der ersten Stunde minus Schulweg; Freistunden davor zählen). Ist die Stunde vorbei → wie überfällig.
 - **Hofpausen** (Lücken unter 1 Std zwischen zwei Stunden, `planner.schoolBreaks`) sind nie frei – weder in der Anzeige noch in der Planung (`DayAgenda.busyRanges`). Freistunden ab 1 Std bleiben frei.
 
+## Neustart, eigene Ziele, Aufgaben (seit Version 28)
+- **Neustart des Coachs** (`AppSettings.coachStart`, `Progress.compute` filtert Blöcke davor): Rückstand/Strafpunkte/Zockzeit-Sperre zählen erst ab diesem Tag. Beim ersten Start mit v28 automatisch heute (`ensureCoachStart` in `RootViewModel`), danach Knopf „Neu starten“ unter Fortschritt. Grund: Daniel hatte 12 Std „Rückstand“ aus alten, nie bestätigten Vorschlägen.
+- **Eigene Ziele** (`GoalsDialog`, Knopf „Ziele“ in der Fortschritts-Karte): Schritte pro Tag (`training.stepGoal`), Sport/Lernen pro Woche (`goalSportWeek`/`goalStudyWeek`, 0 = automatisch). Schritte heute kommen aus Health Connect und stehen als Balken in der Fortschritts-Karte.
+- **Aufgaben-Reiter neu** (`ui/tasks/TasksScreen.kt`): Kopfkarte „Bis morgen fällig“ + Wochenquote-Ring + „Als Nächstes · Starten“ (Fokus-Modus), Offen/Erledigt-Umschalter, Filter-Pills mit Anzahl, Abschnitte nach Tagen (Überfällig, Heute, Morgen, Wochentage, Nächste Woche, Später, Irgendwann) mit Summen, Karten mit Fachfarbe, „eingeplant Di 16:25“ aus dem Tagesplan und Start-Knopf. Wischen rechts = erledigt, links = löschen mit „Rückgängig“.
+
 ## Technik
 - Kotlin 2.2.21, AGP 8.13.0, Gradle 8.14.3, compileSdk/targetSdk 36, minSdk 34, KSP, Hilt 2.57.2, Compose BOM 2025.05.00, Material 3.
 - Room 2.7.1 + SQLCipher 4.10 (Passwort aus dem Keystore), DataStore, WorkManager + hilt-work, Health Connect 1.1.0, Glance-Widgets.
@@ -91,11 +96,11 @@ Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (
    - `lifedashboard-release.jks` (Alias `lifedashboard`, Store- und Key-Passwort sind gleich), Passwort in `1_SIGNING_STORE_PASSWORD.txt`
    - alternativ `2_SIGNING_KEYSTORE_BASE64.txt` → `base64 -d > lifedashboard-release.jks`
    - SHA-256 des Zertifikats: `b32c0d0261e207b39411391dd7a6a4f3df17c81f81239220d47c4b445f836134`. **Muss gleich bleiben**, sonst lässt sich das Update nicht installieren.
-3. Bauen (nächste Version = 28):
+3. Bauen (nächste Version = 29):
    ```bash
-   export SIGNING_KEYSTORE_PATH=/pfad/lifedashboard-release.jks SIGNING_STORE_PASSWORD='…' GITHUB_RUN_NUMBER=28
+   export SIGNING_KEYSTORE_PATH=/pfad/lifedashboard-release.jks SIGNING_STORE_PASSWORD='…' GITHUB_RUN_NUMBER=29
    ./gradlew --max-workers=2 :planner:test :app:testDebugUnitTest :app:assembleRelease
-   # → app/build/outputs/apk/release/app-release.apk  (als LifeDashboard-28.apk schicken)
+   # → app/build/outputs/apk/release/app-release.apk  (als LifeDashboard-29.apk schicken)
    ```
    Prüfen: `apksigner verify --print-certs …apk` muss den SHA-256 oben zeigen.
 - Maven Central antwortet manchmal mit **429** → mit Pause wiederholen.

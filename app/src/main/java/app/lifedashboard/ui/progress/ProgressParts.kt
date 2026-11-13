@@ -1,5 +1,6 @@
 package app.lifedashboard.ui.progress
 
+import androidx.compose.runtime.setValue
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DirectionsBike
 import androidx.compose.material.icons.rounded.DirectionsRun
+import androidx.compose.material.icons.rounded.DirectionsWalk
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Flag
@@ -88,11 +90,21 @@ fun ProgressCard(
     onRedeem: ((Int) -> Unit)? = null,
     /** Spiegel am Abend: Social-Media-Zeit heute (null = nicht anzeigen) */
     socialMinutesToday: Int? = null,
+    /** Ziele selbst festlegen (Knopf oben rechts) */
+    onEditGoals: (() -> Unit)? = null,
 ) {
     SectionCard(onClick = onClick) {
         TileHeader(Icons.Rounded.Bolt, "Fortschritt", MaterialTheme.colorScheme.primary) {
             if (state.xpToday > 0) {
                 Text("+${state.xpToday} heute", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
+            if (onEditGoals != null) {
+                Text(
+                    "Ziele",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onEditGoals).padding(horizontal = 10.dp, vertical = 4.dp),
+                )
             }
         }
         LevelRow(state)
@@ -101,6 +113,24 @@ fun ProgressCard(
             WeekRingTile("Sport", state.sportWeek, LifeArea.SPORT.color, Modifier.weight(1f))
             WeekRingTile("Lernen", state.studyWeek, LifeArea.SCHOOL.color, Modifier.weight(1f))
             StreakTile(state, Modifier.weight(1f))
+        }
+        state.stepsToday?.let { steps ->
+            Spacer(Modifier.height(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(Icons.Rounded.DirectionsWalk, null, tint = LifeArea.SPORT.color.readable(), modifier = Modifier.size(20.dp))
+                Column(Modifier.weight(1f)) {
+                    Row {
+                        Text("Schritte", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                        Text(
+                            "%,d / %,d".format(steps, state.stepGoal).replace(',', '.'),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (steps >= state.stepGoal) LifeArea.SPORT.color.readable() else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Meter(state.stepsFraction, color = LifeArea.SPORT.color, height = 5.dp)
+                }
+            }
         }
         if (onRedeem != null) {
             Spacer(Modifier.height(18.dp))
@@ -429,5 +459,51 @@ fun LevelUpOverlay(level: Int, title: String, onDismiss: () -> Unit) {
             Spacer(Modifier.height(20.dp))
             TextButton(onClick = onDismiss) { Text("Weiter", color = accent) }
         }
+    }
+}
+
+
+/** Eigene Ziele festlegen: Schritte pro Tag, Sport und Lernen pro Woche (0 = automatisch). */
+@Composable
+fun GoalsDialog(stepGoal: Int, sportWeek: Int, studyWeek: Int, autoSport: Int, autoStudy: Int, onSave: (Int, Int, Int) -> Unit, onDismiss: () -> Unit) {
+    var steps by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(stepGoal) }
+    var sport by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(sportWeek) }
+    var study by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(studyWeek) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Deine Ziele") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                GoalSlider("Schritte pro Tag", "%,d".format(steps).replace(',', '.'), steps.toFloat(), 3000f..25000f) { steps = (it / 500).toInt() * 500 }
+                GoalSlider(
+                    "Sport pro Woche",
+                    if (sport == 0) "automatisch (${minutesText(autoSport)})" else minutesText(sport),
+                    sport.toFloat(), 0f..900f,
+                ) { sport = (it / 15).toInt() * 15 }
+                GoalSlider(
+                    "Lernen pro Woche",
+                    if (study == 0) "automatisch (${minutesText(autoStudy)})" else minutesText(study),
+                    study.toFloat(), 0f..1200f,
+                ) { study = (it / 15).toInt() * 15 }
+                Text(
+                    "Ganz nach links = automatisch: Die App rechnet das Ziel aus Trainings und Lernplan. Wie viele Sport-Zeitfenster geplant werden, stellst du unter Fitness ein.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(steps, sport, study) }) { Text("Speichern") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+    )
+}
+
+@Composable
+private fun GoalSlider(label: String, value: String, current: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
+    Column {
+        Row {
+            Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            Text(value, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        }
+        androidx.compose.material3.Slider(current.coerceIn(range.start, range.endInclusive), onChange, valueRange = range)
     }
 }

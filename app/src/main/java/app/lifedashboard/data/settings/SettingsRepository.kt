@@ -57,6 +57,11 @@ data class AppSettings(
     val redeemedGaming: Pair<String, Int> = "" to 0,
     /** Strava ist verbunden (Tokens liegen im Keystore) */
     val stravaConnected: Boolean = false,
+    /** Neustart des strengen Coachs: erst ab diesem Tag zählen verpasste Blöcke (null = noch nie gesetzt) */
+    val coachStart: LocalDate? = null,
+    /** Eigene Wochenziele in Minuten (0 = automatisch aus Plan und Trainings) */
+    val goalSportWeek: Int = 0,
+    val goalStudyWeek: Int = 0,
 ) {
     /** In dieser Woche eingelöste Zockzeit */
     fun redeemedThisWeek(today: LocalDate = LocalDate.now()): Int =
@@ -145,6 +150,9 @@ class SettingsRepository @Inject constructor(
                 strictCoach = p[STRICT] ?: true,
                 redeemedGaming = p[REDEEMED]?.split(':')?.takeIf { it.size == 2 }?.let { it[0] to (it[1].toIntOrNull() ?: 0) } ?: ("" to 0),
                 stravaConnected = p[STRAVA] ?: false,
+                coachStart = p[COACH_START]?.let { LocalDate.ofEpochDay(it) },
+                goalSportWeek = p[GOAL_SPORT] ?: 0,
+                goalStudyWeek = p[GOAL_STUDY] ?: 0,
                 training = TrainingSettings(
                     windowsPerWeek = p[T_WINDOWS] ?: 3,
                     windowMinutes = p[T_WINDOW_MIN] ?: 45,
@@ -162,6 +170,25 @@ class SettingsRepository @Inject constructor(
                 systemCalendarIds = p[SYSTEM_CALENDARS].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
             )
         }
+
+    /** Neustart: Rückstand, Strafpunkte und Sperre vergessen – ab heute zählt es */
+    suspend fun restartCoach(today: LocalDate = LocalDate.now()) {
+        dataStore.edit { it[COACH_START] = today.toEpochDay() }
+    }
+
+    /** Beim ersten Start mit v28: Neustart auf heute setzen (alte, nie bestätigte Vorschläge zählen nicht) */
+    suspend fun ensureCoachStart(today: LocalDate = LocalDate.now()) {
+        dataStore.edit { if (it[COACH_START] == null) it[COACH_START] = today.toEpochDay() }
+    }
+
+    /** Eigene Ziele: Schritte pro Tag, Sport und Lernen pro Woche (0 = automatisch) */
+    suspend fun setGoals(stepGoal: Int, sportWeek: Int, studyWeek: Int) {
+        dataStore.edit {
+            it[T_STEP_GOAL] = stepGoal.coerceIn(1000, 40000)
+            it[GOAL_SPORT] = sportWeek.coerceIn(0, 1500)
+            it[GOAL_STUDY] = studyWeek.coerceIn(0, 2000)
+        }
+    }
 
     suspend fun setStrictCoach(strict: Boolean) {
         dataStore.edit { it[STRICT] = strict }
@@ -268,6 +295,9 @@ class SettingsRepository @Inject constructor(
         val STRICT = booleanPreferencesKey("strict_coach")
         val REDEEMED = stringPreferencesKey("gaming_redeemed")
         val STRAVA = booleanPreferencesKey("strava_connected")
+        val COACH_START = androidx.datastore.preferences.core.longPreferencesKey("coach_start_day")
+        val GOAL_SPORT = intPreferencesKey("goal_sport_week")
+        val GOAL_STUDY = intPreferencesKey("goal_study_week")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val APP_LOCK = booleanPreferencesKey("app_lock_enabled")
         val LOCK_TIMEOUT = intPreferencesKey("lock_timeout_minutes")

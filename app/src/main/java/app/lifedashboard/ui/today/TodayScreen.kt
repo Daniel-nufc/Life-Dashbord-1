@@ -90,6 +90,9 @@ fun TodayScreen(
     val decline: (app.lifedashboard.data.db.PlanBlockEntity) -> Unit = { b ->
         if (b.type == app.lifedashboard.planner.DemandType.SPORT && b.endMinute - b.startMinute > 15) miniFor = b else viewModel.decline(b)
     }
+    val root: app.lifedashboard.ui.navigation.RootViewModel = hiltViewModel()
+    val appSettings by root.appSettings.collectAsStateWithLifecycle()
+    var editGoals by remember { mutableStateOf(false) }
     var showAdd by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<EditRequest?>(null) }
 
@@ -144,6 +147,7 @@ fun TodayScreen(
                                     onRedeem = viewModel::redeemGaming,
                                     // Spiegel ab 17 Uhr: Handy gegen Schule
                                     socialMinutesToday = social?.takeIf { s.now.hour >= 17 }?.toMinutes()?.toInt(),
+                                    onEditGoals = { editGoals = true },
                                 )
                             }
                         }
@@ -207,6 +211,16 @@ fun TodayScreen(
         )
     }
     EditorHost(editing, onDismiss = { editing = null })
+    val st = appSettings
+    val p = progress
+    if (editGoals && st != null && p != null) {
+        app.lifedashboard.ui.progress.GoalsDialog(
+            stepGoal = st.training.stepGoal, sportWeek = st.goalSportWeek, studyWeek = st.goalStudyWeek,
+            autoSport = p.sportWeek.goalMinutes, autoStudy = p.studyWeek.goalMinutes,
+            onSave = { a, b, c -> root.setGoals(a, b, c); editGoals = false },
+            onDismiss = { editGoals = false },
+        )
+    }
     focusBlock?.let { b ->
         app.lifedashboard.ui.focus.FocusMode(b, onDone = { viewModel.done(b) }, onClose = { focusBlock = null })
     }

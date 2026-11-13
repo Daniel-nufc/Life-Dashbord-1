@@ -45,6 +45,11 @@ data class ProgressInput(
     val strict: Boolean = true,
     /** Diese Woche schon eingelöste Zockzeit */
     val redeemedMinutes: Int = 0,
+    /** Schritte heute (null = keine Daten) und eigenes Tagesziel */
+    val stepsToday: Long? = null,
+    val stepGoal: Int = 8000,
+    /** Ab diesem Tag zählt der strenge Coach (Neustart) – davor gibt es keinen Rückstand und keine Strafpunkte */
+    val coachStart: LocalDate? = null,
 )
 
 data class LevelInfo(
@@ -120,7 +125,11 @@ data class ProgressState(
     val reward: RewardState = RewardState(0, 0, 0),
     /** Heute geschaffte Schul-Minuten (Blöcke + Lernzeit) */
     val schoolMinutesToday: Int = 0,
+    /** Schritte heute (null = keine Daten) */
+    val stepsToday: Long? = null,
+    val stepGoal: Int = 8000,
 ) {
+    val stepsFraction: Float get() = if (stepsToday == null || stepGoal <= 0) 0f else (stepsToday.toFloat() / stepGoal).coerceIn(0f, 1f)
     val earnedBadges: Int get() = badges.count { it.earned }
 }
 
@@ -207,7 +216,9 @@ object Progress {
 
     fun weekStart(day: LocalDate): LocalDate = day.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
 
-    fun compute(input: ProgressInput): ProgressState {
+    fun compute(raw: ProgressInput): ProgressState {
+        // Neustart: Blöcke vor dem Start-Tag zählen weder als verpasst noch als erledigt
+        val input = raw.coachStart?.let { start -> raw.copy(blocks = raw.blocks.filter { !it.date.isBefore(start) }) } ?: raw
         val today = input.today
         val monday = weekStart(today)
         fun inWeek(d: LocalDate) = !d.isBefore(monday) && !d.isAfter(today)
@@ -237,6 +248,8 @@ object Progress {
             backlogMinutes = backlog,
             penaltyXp = penaltyXp(input),
             reward = RewardState(gamingMinutes(schoolWeek, sportMinutes), input.redeemedMinutes, if (input.strict) backlog else 0),
+            stepsToday = input.stepsToday,
+            stepGoal = input.stepGoal,
             schoolMinutesToday = maxOf(
                 input.study.filter { it.date == today }.sumOf { it.minutes },
                 input.blocks.filter { it.date == today && it.outcome == BlockOutcome.DONE }.sumOf { it.minutes },

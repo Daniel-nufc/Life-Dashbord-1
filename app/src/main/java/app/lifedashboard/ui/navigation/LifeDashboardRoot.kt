@@ -149,6 +149,23 @@ class RootViewModel @Inject constructor(
     val userName: StateFlow<String> = settings.settings.map { it.userName }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
+    /** Aktuelle Einstellungen (für den Ziele-Dialog) */
+    val appSettings: StateFlow<app.lifedashboard.data.settings.AppSettings?> = settings.settings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    init {
+        // Erster Start mit v28: Coach startet heute neu (alter Rückstand aus nie gesehenen Vorschlägen zählt nicht)
+        viewModelScope.launch { settings.ensureCoachStart() }
+    }
+
+    fun restartCoach() {
+        viewModelScope.launch { settings.restartCoach() }
+    }
+
+    fun setGoals(stepGoal: Int, sportWeek: Int, studyWeek: Int) {
+        viewModelScope.launch { settings.setGoals(stepGoal, sportWeek, studyWeek) }
+    }
+
     fun redeemGaming(minutes: Int) {
         viewModelScope.launch { settings.redeemGaming(minutes) }
     }
