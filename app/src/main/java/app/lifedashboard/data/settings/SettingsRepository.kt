@@ -265,6 +265,16 @@ class SettingsRepository @Inject constructor(
         return result
     }
 
+    /** Einmal je Gerät: den FamilyWall-Kalender automatisch übernehmen (danach entscheidet Daniel). */
+    suspend fun claimFamilyWallAutoConnect(): Boolean {
+        var first = false
+        dataStore.edit {
+            first = it[FAMILY_WALL_AUTO] != true
+            it[FAMILY_WALL_AUTO] = true
+        }
+        return first
+    }
+
     suspend fun markFamilyTitlesSeeded() {
         dataStore.edit { it[FAMILY_TITLES_SEEDED] = true }
     }
@@ -340,6 +350,7 @@ class SettingsRepository @Inject constructor(
         val MINE_TITLES = stringSetPreferencesKey("mine_titles")
         val NOT_MINE_TITLES = stringSetPreferencesKey("not_mine_titles")
         val FAMILY_TITLES_SEEDED = booleanPreferencesKey("family_titles_seeded")
+        val FAMILY_WALL_AUTO = booleanPreferencesKey("family_wall_auto_connect")
         val PRIORITY_ORDER = stringPreferencesKey("priority_order")
         val BUFFER = androidx.datastore.preferences.core.longPreferencesKey("buffer_cents")
         val JOB_WAGE = androidx.datastore.preferences.core.longPreferencesKey("job_wage_cents")

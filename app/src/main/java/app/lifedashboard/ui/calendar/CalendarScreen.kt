@@ -389,6 +389,7 @@ private fun DayPane(
                     done = viewModel::done,
                     decline = { b -> if (b.type == app.lifedashboard.planner.DemandType.SPORT && b.endMinute - b.startMinute > 15) miniFor = b else viewModel.decline(b) },
                     later = viewModel::later,
+                    move = viewModel::move,
                 ),
                 modifier = Modifier.padding(top = 12.dp),
             ) { entry ->

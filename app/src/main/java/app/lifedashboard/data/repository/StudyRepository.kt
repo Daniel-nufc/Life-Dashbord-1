@@ -85,14 +85,16 @@ class StudyRepository @Inject constructor(
             fun capacity(date: LocalDate): Int {
                 val busy = routineBlocks.any { it.active && it.area == app.lifedashboard.data.db.LifeArea.SPORT && date.dayOfWeek in it.days() } ||
                     shifts.any { it.dateEpochDay == date.toEpochDay() }
+                // Lernwoche: Klausur in den nächsten 7 Tagen → 1 Std mehr erlaubt
+                val examWeek = if (exams.any { it.dateEpochDay - date.toEpochDay() in 1..7 }) 60 else 0
                 return when {
                     // eigener Ganztagstermin: nur lernen, wenn die Klausur in 1–2 Tagen ist
                     date in reservedDays -> if (exams.any { it.dateEpochDay - date.toEpochDay() in 1..2 }) 60 else 0
-                    date.dayOfWeek == java.time.DayOfWeek.SUNDAY -> 0
-                    date.dayOfWeek == java.time.DayOfWeek.SATURDAY -> 120
-                    freeRanges.any { date in it } -> 150
-                    busy -> 60
-                    else -> 120
+                    date.dayOfWeek == java.time.DayOfWeek.SUNDAY -> if (exams.any { it.dateEpochDay - date.toEpochDay() in 1..2 }) 60 else 0
+                    date.dayOfWeek == java.time.DayOfWeek.SATURDAY -> 120 + examWeek
+                    freeRanges.any { date in it } -> 150 + examWeek
+                    busy -> 60 + examWeek
+                    else -> 120 + examWeek
                 }
             }
             val subjectById = subjects.associateBy { it.id }
@@ -106,16 +108,22 @@ class StudyRepository @Inject constructor(
                     difficulty = e.subject?.difficulty ?: 3,
                     topics = e.topics.map { StudyTopic(it.id, it.title, it.effortMinutes, it.progress) },
                     defaultMinutes = when (e.exam.kind) {
-                        app.lifedashboard.data.db.ExamKind.KLAUSUR -> 240
-                        app.lifedashboard.data.db.ExamKind.TEST -> 120
+                        app.lifedashboard.data.db.ExamKind.KLAUSUR -> 480
+                        app.lifedashboard.data.db.ExamKind.TEST -> 180
                         else -> 180
                     },
                     effortFactor = StudyPlanner.effortFactor(averageBySubject[e.exam.subjectId], targetPoints),
+                    // Oberstufe: eine Klausur braucht mehr als die Summe kleiner Themen – mind. 8 Std, Test 3 Std
+                    minimumMinutes = when (e.exam.kind) {
+                        app.lifedashboard.data.db.ExamKind.KLAUSUR -> 480
+                        app.lifedashboard.data.db.ExamKind.TEST -> 180
+                        else -> 240
+                    },
                 )
             }
             // Ab 21 Uhr passt heute nichts mehr hinein → Lernplan startet morgen (sonst ginge die Zeit verloren)
             val planFrom = if (today == LocalDate.now() && java.time.LocalTime.now().isAfter(LATE_EVENING)) today.plusDays(1) else today
-            val plan = StudyPlanner.plan(exams = studyExams, today = planFrom, dailyCapMinutes = 150, capacity = ::capacity)
+            val plan = StudyPlanner.plan(exams = studyExams, today = planFrom, dailyCapMinutes = 210, capacity = ::capacity)
             val forecasts = StudyPlanner.forecast(studyExams, plan, today)
             val todayEpoch = today.toEpochDay()
             val due = withTopics.filter { it.daysLeft(today) >= 0 }.flatMap { e ->

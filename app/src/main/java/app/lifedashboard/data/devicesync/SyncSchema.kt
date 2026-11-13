@@ -11,7 +11,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *   Startdaten, die auf beiden Geräten angelegt wurden, nicht doppelt.
  * - [refs]: Verweise auf andere Tabellen (lokale IDs werden beim Abgleich übersetzt).
  *
- * Nicht abgeglichen: Tagesplan-Vorschläge (rechnet jedes Gerät selbst), Feedback, Kalender-Abos.
+ * Nicht abgeglichen: reine Tagesplan-Vorschläge (rechnet jedes Gerät selbst), Feedback, Kalender-Abos.
+ * Bestätigte, erledigte, verschobene und verpasste Blöcke schon ([SyncTable.track]) – sonst zählen Punkte,
+ * Serie und „x/3 Blöcke“ auf Handy und Tablet verschieden.
  */
 data class SyncTable(
     val name: String,
@@ -23,6 +25,8 @@ data class SyncTable(
     val autoId: String? = "id",
     /** Datenbank-Version, ab der es die Tabelle gibt (für Migrationen) */
     val since: Int = 12,
+    /** Nur Zeilen, die diese SQL-Bedingung erfüllen, werden abgeglichen (null = alle) */
+    val track: String? = null,
 )
 
 object SyncSchema {
@@ -63,6 +67,8 @@ object SyncSchema {
         SyncTable("etsy_stats", listOf("monthKey")),
         SyncTable("school_holidays", listOf("startEpochDay", "name")),
         SyncTable("calendar_title_choices", listOf("titleKey"), since = 14),
+        // gleicher Inhalt am gleichen Tag = derselbe Block, auch wenn die Geräte ihn zu verschiedenen Zeiten bestätigt haben
+        SyncTable("plan_blocks", listOf("dateEpochDay", "demandKey"), since = 15, track = "status != 'PROPOSED'"),
     )
 
     val byName = tables.associateBy { it.name }
@@ -77,21 +83,23 @@ object SyncSchema {
     fun createTriggers(db: SupportSQLiteDatabase) {
         tables.forEach { t ->
             val n = t.name
+            val whenNew = t.track?.let { " WHEN " + it.replace(Regex("\\b(status)\\b"), "NEW.$1") } ?: ""
+            val whenOld = t.track?.let { " WHEN " + it.replace(Regex("\\b(status)\\b"), "OLD.$1") } ?: ""
             db.execSQL(
-                """CREATE TRIGGER IF NOT EXISTS `sync_ins_$n` AFTER INSERT ON `$n` BEGIN
+                """CREATE TRIGGER IF NOT EXISTS `sync_ins_$n` AFTER INSERT ON `$n`$whenNew BEGIN
                     INSERT INTO sync_meta(tbl, localId, gid, updatedAt, deleted) VALUES('$n', NEW.rowid, NULL, $NOW, 0)
                     ON CONFLICT(tbl, localId) DO UPDATE SET updatedAt = excluded.updatedAt, deleted = 0,
                         gid = CASE WHEN sync_meta.deleted = 1 THEN NULL ELSE sync_meta.gid END;
                 END""",
             )
             db.execSQL(
-                """CREATE TRIGGER IF NOT EXISTS `sync_upd_$n` AFTER UPDATE ON `$n` BEGIN
+                """CREATE TRIGGER IF NOT EXISTS `sync_upd_$n` AFTER UPDATE ON `$n`$whenNew BEGIN
                     INSERT INTO sync_meta(tbl, localId, gid, updatedAt, deleted) VALUES('$n', NEW.rowid, NULL, $NOW, 0)
                     ON CONFLICT(tbl, localId) DO UPDATE SET updatedAt = excluded.updatedAt, deleted = 0;
                 END""",
             )
             db.execSQL(
-                """CREATE TRIGGER IF NOT EXISTS `sync_del_$n` AFTER DELETE ON `$n` BEGIN
+                """CREATE TRIGGER IF NOT EXISTS `sync_del_$n` AFTER DELETE ON `$n`$whenOld BEGIN
                     UPDATE sync_meta SET deleted = 1, updatedAt = $NOW WHERE tbl = '$n' AND localId = OLD.rowid;
                 END""",
             )
@@ -99,9 +107,12 @@ object SyncSchema {
     }
 
     /** Für bestehende Daten (Update von Version 11): alle Einträge einmal registrieren. */
-    fun backfill(db: SupportSQLiteDatabase, version: Int = Int.MAX_VALUE) {
-        tables.filter { it.since <= version }.forEach { t ->
-            db.execSQL("INSERT OR IGNORE INTO sync_meta(tbl, localId, gid, updatedAt, deleted) SELECT '${t.name}', rowid, NULL, 0, 0 FROM `${t.name}`")
+    fun backfill(db: SupportSQLiteDatabase, version: Int = Int.MAX_VALUE, only: String? = null) {
+        tables.filter { it.since <= version && (only == null || it.name == only) }.forEach { t ->
+            db.execSQL("INSERT OR IGNORE INTO sync_meta(tbl, localId, gid, updatedAt, deleted) SELECT '${t.name}', rowid, NULL, 0, 0 FROM `${t.name}`${t.where()}")
         }
     }
+
+    /** SQL-Bedingung für abgeglichene Zeilen ([SyncTable.track]) */
+    fun SyncTable.where(): String = track?.let { " WHERE $it" } ?: ""
 }

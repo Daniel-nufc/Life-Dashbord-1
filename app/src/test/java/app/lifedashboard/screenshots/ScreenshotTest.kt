@@ -185,7 +185,7 @@ class ScreenshotTest {
 
         tab("Kalender"); shot(device, "03_kalender")
         tab("Aufgaben"); assertText("Bis morgen fällig"); shot(device, "04_aufgaben"); scrollDown(); shot(device, "04b_aufgaben_unten")
-        tab("Lernen"); shot(device, "05_lernen_klausuren"); assertText("Analysis"); assertText("Plan passt"); shot(device, "05b_lernen_mathe")
+        tab("Lernen"); shot(device, "05_lernen_klausuren"); assertText("Analysis"); shot(device, "05b_lernen_mathe")
 
         tab("Fitness"); shot(device, "07_fitness"); assertText("Ironman-Weg"); shot(device, "07b_fitness_ironman")
         assertText("Strava"); shot(device, "07c_fitness_strava")

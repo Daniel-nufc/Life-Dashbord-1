@@ -88,7 +88,8 @@ class LanSyncManager @Inject constructor(
     // ------------------------------------------------------------------ sofort nach jeder Änderung
 
     private var changeJob: Job? = null
-    private val changeObserver = object : androidx.room.InvalidationTracker.Observer(SyncSchema.tables.map { it.name }.toTypedArray()) {
+    // sync_meta ändert sich nur bei echten, abgeglichenen Änderungen (nicht bei jedem neu berechneten Vorschlag)
+    private val changeObserver = object : androidx.room.InvalidationTracker.Observer(arrayOf("sync_meta")) {
         override fun onInvalidated(tables: Set<String>) {
             // Änderungen, die gerade vom anderen Gerät kamen, nicht zurückschicken
             if (System.currentTimeMillis() - repo.lastMergeAt < 4_000) return

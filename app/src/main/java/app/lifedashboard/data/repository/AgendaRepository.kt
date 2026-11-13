@@ -87,7 +87,10 @@ data class DayAgenda(
     val reservedDay: Boolean get() = externalEvents.any { it.blocksDay }
 
     /** Schul-Pensum (Lernen + Hausaufgaben) für diesen Tag: werktags 2 Std, mit Training/Job 1 Std, Samstag 2 Std, Sonntag frei. */
-    fun schoolCapMinutes(examSoon: Boolean = false): Int = when {
+    fun schoolCapMinutes(examSoon: Boolean = false, examWeek: Boolean = false): Int = baseSchoolCap(examSoon) +
+        (if (examWeek && !reservedDay && date.dayOfWeek != DayOfWeek.SUNDAY) 60 else 0)
+
+    private fun baseSchoolCap(examSoon: Boolean): Int = when {
         reservedDay -> if (examSoon) 60 else 0
         date.dayOfWeek == DayOfWeek.SUNDAY -> if (examSoon) 60 else 0
         date.dayOfWeek == DayOfWeek.SATURDAY -> 120

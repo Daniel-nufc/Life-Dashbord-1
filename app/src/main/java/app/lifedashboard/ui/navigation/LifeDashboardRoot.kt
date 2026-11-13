@@ -95,6 +95,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -137,12 +141,17 @@ private fun NavHostController.openTab(route: String) {
     }
 }
 
+@OptIn(kotlinx.coroutines.FlowPreview::class)
 @HiltViewModel
 class RootViewModel @Inject constructor(
     progressRepository: ProgressRepository,
     private val settings: SettingsRepository,
     private val ical: app.lifedashboard.data.sync.IcalSyncRepository,
     private val titleChoices: app.lifedashboard.data.repository.TitleChoiceRepository,
+    private val systemCalendar: app.lifedashboard.data.sync.SystemCalendarRepository,
+    private val agenda: app.lifedashboard.data.repository.AgendaRepository,
+    private val planDao: app.lifedashboard.data.db.PlanDao,
+    private val engine: app.lifedashboard.data.planning.PlanningEngine,
 ) : ViewModel() {
     val progress: StateFlow<ProgressState?> = progressRepository.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -158,10 +167,40 @@ class RootViewModel @Inject constructor(
     init {
         // Erster Start mit v28: Coach startet heute neu (alter Rückstand aus nie gesehenen Vorschlägen zählt nicht)
         viewModelScope.launch { settings.ensureCoachStart() }
-        viewModelScope.launch { titleChoices.ensureSeeded() }
+        viewModelScope.launch {
+            titleChoices.ensureSeeded()
+            connectFamilyWall()
+        }
+        // Plan immer passend halten: Kommt irgendwo in den nächsten 2 Wochen etwas dazu (Termin, FamilyWall,
+        // Schicht, Aufgabe, Klausur – oder ein bestätigter Block vom Tablet), wird neu verteilt.
+        viewModelScope.launch {
+            val today = java.time.LocalDate.now()
+            kotlinx.coroutines.flow.combine(agenda.observe(today, 14), planDao.observeKeptFrom(today.toEpochDay())) { a, k ->
+                a.days.map { Triple(it.busyRanges(), it.reservedDay, it.tasksDue.map { t -> t.id to t.done }) } to
+                    (a.allTasks.map { it.id to it.dueEpochDay } to k.map { listOf(it.id, it.status, it.startMinute, it.dateEpochDay) })
+            }
+                .distinctUntilChanged()
+                .debounce(2_500)
+                .conflate()
+                .collect { runCatching { engine.planDays(java.time.LocalDate.now(), 14) } }
+        }
         // Beim Öffnen Kalender-Abos (FamilyWall, Lernraum) auffrischen, wenn sie älter als 30 Minuten sind
         viewModelScope.launch { ical.syncStale(30 * 60_000L) }
     }
+
+    /** FamilyWall-App auf dem Gerät? Dann einmalig deren Handy-Kalender übernehmen – nur meine Termine. */
+    private suspend fun connectFamilyWall() {
+        if (!systemCalendar.hasPermission()) return
+        val fw = systemCalendar.calendars().firstOrNull { it.isFamilyWall } ?: return
+        if (!settings.claimFamilyWallAutoConnect()) return
+        val s = settings.settings.first()
+        settings.setSystemCalendarIds(s.systemCalendarIds + fw.id)
+        settings.setOnlyMineCalendarIds(s.onlyMineCalendarIds + fw.id)
+        ical.all.first().filter { it.isFamilyWallSource() }.forEach { ical.delete(it) }
+    }
+
+    private fun app.lifedashboard.data.db.IcalSourceEntity.isFamilyWallSource() =
+        name.contains("familywall", ignoreCase = true) || url.contains("familywall", ignoreCase = true)
 
     fun restartCoach() {
         viewModelScope.launch { settings.restartCoach() }

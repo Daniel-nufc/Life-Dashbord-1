@@ -183,6 +183,7 @@ fun TodayScreen(
                                     done = viewModel::done,
                                     decline = decline,
                                     later = viewModel::later,
+                                    move = viewModel::move,
                                 ),
                                 replan = viewModel::replanNow,
                             ) { entry ->

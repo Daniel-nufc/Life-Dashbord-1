@@ -49,6 +49,8 @@ class PlanActions(
     val done: (PlanBlockEntity) -> Unit,
     val decline: (PlanBlockEntity) -> Unit,
     val later: (PlanBlockEntity) -> Unit,
+    /** Selbst auf eine Uhrzeit legen – der Block bleibt dann fest dort */
+    val move: ((PlanBlockEntity, LocalTime) -> Unit)? = null,
 )
 
 @Composable
@@ -216,7 +218,7 @@ private fun TimelineRow(
                 val detail = listOfNotNull(
                     when (status) {
                         PlanStatus.PROPOSED -> "Vorschlag"
-                        PlanStatus.ACCEPTED -> "Eingeplant"
+                        PlanStatus.ACCEPTED -> if (entry.plan?.pinned == true) "Fest eingeplant" else "Eingeplant"
                         PlanStatus.DONE -> "Erledigt"
                         else -> null
                     },
@@ -239,6 +241,12 @@ private fun TimelineRow(
                             MiniAction("Erledigt", filled = true) { actions.done(block) }
                         }
                         MiniAction("Später", filled = false) { actions.later(block) }
+                        actions.move?.let { move ->
+                            val context = androidx.compose.ui.platform.LocalContext.current
+                            MiniAction("Zeit", filled = false) {
+                                context.pickTime(entry.range.start) { time -> move(block, time) }
+                            }
+                        }
                         Box(
                             Modifier.size(32.dp).clip(CircleShape).clickable { actions.decline(block) },
                             contentAlignment = Alignment.Center,

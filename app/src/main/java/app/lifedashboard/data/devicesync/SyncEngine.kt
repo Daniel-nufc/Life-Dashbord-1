@@ -43,7 +43,7 @@ class SyncEngine(private val db: AppDatabase, private val deviceId: () -> String
         try {
             for (t in SyncSchema.tables) {
                 // Sicherheitsnetz: jeder Eintrag hat einen Meta-Datensatz
-                s.execSQL("INSERT OR IGNORE INTO sync_meta(tbl, localId, gid, updatedAt, deleted) SELECT '${t.name}', rowid, NULL, 0, 0 FROM `${t.name}`")
+                s.execSQL("INSERT OR IGNORE INTO sync_meta(tbl, localId, gid, updatedAt, deleted) SELECT '${t.name}', rowid, NULL, 0, 0 FROM `${t.name}`${with(SyncSchema) { t.where() }}")
                 val missing = s.query("SELECT localId FROM sync_meta WHERE tbl = ? AND gid IS NULL AND deleted = 0 ORDER BY localId", arrayOf(t.name))
                     .use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } }
                 if (missing.isEmpty()) continue
@@ -124,7 +124,7 @@ class SyncEngine(private val db: AppDatabase, private val deviceId: () -> String
         val tables = JSONObject()
         for (t in SyncSchema.tables) {
             val parentGids = t.refs.values.toSet().associateWith { gidByLocalId(it) }
-            val rows = s.query("SELECT rowid AS __rid, * FROM `${t.name}`").use { c ->
+            val rows = s.query("SELECT rowid AS __rid, * FROM `${t.name}`${with(SyncSchema) { t.where() }}").use { c ->
                 buildMap { while (c.moveToNext()) put(c.getLong(0), c.toMap(skip = "__rid")) }
             }
             val out = JSONArray()
@@ -161,9 +161,11 @@ class SyncEngine(private val db: AppDatabase, private val deviceId: () -> String
     // ------------------------------------------------------------------ Zusammenführen
 
     fun merge(remote: JSONObject): MergeResult {
+        // Verschiedene App-Versionen: trotzdem abgleichen, was beide kennen (unbekannte Tabellen/Spalten bleiben unberührt).
+        // Nur ein sehr altes Format (vor dem Geräte-Abgleich) wird abgelehnt.
         val remoteVersion = remote.optInt("dbVersion", -1)
         val localVersion = sql.version
-        if (remoteVersion != localVersion) throw SyncVersionException(remoteVersion, localVersion)
+        if (remoteVersion < 12) throw SyncVersionException(remoteVersion, localVersion)
         if (remote.optString("device") == deviceId()) return MergeResult()
         assignGids()
         val tables = remote.getJSONObject("tables")

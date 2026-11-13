@@ -68,6 +68,10 @@ interface EventDao {
 
     @Query("SELECT * FROM events WHERE externalUid LIKE :prefix || '%'")
     suspend fun byExternalPrefix(prefix: String): List<EventEntity>
+
+    /** Kennungen eines Kalender-Abos umbenennen (alte, gerätespezifische → neue, auf beiden Geräten gleiche) */
+    @Query("UPDATE events SET externalUid = :newPrefix || substr(externalUid, length(:oldPrefix) + 1) WHERE externalUid LIKE :oldPrefix || '%'")
+    suspend fun renameExternalPrefix(oldPrefix: String, newPrefix: String)
 }
 
 @Dao
@@ -89,6 +93,10 @@ interface TaskDao {
 
     @Query("SELECT * FROM tasks WHERE externalUid LIKE :prefix || '%'")
     suspend fun byExternalPrefix(prefix: String): List<TaskEntity>
+
+    /** Kennungen eines Kalender-Abos umbenennen (alte, gerätespezifische → neue, auf beiden Geräten gleiche) */
+    @Query("UPDATE tasks SET externalUid = :newPrefix || substr(externalUid, length(:oldPrefix) + 1) WHERE externalUid LIKE :oldPrefix || '%'")
+    suspend fun renameExternalPrefix(oldPrefix: String, newPrefix: String)
 }
 
 @Dao
@@ -183,6 +191,10 @@ interface PlanDao {
     @Query("SELECT * FROM plan_blocks WHERE id = :id")
     suspend fun byId(id: Long): PlanBlockEntity?
 
+    /** Bestätigte/erledigte/feste Blöcke ab einem Tag (ändern sich z. B. durch den Abgleich mit dem Tablet). */
+    @Query("SELECT * FROM plan_blocks WHERE dateEpochDay >= :fromDay AND status != 'PROPOSED' ORDER BY dateEpochDay, startMinute")
+    fun observeKeptFrom(fromDay: Long): Flow<List<PlanBlockEntity>>
+
     @Insert
     suspend fun insertAll(blocks: List<PlanBlockEntity>)
 
@@ -194,6 +206,14 @@ interface PlanDao {
 
     @Query("UPDATE plan_blocks SET endMinute = :endMinute WHERE id = :id")
     suspend fun setEnd(id: Long, endMinute: Int)
+
+    /** Block auf eine andere Zeit legen (automatisch: Platz machen für einen neuen Termin). */
+    @Query("UPDATE plan_blocks SET startMinute = :startMinute, endMinute = :endMinute WHERE id = :id")
+    suspend fun setTimes(id: Long, startMinute: Int, endMinute: Int)
+
+    /** Von Daniel selbst gelegt: feste Zeit, bestätigt, wird nicht mehr automatisch verschoben. */
+    @Query("UPDATE plan_blocks SET dateEpochDay = :day, startMinute = :startMinute, endMinute = :endMinute, status = 'ACCEPTED', pinned = 1 WHERE id = :id")
+    suspend fun pin(id: Long, day: Long, startMinute: Int, endMinute: Int)
 
     /** Alte Trainings-Einheiten (vor den Sport-Zeitfenstern) ab [fromDay] löschen – erledigte bleiben. */
     @Query("DELETE FROM plan_blocks WHERE dateEpochDay >= :fromDay AND demandKey LIKE 'train:%' AND demandKey NOT LIKE '%:WINDOW' AND status IN ('PROPOSED', 'ACCEPTED')")

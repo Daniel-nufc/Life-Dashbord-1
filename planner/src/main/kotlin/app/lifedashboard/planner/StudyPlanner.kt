@@ -25,6 +25,11 @@ data class StudyExam(
     val defaultMinutes: Int = StudyPlanner.DEFAULT_MINUTES_WITHOUT_TOPICS,
     /** Zuschlag, wenn das Fach bisher unter dem Ziel liegt (1,0 = kein Zuschlag). */
     val effortFactor: Double = 1.0,
+    /**
+     * Untergrenze für die ganze Klausur (z. B. 8 Std), auch wenn die Themen weniger ergeben –
+     * der Fortschritt (= wie gut Daniel es schon kann) zieht davon anteilig ab.
+     */
+    val minimumMinutes: Int = 0,
 )
 
 /** Wie realistisch ist der Lernplan einer Klausur? */
@@ -77,11 +82,19 @@ object StudyPlanner {
     /** Ohne eingetragene Themen: pauschal 4 Std Lernzeit, damit der Plan trotzdem startet. */
     const val DEFAULT_MINUTES_WITHOUT_TOPICS = 240
 
-    fun remainingMinutes(exam: StudyExam): Int = if (exam.topics.isEmpty()) {
-        (exam.defaultMinutes * difficultyFactor(exam.difficulty) * exam.effortFactor).roundToInt()
-    } else exam.topics.sumOf { topic ->
-        topic.effortMinutes * (100 - topic.progress.coerceIn(0, 100)) / 100.0
-    }.let { (it * difficultyFactor(exam.difficulty) * exam.effortFactor).roundToInt() }
+    /**
+     * Restlernzeit: Themen-Aufwand × (100 % − Fortschritt). Der Fortschritt ist Daniels Verständnis –
+     * je weiter der Regler, desto weniger Lernzeit. Nie weniger als die Untergrenze der Klausur × (1 − Ø Fortschritt).
+     */
+    fun remainingMinutes(exam: StudyExam): Int {
+        val topicNeed = if (exam.topics.isEmpty()) exam.defaultMinutes.toDouble() else exam.topics.sumOf { topic ->
+            topic.effortMinutes * (100 - topic.progress.coerceIn(0, 100)) / 100.0
+        }
+        val totalEffort = exam.topics.sumOf { it.effortMinutes }
+        val understood = if (totalEffort <= 0) 0.0 else exam.topics.sumOf { it.effortMinutes * it.progress.coerceIn(0, 100) / 100.0 } / totalEffort
+        val floor = exam.minimumMinutes * (1 - understood)
+        return (maxOf(topicNeed, floor) * difficultyFactor(exam.difficulty) * exam.effortFactor).roundToInt()
+    }
 
     /** Liegt der Schnitt unter dem Ziel, gibt es bis zu 30 % mehr Lernzeit (pro fehlendem Punkt 6 %). */
     fun effortFactor(averagePoints: Double?, targetPoints: Double): Double =
@@ -90,7 +103,14 @@ object StudyPlanner {
     fun plan(
         exams: List<StudyExam>,
         today: LocalDate,
-        leadDays: Int = 10,
+        /** Lernwoche: so viele Tage vor der Klausur wird richtig gelernt */
+        leadDays: Int = 7,
+        /** Ist die Klausur weiter weg, gibt es vorher lockere Einheiten etwa alle [warmupEvery] Tage … */
+        warmupEvery: Int = 3,
+        /** … mit diesem Anteil der Lernzeit … */
+        warmupShare: Double = 0.3,
+        /** … frühestens so viele Tage vor der Klausur. */
+        warmupMaxLead: Int = 35,
         dailyCapMinutes: Int = 120,
         blockMinutes: Int = 25,
         reviewMinutes: Int = 25,
@@ -118,12 +138,38 @@ object StudyPlanner {
                 }
             }
 
-            // 2) Lerntage: von max(heute, Klausur − leadDays) bis Vortag − 1
-            var firstDay = maxOf(today, exam.date.minusDays(leadDays.toLong()))
+            val mine = sortedMapOf<LocalDate, Int>()
+            val totalNeed = roundToBlocks(remainingMinutes(exam), blockMinutes)
+
+            // 1b) Locker vorlernen: Ist die Klausur weit weg, alle ~3 Tage eine Einheit (ca. 30 %),
+            //     damit nicht alles in der letzten Woche hängt. Gewählt wird der freieste Tag im 3-Tage-Fenster.
+            val intensiveStart = exam.date.minusDays(leadDays.toLong())
+            var warmed = 0
+            if (ChronoUnit.DAYS.between(today, exam.date) > leadDays + 2 && totalNeed > 0) {
+                val warmEnd = intensiveStart.minusDays(1)
+                var d = maxOf(today, exam.date.minusDays(warmupMaxLead.toLong()))
+                var left = roundToBlocks((totalNeed * warmupShare).roundToInt(), blockMinutes)
+                while (!d.isAfter(warmEnd) && left > 0) {
+                    val window = (0 until warmupEvery).map { d.plusDays(it.toLong()) }.filter { !it.isAfter(warmEnd) }
+                    val best = window.maxByOrNull { cap(it) - (used[it] ?: 0) }!!
+                    val fits = minOf(left, sessionMinutes, roundDownToBlocks(cap(best) - (used[best] ?: 0), blockMinutes))
+                    if (fits >= blockMinutes) {
+                        mine[best] = (mine[best] ?: 0) + fits
+                        used[best] = (used[best] ?: 0) + fits
+                        left -= fits
+                        warmed += fits
+                    }
+                    d = d.plusDays(warmupEvery.toLong())
+                }
+            }
+            val intensiveNeed = (totalNeed - warmed).coerceAtLeast(0)
+
+            // 2) Lernwoche: von max(heute, Klausur − leadDays) bis Vortag − 1
+            var firstDay = maxOf(today, intensiveStart)
             val lastDay = dayBefore.minusDays(1)
             // Reicht die freie Zeit im normalen Vorlauf nicht, fängt der Plan früher an (statt Lernzeit zu streichen)
             if (!lastDay.isBefore(firstDay)) {
-                val needed = remainingMinutes(exam)
+                val needed = intensiveNeed
                 fun room(from: LocalDate): Int {
                     var sum = 0
                     var d = from
@@ -140,7 +186,7 @@ object StudyPlanner {
                 // Zu knapp (Klausur morgen): heute = Vortag → so viel lernen wie das Tageslimit erlaubt
                 if (!dayBefore.isBefore(today)) {
                     val left = roundDownToBlocks(maxOf(cap(dayBefore), blockMinutes * 2) - (used[dayBefore] ?: 0), blockMinutes)
-                    val minutes = minOf(left, roundToBlocks(remainingMinutes(exam), blockMinutes))
+                    val minutes = minOf(left, roundToBlocks(intensiveNeed, blockMinutes))
                     if (minutes > 0) {
                         val topic = exam.topics.firstOrNull { it.progress < 100 }
                         result += StudyAllocation(dayBefore, exam.id, topic?.id, "${exam.subjectName}: ${topic?.title ?: "lernen"}", minutes, isReview = false)
@@ -150,14 +196,12 @@ object StudyPlanner {
                 continue
             }
             val days = ChronoUnit.DAYS.between(firstDay, lastDay).toInt() + 1
-            var remaining = roundToBlocks(remainingMinutes(exam), blockMinutes)
-            if (remaining <= 0) continue
+            var remaining = roundToBlocks(intensiveNeed, blockMinutes)
 
             // Gleichmäßig verteilen: Die Lernzeit wird in Einheiten (meist 2 Pomodoros) geteilt. Jede Einheit bekommt
             // einen Wunsch-Tag (in gleichen Abständen bis zur Klausur) und landet auf dem Tag in der Nähe,
             // der danach am wenigsten ausgelastet ist. So entsteht kein Tag mit 15 Minuten neben einem mit 3 Stunden.
             val sessions = (remaining + sessionMinutes - 1) / sessionMinutes
-            val mine = sortedMapOf<LocalDate, Int>()
             for (i in 0 until sessions) {
                 if (remaining <= 0) break
                 val unit = minOf(sessionMinutes, remaining)

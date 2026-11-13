@@ -172,6 +172,10 @@ class TodayViewModel @Inject constructor(
     fun done(block: PlanBlockEntity) = launch { engine.done(block) }
     fun decline(block: PlanBlockEntity) = launch { engine.decline(block) }
     fun later(block: PlanBlockEntity) = launch { engine.later(block) }
+
+    /** Selbst auf eine Uhrzeit gelegt: bleibt fest, der Rest des Tages plant drumherum. */
+    fun move(block: PlanBlockEntity, time: java.time.LocalTime) =
+        launch { engine.pin(block, LocalDate.ofEpochDay(block.dateEpochDay), time.hour * 60 + time.minute) }
     fun replanNow() = launch { engine.replan(LocalDate.now()) }
     fun toggleHabit(id: Long, done: Boolean) = launch { goals.toggleHabit(id, LocalDate.now(), done) }
 

@@ -153,8 +153,8 @@ class PlanningIntegrationTest {
         engine.planDays(tomorrow, 1)
         val school = blocks(tomorrow, 1).filter { it.type == DemandType.STUDY || it.type == DemandType.HOMEWORK || it.type == DemandType.REVIEW }
             .sumOf { it.endMinute - it.startMinute }
-        // Schul-Pensum: höchstens 2 Std (Sonntag mit Klausur in 1–2 Tagen: 1 Std)
-        assertTrue("$school Min Schule geplant – Limit 120", school <= 120)
+        // Schul-Pensum: werktags 2 Std, in der Lernwoche vor einer Klausur 3 Std (Sonntag mit Klausur in 1–2 Tagen: 1 Std)
+        assertTrue("$school Min Schule geplant – Limit 180", school <= 180)
     }
 
     private fun nextSchoolDay(from: LocalDate): Pair<LocalDate, app.lifedashboard.data.repository.DayAgenda> = runBlocking {
@@ -239,5 +239,40 @@ class PlanningIntegrationTest {
         val home = schoolEnd.hour * 60 + schoolEnd.minute + agendaDay.settings.schoolCommuteMinutes
         val afterSchool = blocks(day, 1).filter { it.startMinute >= schoolEnd.hour * 60 + schoolEnd.minute }
         assertTrue("erst 60 Min nach dem Heimweg planen: ${afterSchool.map { it.startMinute }}", afterSchool.all { it.startMinute >= home + 60 })
+    }
+
+    @Test
+    fun `neuer Termin schiebt bestaetigte Bloecke weg - selbst gelegte bleiben`() = runBlocking {
+        seed.seedIfNeeded()
+        val day = tomorrow
+        val bio = subject("Bio")
+        study.saveExam(ExamEntity(subjectId = bio.id, dateEpochDay = today.plusDays(4).toEpochDay(), title = "", kind = ExamKind.TEST, note = null), emptyList())
+        engine.planDays(day, 1)
+        engine.acceptAll(day, day)
+        val accepted = blocks(day, 1).filter { it.status == PlanStatus.ACCEPTED }
+        if (accepted.isEmpty()) return@runBlocking
+        val target = accepted.first()
+        // Termin genau über den bestätigten Block legen
+        db.eventDao().upsert(app.lifedashboard.data.db.EventEntity(
+            title = "Zahnarzt", dateEpochDay = day.toEpochDay(), startMinute = target.startMinute, endMinute = target.endMinute,
+            area = app.lifedashboard.data.db.LifeArea.PRIVATE, location = null, note = null,
+        ))
+        engine.replan(day)
+        val after = blocks(day, 1).filter { it.status == PlanStatus.ACCEPTED }
+        val moved = after.firstOrNull { it.id == target.id }
+        if (moved != null) {
+            assertTrue("Block liegt noch auf dem Termin", moved.endMinute <= target.startMinute || moved.startMinute >= target.endMinute)
+        } else {
+            // kein Platz mehr an dem Tag → Inhalt wird neu verteilt
+            assertTrue(after.none { it.id == target.id })
+        }
+
+        // Selbst gelegt (19:00) → bleibt, auch nach Neuplanung
+        val other = after.firstOrNull() ?: return@runBlocking
+        engine.pin(other, day, 19 * 60)
+        engine.replan(day)
+        val pinned = blocks(day, 1).first { it.id == other.id }
+        assertEquals(19 * 60, pinned.startMinute)
+        assertTrue(pinned.pinned)
     }
 }

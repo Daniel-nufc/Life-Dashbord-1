@@ -40,7 +40,8 @@ class IcalSyncRepository @Inject constructor(
         val existing = studyDao.observeExams().first()
         items.filter { examWords.containsMatchIn(it.summary) && !it.startDate.isBefore(java.time.LocalDate.now()) }.forEach { item ->
             val marker = "ical:${source.id}:${item.uid}"
-            if (existing.any { it.note == marker }) return@forEach
+            // schon da – auch wenn das andere Gerät sie angelegt hat (dort hat das Abo eine andere Nummer)
+            if (existing.any { it.note == marker || (it.note?.startsWith("ical:") == true && it.note.endsWith(":${item.uid}")) }) return@forEach
             val intent = app.lifedashboard.planner.QuickParser.parse(
                 item.summary, java.time.LocalDate.now(), subjects.map { app.lifedashboard.planner.QuickSubject(it.code, it.name) },
             )
@@ -90,6 +91,7 @@ class IcalSyncRepository @Inject constructor(
             if (!text.contains("BEGIN:VCALENDAR", ignoreCase = true)) {
                 error("Der Link liefert keinen Kalender. Ist es der richtige Export-Link?")
             }
+            migratePrefix(source)
             val from = LocalDate.now().minusDays(14)
             val to = LocalDate.now().plusDays(180)
             // Serientermine (z. B. wöchentlich, Geburtstage) werden im Zeitraum aufgefaltet
@@ -195,7 +197,19 @@ class IcalSyncRepository @Inject constructor(
      * Kennung der übernommenen Einträge. FamilyWall hat eine feste Kennung, damit Handy und Tablet
      * dieselben Termine erzeugen (kein Doppel beim Abgleich) und kein anderes Abo sie löscht.
      */
-    private fun prefixOf(source: IcalSourceEntity) = if (source.isFamilyWall()) "familywall:" else "ical${source.id}:"
+    private fun prefixOf(source: IcalSourceEntity) = if (source.isFamilyWall()) "familywall:" else "ical-" + urlKey(source.url) + ":"
+
+    /** Aus dem Link gebildet → auf Handy und Tablet gleich (die Abo-Nummer ist je Gerät verschieden → sonst Doppel). */
+    private fun urlKey(url: String): String = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(url.trim().replaceFirst("webcal://", "https://").toByteArray()).take(6).joinToString("") { "%02x".format(it) }
+
+    /** Einträge aus Versionen vor v35 (Kennung mit Abo-Nummer) auf die neue Kennung umstellen. */
+    private suspend fun migratePrefix(source: IcalSourceEntity) {
+        if (source.isFamilyWall()) return
+        val old = "ical${source.id}:"
+        tasks.renameExternalPrefix(old, prefixOf(source))
+        events.renameExternalPrefix(old, prefixOf(source))
+    }
 }
 
 /** FamilyWall-Abo erkennen (Name oder Link). */

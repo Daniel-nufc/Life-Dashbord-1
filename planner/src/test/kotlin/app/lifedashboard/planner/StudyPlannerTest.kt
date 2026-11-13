@@ -35,12 +35,15 @@ class StudyPlannerTest {
     }
 
     @Test
-fun `Lernzeit wird gleichmaessig verteilt statt gestapelt`() {
-        val plan = StudyPlanner.plan(listOf(exam(1, today.plusDays(10), 3, 600)), today).filter { !it.isReview }
+fun `Lernzeit - locker vorlernen, dann gleichmaessige Lernwoche`() {
+        val examDay = today.plusDays(10)
+        val plan = StudyPlanner.plan(listOf(exam(1, examDay, 3, 600)), today).filter { !it.isReview }
         val perDay = plan.groupBy { it.date }.mapValues { (_, l) -> l.sumOf { it.minutes } }
         assertEquals(600, perDay.values.sum())
-        assertTrue(perDay.size >= 8, "auf fast alle Tage verteilt: $perDay")
-        assertTrue(perDay.values.max() - perDay.values.min() <= 50, "kein Tag viel voller als ein anderer: $perDay")
+        val week = perDay.filterKeys { !it.isBefore(examDay.minusDays(7)) }
+        assertTrue(week.values.sum() >= 400, "Hauptteil in der Lernwoche: $perDay")
+        assertTrue(week.size >= 5, "Lernwoche auf fast alle Tage verteilt: $perDay")
+        assertTrue(week.values.max() - week.values.min() <= 50, "kein Tag viel voller als ein anderer: $perDay")
     }
 
     @Test
@@ -109,5 +112,27 @@ fun `Lernzeit wird gleichmaessig verteilt statt gestapelt`() {
         assertTrue(plan.all { it.date == today })
         assertTrue(plan.any { !it.isReview && it.minutes >= 50 }, "Lernzeit erwartet: $plan")
         assertTrue(plan.sumOf { it.minutes } <= 120, "Tageslimit")
+    }
+
+    @Test
+    fun `Klausur in 4 Wochen - alle 3 Tage locker, in der letzten Woche richtig`() {
+        val examDay = today.plusDays(28)
+        val topics = (1..4).map { StudyTopic(it.toLong(), "Thema $it", 75, 0) }
+        val e = StudyExam(1, "Englisch", examDay, 3, topics, minimumMinutes = 480)
+        assertEquals(480, StudyPlanner.remainingMinutes(e)) // nicht nur 4 × 75 Min = 5 Std
+        val learn = StudyPlanner.plan(listOf(e), today).filter { !it.isReview }
+        assertTrue(learn.sumOf { it.minutes } in 480..500, "Blöcke à 25 Min: ${learn.sumOf { it.minutes }}")
+        val early = learn.filter { it.date.isBefore(examDay.minusDays(7)) }.map { it.date }.sorted()
+        assertTrue(early.size >= 3, "vorher schon locker anfangen: $early")
+        early.zipWithNext().forEach { (a, b) -> assertTrue(b.toEpochDay() - a.toEpochDay() >= 2, "nur alle paar Tage: $early") }
+        assertTrue(learn.filter { !it.date.isBefore(examDay.minusDays(7)) }.sumOf { it.minutes } >= 300)
+    }
+
+    @Test
+    fun `Fortschritt ist Verstaendnis - weniger Restzeit`() {
+        val half = StudyExam(1, "Englisch", today.plusDays(20), 3, (1..4).map { StudyTopic(it.toLong(), "T$it", 75, 50) }, minimumMinutes = 480)
+        assertEquals(240, StudyPlanner.remainingMinutes(half))
+        val done = half.copy(topics = half.topics.map { it.copy(progress = 100) })
+        assertEquals(0, StudyPlanner.remainingMinutes(done))
     }
 }

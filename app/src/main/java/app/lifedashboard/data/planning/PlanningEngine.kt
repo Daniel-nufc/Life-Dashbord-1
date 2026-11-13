@@ -133,7 +133,11 @@ class PlanningEngine @Inject constructor(
 
     /** Schul-Pensum des Tages (Klausur in 1–2 Tagen gibt auch sonntags etwas Zeit). */
     private fun schoolCap(day: DayAgenda, overview: StudyOverview) =
-        day.schoolCapMinutes(examSoon = overview.upcoming.any { it.daysLeft(day.date) in 1..2 })
+        day.schoolCapMinutes(
+            examSoon = overview.upcoming.any { it.daysLeft(day.date) in 1..2 },
+            // Lernwoche vor einer Klausur: 1 Std mehr (gleiche Regel wie im Lernplan)
+            examWeek = overview.upcoming.any { it.daysLeft(day.date) in 1..7 },
+        )
 
     /** Tageslimit gesamt: Schul-Pensum + Platz für Sport/Etsy. Sonntag bleibt frei. */
     private fun dailyLimit(day: DayAgenda, overview: StudyOverview): Int {
@@ -158,14 +162,19 @@ class PlanningEngine @Inject constructor(
         // Offene Vorschläge ab jetzt neu berechnen
         dao.delete(existing.filter { it.status == PlanStatus.PROPOSED && it.endMinute > nowMinute }.map { it.id })
 
-        val current = dao.forDay(epoch)
-        val kept = current.filter { it.status == PlanStatus.ACCEPTED || it.status == PlanStatus.DONE }
-        val blockedRanges = current.filter { it.status == PlanStatus.MOVED || it.status == PlanStatus.ACCEPTED || it.status == PlanStatus.DONE }
-            .map { TimeRange.ofMinutes(it.startMinute, it.endMinute) }
-        val declinedKeys = current.filter { it.status == PlanStatus.DECLINED }.map { it.demandKey }.toSet()
-
         val range = agenda.observe(date, 1).first()
         val day = range.days.first()
+        // Neuer fester Termin (selbst eingetragen, FamilyWall, Schicht …) liegt über einem bestätigten Block?
+        // → Block rutscht auf die nächste passende freie Zeit. Selbst gelegte Blöcke bleiben, wo sie sind.
+        makeRoom(date, day, range.settings, nowMinute)
+
+        val current = dao.forDay(epoch)
+        val kept = current.filter { it.status == PlanStatus.ACCEPTED || it.status == PlanStatus.DONE }
+        // „Später“ (MOVED) blockiert keine Zeit mehr – nur derselbe Inhalt kommt nicht wieder auf diese Zeit
+        val blockedRanges = kept.map { TimeRange.ofMinutes(it.startMinute, it.endMinute) }
+        val movedAway = current.filter { it.status == PlanStatus.MOVED }.groupBy { it.demandKey }
+            .mapValues { (_, l) -> l.maxOf { it.endMinute } }
+        val declinedKeys = current.filter { it.status == PlanStatus.DECLINED }.map { it.demandKey }.toSet()
         val overview = study.overview(today).first()
         val settings = range.settings
 
@@ -270,7 +279,9 @@ class PlanningEngine @Inject constructor(
             // geplante Hausaufgabe + 5 Min Pause danach sind belegt
             freeSlots(slot, early.map { TimeRange(it.range.start, maxOf(it.range.end, minOf(it.range.end.plusMinutes(5), slot.end))) }, Duration.ofMinutes(15))
         }
-        val planned = early + DayPlanner.plan(date, freeAfterEarly, rest, config, maxTotalMinutes = budget - early.sumOf { it.range.duration.toMinutes().toInt() })
+        val planned = (early + DayPlanner.plan(date, freeAfterEarly, rest, config, maxTotalMinutes = budget - early.sumOf { it.range.duration.toMinutes().toInt() }))
+            // „Später“ heißt später: nicht vor dem Ende des verschobenen Blocks
+            .filter { p -> movedAway[p.demandKey]?.let { p.range.start.minuteOfDay() >= it } ?: true }
         dao.insertAll(
             planned.map {
                 PlanBlockEntity(
@@ -286,6 +297,48 @@ class PlanningEngine @Inject constructor(
                 )
             },
         )
+    }
+
+    /**
+     * Bestätigte Blöcke, die jetzt mit festen Einträgen kollidieren, auf die nächstgelegene freie Zeit am selben Tag legen.
+     * Passt nichts mehr, wird der Block gelöscht – sein Inhalt wird dann neu (auch auf andere Tage) verteilt.
+     */
+    private suspend fun makeRoom(date: LocalDate, day: app.lifedashboard.data.repository.DayAgenda, settings: app.lifedashboard.data.settings.AppSettings, nowMinute: Int) {
+        val blocks = dao.forDay(date.toEpochDay())
+        val fixed = day.busyRanges()
+        val movable = blocks.filter { it.status == PlanStatus.ACCEPTED && !it.pinned && it.endMinute > nowMinute }
+        val window = TimeRange(settings.dayStartFor(date, day.holiday != null), settings.dayEnd)
+        val placed = blocks.filter { (it.status == PlanStatus.ACCEPTED || it.status == PlanStatus.DONE) }
+            .associate { it.id to TimeRange.ofMinutes(it.startMinute, it.endMinute) }.toMutableMap()
+        for (b in movable.sortedBy { it.startMinute }) {
+            val own = TimeRange.ofMinutes(b.startMinute, b.endMinute)
+            val othersPlaced = placed.filterKeys { it != b.id }.values
+            if (fixed.none { it.overlaps(own) } && othersPlaced.none { it.overlaps(own) }) continue
+            var free = freeSlots(window, fixed + othersPlaced, Duration.ofMinutes(15))
+            if (nowMinute > 0) free = DayPlanner.from(free, minuteToTime(((nowMinute + 4) / 5) * 5))
+            val length = b.endMinute - b.startMinute
+            val slot = free.filter { it.duration.toMinutes() >= length }
+                .minByOrNull { kotlin.math.abs(it.start.minuteOfDay() - b.startMinute) }
+            if (slot == null) {
+                dao.delete(listOf(b.id))
+                placed.remove(b.id)
+                continue
+            }
+            val start = b.startMinute.coerceIn(slot.start.minuteOfDay(), slot.end.minuteOfDay() - length)
+            dao.setTimes(b.id, start, start + length)
+            placed[b.id] = TimeRange.ofMinutes(start, start + length)
+        }
+    }
+
+    /** Daniel legt einen Block selbst auf eine Zeit (auch einen anderen Tag): bleibt dort fest, der Rest plant drumherum. */
+    suspend fun pin(block: PlanBlockEntity, date: LocalDate, startMinute: Int) = mutex.withLock {
+        val length = block.endMinute - block.startMinute
+        val start = startMinute.coerceIn(0, 24 * 60 - length)
+        dao.pin(block.id, date.toEpochDay(), start, start + length)
+        feedback(block, FeedbackAction.ACCEPTED)
+        val balance = balance()
+        replanLocked(date, balance)
+        if (block.dateEpochDay != date.toEpochDay()) replanLocked(LocalDate.ofEpochDay(block.dateEpochDay), balance)
     }
 
     /** Sport-Zeitfenster nur kurz: 15 Minuten statt ganz ausfallen lassen – die Serie bleibt. */

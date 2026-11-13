@@ -110,8 +110,16 @@ class SyncViewModel @Inject constructor(
         viewModelScope.launch {
             _busy.value = true
             val parts = mutableListOf<String>()
-            if (settings.value?.fileUri != null) parts += "Cloud-Datei: " + repo.syncFile()
-            if (lan.exchangeNow()) parts += "WLAN: " + (lan.state.value.message ?: "")
+            val lanOk = lan.exchangeNow()
+            if (settings.value?.fileUri != null) {
+                val first = repo.syncFile()
+                // Zweiter Durchgang kurz danach: falls das andere Gerät die Datei gerade selbst geschrieben hat,
+                // geht seine Änderung so nicht verloren
+                kotlinx.coroutines.delay(6_000)
+                val second = repo.syncFile()
+                parts += "Cloud-Datei: " + if (second.startsWith("Alles aktuell")) first else second
+            }
+            if (lanOk) parts += "WLAN: " + (lan.state.value.message ?: "")
             _message.value = parts.joinToString("\n").ifBlank { "Noch nichts eingerichtet – Cloud-Datei wählen oder anderes Gerät im WLAN öffnen." }
             _busy.value = false
         }

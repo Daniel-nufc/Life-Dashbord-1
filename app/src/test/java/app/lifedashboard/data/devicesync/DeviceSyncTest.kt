@@ -199,7 +199,7 @@ class DeviceSyncTest {
     }
 
     @Test
-    fun `alte App-Version auf dem anderen Geraet wird erkannt`() {
+    fun `sehr altes Format wird erkannt - andere neuere Versionen gleichen trotzdem ab`() = runBlocking {
         val json = phone.engine.snapshot().put("dbVersion", 11)
         try {
             tablet.engine.merge(json)
@@ -207,6 +207,34 @@ class DeviceSyncTest {
         } catch (e: SyncVersionException) {
             assertEquals(11, e.remote)
         }
+        // Tablet noch auf der vorigen Version: Aufgaben kommen trotzdem an
+        phone.db.taskDao().upsert(task("Vokabeln"))
+        tablet.engine.merge(phone.engine.snapshot().put("dbVersion", 14))
+        assertEquals(listOf("Vokabeln"), tablet.tasks().map { it.title })
+    }
+
+    private fun block(day: Long, key: String, start: Int, status: app.lifedashboard.data.db.PlanStatus) = app.lifedashboard.data.db.PlanBlockEntity(
+        dateEpochDay = day, startMinute = start, endMinute = start + 50, type = app.lifedashboard.planner.DemandType.STUDY,
+        demandKey = key, title = key, refId = null, status = status, createdAtMillis = 0,
+    )
+
+    @Test
+    fun `Tagesplan - erledigte und bestaetigte Bloecke werden abgeglichen, Vorschlaege nicht`() = runBlocking {
+        val day = 20_500L
+        phone.db.planDao().insertAll(
+            listOf(
+                block(day, "study:a", 960, app.lifedashboard.data.db.PlanStatus.DONE),
+                block(day, "study:b", 1020, app.lifedashboard.data.db.PlanStatus.ACCEPTED),
+                block(day, "study:c", 1080, app.lifedashboard.data.db.PlanStatus.PROPOSED),
+            ),
+        )
+        // Tablet hat denselben Block selbst bestätigt – zu einer anderen Zeit
+        tablet.db.planDao().insertAll(listOf(block(day, "study:b", 1100, app.lifedashboard.data.db.PlanStatus.ACCEPTED)))
+        sync(phone, tablet)
+        val onTablet = tablet.db.planDao().forDay(day)
+        assertEquals(listOf("study:a", "study:b"), onTablet.map { it.demandKey }.sorted()) // kein Doppel, kein Vorschlag
+        assertEquals(app.lifedashboard.data.db.PlanStatus.DONE, onTablet.first { it.demandKey == "study:a" }.status)
+        assertEquals(3, phone.db.planDao().forDay(day).size) // eigener Vorschlag bleibt auf dem Handy
     }
 
     /** Zustand direkt nach dem Update auf Version 21: alte Einträge ohne Kennung und ohne Zeitstempel. */

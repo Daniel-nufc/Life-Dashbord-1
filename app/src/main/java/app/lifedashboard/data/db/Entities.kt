@@ -206,6 +206,8 @@ data class PlanBlockEntity(
     val refId: Long?,
     val status: PlanStatus,
     val createdAtMillis: Long,
+    /** Von Daniel selbst auf diese Zeit gelegt („Zeit ändern“) – die App verschiebt ihn nie. */
+    @ColumnInfo(defaultValue = "0") val pinned: Boolean = false,
 )
 
 enum class FeedbackAction { ACCEPTED, DONE, DECLINED, MOVED, MISSED }

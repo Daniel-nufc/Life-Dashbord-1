@@ -77,6 +77,10 @@ class CalendarViewModel @Inject constructor(
     fun decline(block: PlanBlockEntity) { viewModelScope.launch { engine.decline(block) } }
     fun done(block: PlanBlockEntity) { viewModelScope.launch { engine.done(block) } }
     fun later(block: PlanBlockEntity) { viewModelScope.launch { engine.later(block) } }
+
+    fun move(block: PlanBlockEntity, time: java.time.LocalTime) {
+        viewModelScope.launch { engine.pin(block, java.time.LocalDate.ofEpochDay(block.dateEpochDay), time.hour * 60 + time.minute) }
+    }
     fun miniSport(block: PlanBlockEntity) { viewModelScope.launch { engine.miniSport(block) } }
     fun acceptWeek() { viewModelScope.launch { engine.acceptAll(_weekStart.value, _weekStart.value.plusDays(6)) } }
     fun replanWeek() {
