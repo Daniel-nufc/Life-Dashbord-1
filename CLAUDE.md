@@ -62,6 +62,7 @@ Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (
 - FamilyWall hat keine API, aber einen **iCal-Link** (FamilyWall → Kalender → Zahnrad → ersten Kalender antippen → „iCal generieren“). Eigene Karte unter *Mehr → Kalender & Abos* mit Anleitung und „Link einfügen“ (Zwischenablage).
 - `ical_sources.area` (Migration 12→13): Schule oder Privat. FamilyWall = `PRIVATE`, Klausur-Erkennung nur bei Schul-Abos.
 - `planner/IcsParser.parse(text, zone, from, to)` faltet Serien auf (RRULE täglich/wöchentlich/monatlich/jährlich, INTERVAL, COUNT, UNTIL, BYDAY inkl. „2TU“/„-1FR“, BYMONTHDAY, BYMONTH), EXDATE, RECURRENCE-ID, STATUS:CANCELLED, mehrtägige Termine (ein Eintrag pro Tag), LOCATION, VALARM wird übersprungen. Kennung je Wiederholung `uid#yyyyMMdd`.
+- **Nur Daniels Termine** (`ical_sources.filterName`, Standard = Name aus den Einstellungen): `planner.IcsPersonFilter` behält Termine, bei denen die Person als Teilnehmer (`ATTENDEE`, CN oder E-Mail) ausgewählt ist oder im Titel steht (nur Vorname, ganzes Wort). Ob FamilyWall `ATTENDEE` mitschickt, ist **nicht bestätigt** – `lastNote` zeigt „X von Y Terminen sind für dich“ und die gefundenen Personen bzw. den Hinweis, dass keine Teilnehmer mitkommen.
 - FamilyWall-Einträge haben die feste Kennung `familywall:` (statt `ical<id>:`), damit Handy und Tablet keine Doppel erzeugen.
 - Abos werden alle 2 Std (`IcalSyncWorker`, Policy UPDATE) und beim Öffnen der App (älter als 30 Min, `RootViewModel`) geholt. Test: `FamilyWallSyncTest` (echter lokaler HTTP-Server).
 

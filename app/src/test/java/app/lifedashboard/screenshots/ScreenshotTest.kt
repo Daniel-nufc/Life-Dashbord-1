@@ -133,6 +133,16 @@ class ScreenshotTest {
         db.sportDao().upsertWorkout(WorkoutEntity(dateEpochDay = today.minusDays(2).toEpochDay(), type = WorkoutType.RUN, durationMinutes = 34, distanceMeters = 5200, note = null))
         db.sportDao().upsertWorkout(WorkoutEntity(dateEpochDay = today.minusDays(5).toEpochDay(), type = WorkoutType.FLOORBALL, durationMinutes = 90, distanceMeters = null, note = null))
         val dkb = db.financeDao().accounts().first()
+        // FamilyWall verbunden: nur Daniels Termine, einer davon heute
+        db.icalSourceDao().upsert(app.lifedashboard.data.db.IcalSourceEntity(
+            name = "FamilyWall", url = "https://api.familywall.com/ical/beispiel", importAsTasks = false,
+            lastSyncMillis = System.currentTimeMillis(), lastError = null, area = LifeArea.PRIVATE, filterName = "Daniel",
+            lastNote = "14 von 52 Terminen sind für dich. Personen im Kalender: Daniel, Mama, Papa",
+        ))
+        db.eventDao().upsert(app.lifedashboard.data.db.EventEntity(
+            title = "Zahnarzt", dateEpochDay = today.toEpochDay(), startMinute = 16 * 60 + 30, endMinute = 17 * 60, area = LifeArea.PRIVATE,
+            location = "Praxis Dr. Weber", note = "Aus: FamilyWall", externalUid = "familywall:zahnarzt",
+        ))
         db.financeDao().upsertTransaction(TransactionEntity(accountId = dkb.id, dateEpochDay = today.minusDays(3).toEpochDay(), amountCents = -899, counterparty = "Rewe",
             description = "Snacks", category = "Essen", importHash = null, recurringId = null))
     }
@@ -188,6 +198,7 @@ class ScreenshotTest {
         open("Etsy-Shop"); assertText("Motiv-Pipeline"); shot(device, "10_etsy"); back()
         open("Ziele & Gewohnheiten"); shot(device, "11_ziele"); back()
         open("Handy ↔ Tablet"); assertText("Abgleich-Passwort"); shot(device, "12_abgleich"); back()
+        open("Kalender & Abos"); assertText("Nur Termine für Daniel"); shot(device, "14_kalender_abos"); back()
     }
 
     // ------------------------------------------------------------------ Helfer

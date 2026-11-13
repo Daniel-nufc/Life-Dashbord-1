@@ -297,10 +297,12 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        /** Update 30: Kalender-Abos bekommen einen Bereich (FamilyWall-Termine = Privat statt Schule). */
+        /** Update 30: Kalender-Abos bekommen Bereich (FamilyWall = Privat), Personen-Filter und Hinweis. */
         val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `ical_sources` ADD COLUMN `area` TEXT NOT NULL DEFAULT 'SCHOOL'")
+                db.execSQL("ALTER TABLE `ical_sources` ADD COLUMN `filterName` TEXT")
+                db.execSQL("ALTER TABLE `ical_sources` ADD COLUMN `lastNote` TEXT")
             }
         }
 

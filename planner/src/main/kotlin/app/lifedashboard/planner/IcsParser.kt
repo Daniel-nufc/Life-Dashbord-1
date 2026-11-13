@@ -23,7 +23,36 @@ data class IcsEvent(
     val startTime: LocalTime?,
     val endTime: LocalTime?,
     val location: String? = null,
+    /** Teilnehmer (Name aus CN oder Teil der E-Mail vor dem @), z. B. die in FamilyWall ausgewählten Personen. */
+    val attendees: List<String> = emptyList(),
 )
+
+/** Ergebnis von [IcsPersonFilter.apply]: was übernommen wird und was im Kalender gefunden wurde. */
+data class PersonFilterResult(
+    val kept: List<IcsEvent>,
+    val total: Int,
+    /** Alle Personen, die im Kalender als Teilnehmer vorkommen. */
+    val people: Set<String>,
+)
+
+/**
+ * „Nur meine Termine“: ein Termin gehört zu [name], wenn die Person als Teilnehmer ausgewählt ist
+ * oder der Name im Titel/in der Beschreibung steht (z. B. „Daniel Zahnarzt“).
+ * Es reicht der Vorname: „Daniel“ passt zu „Daniel Müller“ und „daniel.mueller@…“.
+ */
+object IcsPersonFilter {
+    fun apply(events: List<IcsEvent>, name: String): PersonFilterResult {
+        val people = events.flatMap { it.attendees }.toSortedSet(String.CASE_INSENSITIVE_ORDER)
+        val token = name.trim().split(Regex("\\s+")).firstOrNull()?.lowercase().orEmpty()
+        if (token.isBlank()) return PersonFilterResult(events, events.size, people)
+        val word = Regex("(^|[^\\p{L}])" + Regex.escape(token) + "($|[^\\p{L}])", RegexOption.IGNORE_CASE)
+        val kept = events.filter { e ->
+            e.attendees.any { word.containsMatchIn(it) } ||
+                word.containsMatchIn(e.summary) || (e.description?.let(word::containsMatchIn) ?: false)
+        }
+        return PersonFilterResult(kept, events.size, people)
+    }
+}
 
 /**
  * Robuster iCalendar-Leser (RFC 5545) für Abgabe-Termine (Moodle/IServ/WebUntis) und
@@ -136,6 +165,7 @@ object IcsParser {
         val summary: String,
         val description: String?,
         val location: String?,
+        val attendees: List<String>,
     )
 
     private fun base(props: Props, zone: ZoneId): Base? {
@@ -157,6 +187,10 @@ object IcsParser {
             summary = props.first("SUMMARY")?.second?.let(::unescape).orEmpty().ifBlank { "(ohne Titel)" },
             description = props.first("DESCRIPTION")?.second?.let(::unescape)?.ifBlank { null },
             location = props.first("LOCATION")?.second?.let(::unescape)?.ifBlank { null },
+            attendees = props["ATTENDEE"].orEmpty().mapNotNull { (params, value) ->
+                params["CN"]?.let(::unescape)?.ifBlank { null }
+                    ?: value.trim().removePrefix("mailto:").removePrefix("MAILTO:").substringBefore('@').ifBlank { null }
+            }.distinct(),
         )
     }
 
@@ -209,7 +243,7 @@ object IcsParser {
     private fun occurrence(b: Base, start: LocalDateTime, uid: String): List<IcsEvent> {
         if (b.start.allDay) {
             return (0 until b.allDayDays).map { i ->
-                IcsEvent(if (i == 0L) uid else "$uid/$i", b.summary, b.description, start.toLocalDate().plusDays(i), null, null, b.location)
+                IcsEvent(if (i == 0L) uid else "$uid/$i", b.summary, b.description, start.toLocalDate().plusDays(i), null, null, b.location, b.attendees)
             }
         }
         val end = start.plus(b.length)
@@ -217,7 +251,7 @@ object IcsParser {
         val lastDay = if (end.toLocalTime() == LocalTime.MIDNIGHT && end.toLocalDate().isAfter(firstDay)) end.toLocalDate().minusDays(1) else end.toLocalDate()
         if (!lastDay.isAfter(firstDay)) {
             val endTime = if (b.length.isZero) null else end.toLocalTime().takeIf { it != LocalTime.MIDNIGHT } ?: LocalTime.of(23, 59)
-            return listOf(IcsEvent(uid, b.summary, b.description, firstDay, start.toLocalTime(), endTime, b.location))
+            return listOf(IcsEvent(uid, b.summary, b.description, firstDay, start.toLocalTime(), endTime, b.location, b.attendees))
         }
         val count = ChronoUnit.DAYS.between(firstDay, lastDay).coerceAtMost(MAX_SPAN_DAYS)
         return (0..count).map { i ->
@@ -227,7 +261,7 @@ object IcsParser {
                 day == lastDay -> LocalTime.MIDNIGHT to (end.toLocalTime().takeIf { it != LocalTime.MIDNIGHT } ?: LocalTime.of(23, 59))
                 else -> null to null // Tage dazwischen: ganztägig
             }
-            IcsEvent(if (i == 0L) uid else "$uid/$i", b.summary, b.description, day, s, e, b.location)
+            IcsEvent(if (i == 0L) uid else "$uid/$i", b.summary, b.description, day, s, e, b.location, b.attendees)
         }
     }
 

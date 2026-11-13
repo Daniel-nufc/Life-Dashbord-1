@@ -93,11 +93,26 @@ class IcalSyncRepository @Inject constructor(
             val from = LocalDate.now().minusDays(14)
             val to = LocalDate.now().plusDays(180)
             // Serientermine (z. B. wöchentlich, Geburtstage) werden im Zeitraum aufgefaltet
-            val relevant = IcsParser.parse(text, java.time.ZoneId.systemDefault(), from, to)
+            val all = IcsParser.parse(text, java.time.ZoneId.systemDefault(), from, to)
+            // „Nur meine Termine“ (FamilyWall): nur wo die Person ausgewählt ist oder im Titel steht
+            var note: String? = null
+            val relevant = source.filterName?.takeIf { it.isNotBlank() }?.let { name ->
+                val result = app.lifedashboard.planner.IcsPersonFilter.apply(all, name)
+                val masters = { list: List<app.lifedashboard.planner.IcsEvent> -> list.map { it.uid.substringBefore('#').substringBefore('/') }.toSet().size }
+                note = buildString {
+                    append("${masters(result.kept)} von ${masters(all)} Terminen sind für dich")
+                    if (result.people.isEmpty()) {
+                        append(". FamilyWall schickt keine Teilnehmer mit – übernommen wird nur, wo „${name.trim()}“ im Titel steht.")
+                    } else {
+                        append(". Personen im Kalender: ${result.people.joinToString(", ")}")
+                    }
+                }
+                result.kept
+            } ?: all
             if (source.importAsTasks) importTasks(source, relevant) else importEvents(source, relevant)
             // Klausuren nur in Schul-Abos suchen (im Familienkalender ist „Test“ eher der TÜV)
             if (source.area == LifeArea.SCHOOL) detectExams(source, relevant)
-            sources.setResult(source.id, now, null)
+            sources.setSuccess(source.id, now, note)
             true
         } catch (e: Exception) {
             sources.setResult(source.id, now, e.message ?: e.javaClass.simpleName)

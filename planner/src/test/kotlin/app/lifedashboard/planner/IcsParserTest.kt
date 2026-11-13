@@ -214,4 +214,60 @@ class IcsParserTest {
         val text = cal("BEGIN:VEVENT\nUID:x\nSUMMARY:Serie\nDTSTART;VALUE=DATE:20261102\nRRULE:FREQ=DAILY\nEND:VEVENT")
         assertEquals(1, IcsParser.parse(text, berlin).size)
     }
+
+    // ---------- Nur meine Termine ----------
+
+    private val family = """
+        BEGIN:VCALENDAR
+        BEGIN:VEVENT
+        UID:1
+        SUMMARY:Zahnarzt
+        DTSTART;TZID=Europe/Berlin:20261118T090000
+        ATTENDEE;CN=Daniel Müller;PARTSTAT=ACCEPTED:mailto:daniel@example.org
+        ATTENDEE;CN=Mama:mailto:mama@example.org
+        END:VEVENT
+        BEGIN:VEVENT
+        UID:2
+        SUMMARY:Elternabend Lisa
+        DTSTART;TZID=Europe/Berlin:20261119T190000
+        ATTENDEE;CN=Mama:mailto:mama@example.org
+        END:VEVENT
+        BEGIN:VEVENT
+        UID:3
+        SUMMARY:Daniel Friseur
+        DTSTART;TZID=Europe/Berlin:20261120T150000
+        END:VEVENT
+        BEGIN:VEVENT
+        UID:4
+        SUMMARY:Danielas Geburtstag
+        DTSTART;VALUE=DATE:20261121
+        END:VEVENT
+        BEGIN:VEVENT
+        UID:5
+        SUMMARY:Training
+        DTSTART;TZID=Europe/Berlin:20261122T100000
+        ATTENDEE:mailto:daniel.m@example.org
+        END:VEVENT
+        END:VCALENDAR
+    """.trimIndent()
+
+    @Test
+    fun `Teilnehmer werden gelesen`() {
+        val events = IcsParser.parse(family, berlin)
+        assertEquals(listOf("Daniel Müller", "Mama"), events[0].attendees)
+        assertEquals(listOf("daniel.m"), events[4].attendees)
+    }
+
+    @Test
+    fun `nur Termine, bei denen ich ausgewaehlt bin oder im Titel stehe`() {
+        val result = IcsPersonFilter.apply(IcsParser.parse(family, berlin), "Daniel")
+        assertEquals(listOf("1", "3", "5"), result.kept.map { it.uid }) // nicht „Danielas Geburtstag“, nicht Mamas Termin
+        assertEquals(5, result.total)
+        assertEquals(setOf("Daniel Müller", "Mama", "daniel.m"), result.people.toSet())
+    }
+
+    @Test
+    fun `ohne Namen bleibt alles`() {
+        assertEquals(5, IcsPersonFilter.apply(IcsParser.parse(family, berlin), " ").kept.size)
+    }
 }

@@ -117,6 +117,9 @@ interface IcalSourceDao {
     @Query("UPDATE ical_sources SET lastSyncMillis = :at, lastError = :error WHERE id = :id")
     suspend fun setResult(id: Long, at: Long, error: String?)
 
+    @Query("UPDATE ical_sources SET lastSyncMillis = :at, lastError = NULL, lastNote = :note WHERE id = :id")
+    suspend fun setSuccess(id: Long, at: Long, note: String?)
+
     @Query("DELETE FROM ical_sources WHERE id = :id")
     suspend fun delete(id: Long)
 }

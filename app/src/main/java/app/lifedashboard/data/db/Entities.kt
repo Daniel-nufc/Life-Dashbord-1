@@ -134,6 +134,10 @@ data class IcalSourceEntity(
     val lastError: String?,
     /** Bereich der übernommenen Termine: Schule (Lernraum …) oder Privat (FamilyWall, Familie). */
     @ColumnInfo(defaultValue = "SCHOOL") val area: LifeArea = LifeArea.SCHOOL,
+    /** „Nur meine Termine“: nur Termine mit dieser Person als Teilnehmer (oder im Titel). null = alle. */
+    val filterName: String? = null,
+    /** Hinweis vom letzten Abruf, z. B. „12 von 40 Terminen sind für dich“. */
+    val lastNote: String? = null,
 )
 
 enum class ExamKind { KLAUSUR, TEST, REFERAT, PRAESENTATION }

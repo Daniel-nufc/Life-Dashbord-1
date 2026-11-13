@@ -86,6 +86,8 @@ class ConnectionsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
     val sources: StateFlow<List<IcalSourceEntity>> = ical.all
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val userName: StateFlow<String> = settings.settings.map { it.userName }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
     private val _syncing = MutableStateFlow(false)
     val syncing: StateFlow<Boolean> = _syncing.asStateFlow()
 
@@ -116,11 +118,11 @@ class ConnectionsViewModel @Inject constructor(
     }
 
     /** Neuen FamilyWall-Link übernehmen (ersetzt einen alten, z. B. nach „iCal neu generieren“). */
-    fun connectFamilyWall(url: String) {
+    fun connectFamilyWall(url: String, onlyFor: String?) {
         viewModelScope.launch {
             val old = sources.value.firstOrNull(::isFamilyWall)
             val source = (old ?: IcalSourceEntity(name = "FamilyWall", url = "", importAsTasks = false, lastSyncMillis = null, lastError = null, area = LifeArea.PRIVATE))
-                .copy(url = url.trim(), lastError = null)
+                .copy(url = url.trim(), lastError = null, filterName = onlyFor?.trim()?.ifBlank { null })
             val id = ical.save(source)
             _syncing.value = true
             ical.sync(source.copy(id = if (old != null) old.id else id))
@@ -200,7 +202,7 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
                             if (family != null) IconButton(onClick = viewModel::syncAll, enabled = !syncing) { Icon(Icons.Rounded.Sync, "Jetzt aktualisieren") }
                         }
                         Text(
-                            "Alle Termine aus dem Familienkalender erscheinen automatisch in „Heute“ und im Kalender, auch Serien wie Geburtstage. Die App plant nichts in diese Zeiten. Sie liest nur, in FamilyWall ändert sich nichts.",
+                            "Deine Termine aus dem Familienkalender erscheinen automatisch in „Heute“ und im Kalender, auch Serien wie Geburtstage. Die App plant nichts in diese Zeiten. Sie liest nur, in FamilyWall ändert sich nichts.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -219,8 +221,21 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
                                 color = if (family.lastError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(top = 10.dp),
                             )
+                            Text(
+                                family.filterName?.let { "Nur Termine für $it" } ?: "Alle Termine der Familie",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                            if (family.lastError == null && family.lastNote != null) {
+                                Text(
+                                    family.lastNote,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
+                            }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-                                OutlinedButton(onClick = { showFamilyWall = true }) { Text("Neuen Link eintragen") }
+                                OutlinedButton(onClick = { showFamilyWall = true }) { Text("Ändern") }
                                 TextButton(onClick = { viewModel.delete(family) }) { Text("Trennen") }
                             }
                         }
@@ -323,11 +338,15 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
     }
 
     if (showFamilyWall) {
-        var url by remember { mutableStateOf("") }
+        val existing = sources.firstOrNull(::isFamilyWall)
+        val defaultName by viewModel.userName.collectAsStateWithLifecycle()
+        var url by remember { mutableStateOf(existing?.url.orEmpty()) }
+        var onlyMine by remember { mutableStateOf(existing == null || existing.filterName != null) }
+        var person by remember(defaultName) { mutableStateOf(existing?.filterName ?: defaultName) }
         val valid = url.trim().let { it.startsWith("http") || it.startsWith("webcal") }
         AlertDialog(
             onDismissRequest = { showFamilyWall = false },
-            title = { Text("FamilyWall verbinden") },
+            title = { Text(if (existing == null) "FamilyWall verbinden" else "FamilyWall ändern") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     listOf(
@@ -342,6 +361,18 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
                         Text("Link einfügen", modifier = Modifier.padding(start = 8.dp))
                     }
                     OutlinedTextField(url, { url = it }, label = { Text("iCal-Link") }, modifier = Modifier.fillMaxWidth(), maxLines = 3)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Nur Termine, bei denen ich ausgewählt bin", modifier = Modifier.weight(1f))
+                        Switch(checked = onlyMine, onCheckedChange = { onlyMine = it })
+                    }
+                    if (onlyMine) {
+                        OutlinedTextField(
+                            person, { person = it },
+                            label = { Text("Dein Name in FamilyWall") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                     if (url.isNotBlank() && !valid) {
                         Text("Das ist kein Link. Er beginnt mit https:// oder webcal://", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
@@ -353,8 +384,8 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
                 }
             },
             confirmButton = {
-                TextButton(enabled = valid, onClick = {
-                    viewModel.connectFamilyWall(url)
+                TextButton(enabled = valid && (!onlyMine || person.isNotBlank()), onClick = {
+                    viewModel.connectFamilyWall(url, if (onlyMine) person else null)
                     showFamilyWall = false
                 }) { Text("Verbinden") }
             },
