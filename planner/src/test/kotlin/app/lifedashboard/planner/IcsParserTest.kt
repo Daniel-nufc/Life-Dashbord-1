@@ -277,4 +277,17 @@ class IcsParserTest {
         assertEquals(true, IcsPersonFilter.matches("Daniel", "Arzt", "Teilnehmer: Andrea, Daniel", emptyList()))
         assertEquals(false, IcsPersonFilter.matches("Daniel", "Arzt", null, listOf("Andrea")))
     }
+
+    @Test
+    fun `versteckte Felder zaehlen, das eigene Konto in jedem Termin nicht`() {
+        fun c(title: String, data: String) = IcsPersonFilter.Candidate(title, null, mapOf("sync1" to listOf("Daniel_Sohn"), "sync3" to listOf(data)))
+        val items = listOf(
+            c("Zahnarzt", "{\"members\":[\"Andrea\",\"Daniel\"]}"),
+            c("Elternabend", "{\"members\":[\"Andrea\"]}"),
+            c("Friseur", "{\"members\":[\"Andrea\"]}"),
+            c("Training", "{\"members\":[\"Daniel\"]}"),
+        )
+        // sync1 enthält bei allen „Daniel_Sohn“ → wird ignoriert; sync3 nennt die ausgewählten Personen
+        assertEquals(setOf(0, 3), IcsPersonFilter.mine("Daniel", items))
+    }
 }

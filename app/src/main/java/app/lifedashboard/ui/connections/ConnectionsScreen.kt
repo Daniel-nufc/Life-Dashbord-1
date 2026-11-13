@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.CircleShape
@@ -130,6 +132,18 @@ class ConnectionsViewModel @Inject constructor(
             // FamilyWall-Familienkalender: standardmäßig nur meine Termine
             if (enabled && _calendars.value.any { it.id == id && it.isFamilyWall }) settings.setOnlyMineCalendarIds(onlyMineIds.value + id)
         }
+    }
+
+    /** „Termine prüfen“: was FamilyWall zu den Terminen der nächsten 14 Tage gespeichert hat. */
+    private val _inspection = MutableStateFlow<List<SystemCalendarRepository.Inspection>?>(null)
+    val inspection: StateFlow<List<SystemCalendarRepository.Inspection>?> = _inspection.asStateFlow()
+
+    fun inspect(calendarId: Long) {
+        viewModelScope.launch { _inspection.value = systemCalendar.inspect(calendarId, userName.value) }
+    }
+
+    fun closeInspection() {
+        _inspection.value = null
     }
 
     fun setOnlyMine(id: Long, on: Boolean) {
@@ -278,10 +292,18 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
                                             if (st.people.isNotEmpty()) " Personen in FamilyWall: ${st.people.joinToString(", ")}" else "",
                                     )
                                     if (st.total > 0 && st.kept == 0) {
-                                        hint("Keiner passt? FamilyWall gibt die ausgewählten Personen evtl. nicht weiter. Dann den Schalter ausschalten (alle Familientermine) und mir Bescheid sagen.")
+                                        Text(
+                                            "Kein Termin wird dir zugeordnet. Tippe auf „Termine prüfen“ und schick Claude einen Screenshot – oder schalte den Filter aus, dann erscheinen alle Familientermine.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.padding(top = 6.dp),
+                                        )
                                     }
                                 }
-                                TextButton(onClick = { viewModel.toggleCalendar(fwCalendar.id, false) }) { Text("Nicht mehr anzeigen") }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                                    OutlinedButton(onClick = { viewModel.inspect(fwCalendar.id) }) { Text("Termine prüfen") }
+                                    TextButton(onClick = { viewModel.toggleCalendar(fwCalendar.id, false) }) { Text("Nicht mehr anzeigen") }
+                                }
                             }
                             fwCalendar != null -> {
                                 hint("Auf diesem Gerät gefunden: „${fwCalendar.name}“. Die FamilyWall-App überträgt dorthin alle Termine – vollständig und immer aktuell, ohne Link.")
@@ -471,6 +493,49 @@ fun ConnectionsScreen(onBack: () -> Unit, viewModel: ConnectionsViewModel = hilt
                 }) { Text("Verbinden") }
             },
             dismissButton = { TextButton(onClick = { showFamilyWall = false }) { Text("Abbrechen") } },
+        )
+    }
+
+    val inspection by viewModel.inspection.collectAsStateWithLifecycle()
+    inspection?.let { list ->
+        AlertDialog(
+            onDismissRequest = viewModel::closeInspection,
+            title = { Text("FamilyWall · nächste 14 Tage") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "${list.count { it.mine }} von ${list.size} Terminen sind für dich. Hier steht, was FamilyWall zu jedem Termin speichert.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (list.isEmpty()) Text("Keine Termine in den nächsten 14 Tagen gefunden.")
+                    list.forEach { item ->
+                        val e = item.event
+                        Column {
+                            Text(
+                                (if (item.mine) "FÜR DICH · " else "nicht für dich · ") + e.title,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = if (item.mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            )
+                            val time = e.startMinute?.let { "%d:%02d".format(it / 60, it % 60) } ?: "ganztägig"
+                            Text(
+                                "${e.date.dayOfMonth}.${e.date.monthValue}. · $time · Farbe #%06X".format(e.color and 0xFFFFFF),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            item.description?.let { Text("Beschreibung: " + it.take(160), style = MaterialTheme.typography.bodySmall) }
+                            if (item.fields.isEmpty()) Text("Keine weiteren Felder", style = MaterialTheme.typography.bodySmall)
+                            item.fields.forEach { (key, values) ->
+                                Text(
+                                    key.removePrefix("sync_data").let { if (it != key) "Daten $it" else key } + ": " + values.joinToString(" | ").take(160),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = viewModel::closeInspection) { Text("Schließen") } },
         )
     }
 }

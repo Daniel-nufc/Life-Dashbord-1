@@ -3,8 +3,8 @@
 Private Android-App **Life Dashboard** für Daniel (Schüler, 11. Klasse, OSZ Max Taut Berlin). Läuft auf Galaxy S25 (Android 17) und Galaxy Tab S8+ (Android 16).
 Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (vorher „Auto Blocker“ kurz ausschalten).
 
-**Aktueller Stand: Version 31** (FamilyWall über den Handy-Kalender, Datenbank-Version 13, alle Tests grün). Die Versionsnummer der APK ist die GitHub-Build-Nummer (`GITHUB_RUN_NUMBER`).
-**Code:** `main` = Version 29. Version 30/31 liegen auf `ccr-eb37e95e-gq983n` (noch nicht in `main`). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
+**Aktueller Stand: Version 32** (FamilyWall über den Handy-Kalender + Fehlersuche, Datenbank-Version 13, alle Tests grün). Die Versionsnummer der APK ist die GitHub-Build-Nummer (`GITHUB_RUN_NUMBER`).
+**Code:** `main` = Version 29. Version 30–32 liegen auf `ccr-eb37e95e-gq983n` (noch nicht in `main`). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
 
 ## Wie mit Daniel arbeiten
 - Immer **auf Deutsch**, einfach und kurz erklären. Daniel ist kein Entwickler und liest oft auf dem Handy.
@@ -71,6 +71,7 @@ Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (
 - `SystemCalendar.isFamilyWall`, Karte „FamilyWall“ → „Übernehmen – nur meine Termine“ (wählt den Kalender, setzt „nur meine“, entfernt einen alten FamilyWall-iCal-Link gegen Doppel).
 - Einstellung `onlyMineCalendarIds` (DataStore, pro Gerät): `SystemCalendarRepository.events(…, onlyMineIds, name)` behält nur Termine, bei denen `userName` in Teilnehmern (`CalendarContract.Attendees`), Titel oder Beschreibung steht (`IcsPersonFilter.matches`). `personStats` zeigt „Nächste 31 Tage: X von Y Terminen sind für dich“ + Personen.
 - **Noch nicht bestätigt**, ob FamilyWall die ausgewählten Personen als Teilnehmer in den Android-Kalender schreibt. Wenn 0 passen: Daniel soll Bescheid geben (Schalter aus = alle Familientermine).
+- **v31 bei Daniel: „nichts erkannt“** – Name stand weder in Teilnehmern noch Titel/Beschreibung. Seit **v32** prüft `IcsPersonFilter.mine` zusätzlich alle versteckten Felder (`Events.SYNC_DATA1–10`, `CUSTOM_APP_URI`, Ort, `ExtendedProperties`); Felder, in denen der Name bei ≥ 90 % der Termine steht (z. B. Konto „Daniel_Sohn“), werden ignoriert. Knopf **„Termine prüfen“** zeigt die Felder der nächsten 14 Tage (für Screenshots). Planung selbst war in Ordnung (rechnet bei Änderungen neu, `TodayViewModel`).
 
 ## Technik
 - Kotlin 2.2.21, AGP 8.13.0, Gradle 8.14.3, compileSdk/targetSdk 36, minSdk 34, KSP, Hilt 2.57.2, Compose BOM 2025.05.00, Material 3.

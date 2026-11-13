@@ -80,11 +80,64 @@ class SystemCalendarRepository @Inject constructor(
     ): List<ExternalEvent> = withContext(Dispatchers.IO) {
         if (!hasPermission() || calendarIds.isEmpty()) return@withContext emptyList()
         val rows = instances(from, to, calendarIds)
-        val attendees = attendeesOf(rows.filter { it.calendarId in onlyMineIds }.map { it.event.id }.toSet())
-        rows.filter { row ->
-            row.calendarId !in onlyMineIds ||
-                app.lifedashboard.planner.IcsPersonFilter.matches(name, row.event.title, row.description, attendees[row.event.id].orEmpty())
-        }.map { it.event }
+        val filtered = rows.filter { it.calendarId in onlyMineIds }
+        val mineEvents = mineOf(filtered, name)
+        rows.filter { row -> row.calendarId !in onlyMineIds || row.event.id in mineEvents }.map { it.event }
+    }
+
+    /** Event-IDs der Termine, die zu [name] gehören (Titel, Beschreibung, Teilnehmer, versteckte Felder der Kalender-App). */
+    private fun mineOf(rows: List<Row>, name: String): Set<Long> {
+        if (rows.isEmpty()) return emptySet()
+        val ids = rows.map { it.event.id }.toSet()
+        val fields = fieldsOf(ids)
+        // je Termin (nicht je Wiederholung) einmal bewerten
+        val unique = rows.distinctBy { it.event.id }
+        val candidates = unique.map { app.lifedashboard.planner.IcsPersonFilter.Candidate(it.event.title, it.description, fields[it.event.id].orEmpty()) }
+        return app.lifedashboard.planner.IcsPersonFilter.mine(name, candidates).map { unique[it].event.id }.toSet()
+    }
+
+    /** Teilnehmer, versteckte Sync-Felder und Zusatz-Eigenschaften je Termin. */
+    private fun fieldsOf(eventIds: Set<Long>): Map<Long, Map<String, List<String>>> {
+        val result = mutableMapOf<Long, MutableMap<String, MutableList<String>>>()
+        fun add(id: Long, key: String, value: String?) {
+            if (value.isNullOrBlank()) return
+            result.getOrPut(id) { mutableMapOf() }.getOrPut(key) { mutableListOf() } += value
+        }
+        attendeesOf(eventIds).forEach { (id, names) -> names.forEach { add(id, "Teilnehmer", it) } }
+        val sync = arrayOf(
+            CalendarContract.Events.SYNC_DATA1, CalendarContract.Events.SYNC_DATA2, CalendarContract.Events.SYNC_DATA3,
+            CalendarContract.Events.SYNC_DATA4, CalendarContract.Events.SYNC_DATA5, CalendarContract.Events.SYNC_DATA6,
+            CalendarContract.Events.SYNC_DATA7, CalendarContract.Events.SYNC_DATA8, CalendarContract.Events.SYNC_DATA9,
+            CalendarContract.Events.SYNC_DATA10, CalendarContract.Events.CUSTOM_APP_URI, CalendarContract.Events.EVENT_LOCATION,
+        )
+        eventIds.chunked(400).forEach { chunk ->
+            val inIds = " IN (" + chunk.joinToString(",") + ")"
+            runCatching {
+                context.contentResolver.query(CalendarContract.Events.CONTENT_URI, arrayOf(CalendarContract.Events._ID) + sync, CalendarContract.Events._ID + inIds, null, null)?.use { c ->
+                    while (c.moveToNext()) sync.forEachIndexed { i, col -> add(c.getLong(0), col, runCatching { c.getString(i + 1) }.getOrNull()) }
+                }
+            }
+            runCatching {
+                val projection = arrayOf(CalendarContract.ExtendedProperties.EVENT_ID, CalendarContract.ExtendedProperties.NAME, CalendarContract.ExtendedProperties.VALUE)
+                context.contentResolver.query(CalendarContract.ExtendedProperties.CONTENT_URI, projection, CalendarContract.ExtendedProperties.EVENT_ID + inIds, null, null)?.use { c ->
+                    while (c.moveToNext()) add(c.getLong(0), "Zusatz:" + (c.getString(1) ?: "?"), c.getString(2))
+                }
+            }
+        }
+        return result
+    }
+
+    /** Ein Termin mit allem, was die Kalender-App dazu gespeichert hat (Knopf „Termine prüfen“). */
+    data class Inspection(val event: ExternalEvent, val mine: Boolean, val description: String?, val fields: Map<String, List<String>>)
+
+    /** Für die Fehlersuche: die Termine der nächsten [days] Tage mit allen gespeicherten Feldern. */
+    suspend fun inspect(calendarId: Long, name: String, days: Long = 14): List<Inspection> = withContext(Dispatchers.IO) {
+        if (!hasPermission()) return@withContext emptyList()
+        val today = LocalDate.now()
+        val rows = instances(today, today.plusDays(days - 1), setOf(calendarId)).distinctBy { it.event.id }
+        val fields = fieldsOf(rows.map { it.event.id }.toSet())
+        val mine = mineOf(rows, name)
+        rows.take(40).map { Inspection(it.event, it.event.id in mine, it.description, fields[it.event.id].orEmpty()) }
     }
 
     /** Auswertung „Nur meine Termine“ für einen Kalender in den nächsten [days] Tagen (Anzeige unter Kalender & Abos). */
@@ -92,9 +145,9 @@ class SystemCalendarRepository @Inject constructor(
         if (!hasPermission()) return@withContext PersonStats(0, 0, emptySet())
         val today = LocalDate.now()
         val rows = instances(today, today.plusDays(days - 1), setOf(calendarId))
+        val mine = mineOf(rows, name)
         val attendees = attendeesOf(rows.map { it.event.id }.toSet())
-        val kept = rows.count { app.lifedashboard.planner.IcsPersonFilter.matches(name, it.event.title, it.description, attendees[it.event.id].orEmpty()) }
-        PersonStats(kept, rows.size, attendees.values.flatten().toSortedSet(String.CASE_INSENSITIVE_ORDER))
+        PersonStats(rows.count { it.event.id in mine }, rows.size, attendees.values.flatten().toSortedSet(String.CASE_INSENSITIVE_ORDER))
     }
 
     private data class Row(val event: ExternalEvent, val calendarId: Long, val description: String?)

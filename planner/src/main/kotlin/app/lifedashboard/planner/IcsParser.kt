@@ -48,6 +48,31 @@ object IcsPersonFilter {
         return PersonFilterResult(kept, events.size, people)
     }
 
+    /** Ein Termin aus dem Handy-Kalender mit allen Feldern, die eine App wie FamilyWall dazu speichert. */
+    data class Candidate(val title: String, val description: String?, val fields: Map<String, List<String>>)
+
+    /**
+     * Welche Termine gehören zu [name]? Geprüft werden Titel, Beschreibung und alle Felder (Teilnehmer,
+     * versteckte Daten der Kalender-App). Felder, in denen der Name bei (fast) jedem Termin steht – etwa das
+     * eigene Konto „Daniel_Sohn“ –, sagen nichts aus und werden ignoriert. Liefert die Positionen der passenden Termine.
+     */
+    fun mine(name: String, items: List<Candidate>): Set<Int> {
+        if (name.isBlank()) return items.indices.toSet()
+        val word = wordRegex(name)
+        val hits = mutableMapOf<String, Int>()
+        items.forEach { c -> c.fields.forEach { (key, values) -> if (values.any(word::containsMatchIn)) hits[key] = (hits[key] ?: 0) + 1 } }
+        val ignored = if (items.size >= 3) hits.filterValues { it >= items.size * 0.9 }.keys else emptySet()
+        return items.indices.filter { i ->
+            val c = items[i]
+            matches(name, c.title, c.description, c.fields.filterKeys { it !in ignored }.values.flatten())
+        }.toSet()
+    }
+
+    private fun wordRegex(name: String): Regex {
+        val token = name.trim().split(Regex("\\s+")).first()
+        return Regex("(^|[^\\p{L}])" + Regex.escape(token) + "($|[^\\p{L}])", RegexOption.IGNORE_CASE)
+    }
+
     /** Gehört der Termin zu [name]? Teilnehmer, Titel oder Beschreibung enthalten den Vornamen als ganzes Wort. */
     fun matches(name: String, title: String, description: String?, attendees: List<String>): Boolean {
         val token = name.trim().split(Regex("\\s+")).firstOrNull().orEmpty()
