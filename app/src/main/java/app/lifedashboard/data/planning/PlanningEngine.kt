@@ -180,7 +180,12 @@ class PlanningEngine @Inject constructor(
         // Etsy und Ziel-Schritte füllen nur leichte Tage auf – an vollen Tagen bleiben sie weg (gleichmäßige Wochen)
         val coreMinutes = core.sumOf { it.minutes } + trainings.sumOf { it.session.minutes } + kept.sumOf { it.endMinute - it.startMinute }
         val comfort = if (day.isSchoolFree) 150 else 100
-        val extra = if (coreMinutes >= comfort) emptyList() else etsyDemands(date, day, range.allTasks, overview) + goalDemands(date, day)
+        // … und auch dann nur so viel, bis der Tag „angenehm voll“ ist (werktags 1:40 Std, frei 2:30 Std)
+        var room = comfort - coreMinutes
+        val extra = if (room < 25) emptyList() else (etsyDemands(date, day, range.allTasks, overview) + goalDemands(date, day)).mapNotNull { d ->
+            val minutes = minOf(d.minutes, room)
+            if (minutes < minOf(25, d.minutes)) null else d.copy(minutes = minutes, minChunk = minOf(d.minChunk, minutes), maxChunk = minOf(d.maxChunk, minutes)).also { room -= minutes }
+        }
         val demands = (core + extra + trainings.map { t ->
             Demand(
                 key = t.session.key,

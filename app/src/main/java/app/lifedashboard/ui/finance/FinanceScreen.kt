@@ -92,8 +92,35 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class FinanceViewModel @Inject constructor(private val repo: FinanceRepository) : ViewModel() {
+class FinanceViewModel @Inject constructor(
+    private val repo: FinanceRepository,
+    etsy: app.lifedashboard.data.repository.EtsyRepository,
+    jobs: app.lifedashboard.data.repository.JobRepository,
+    settings: app.lifedashboard.data.settings.SettingsRepository,
+) : ViewModel() {
     val overview: StateFlow<FinanceOverview?> = repo.overview().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Sparplan: Sparziele gegen Taschengeld, Job-Verdienst und Etsy-Gewinn dieses Monats */
+    val savingsPlan: StateFlow<app.lifedashboard.planner.SavingsPlan?> = run {
+        val month = java.time.YearMonth.now()
+        kotlinx.coroutines.flow.combine(repo.overview(), etsy.overview(), jobs.between(month.atDay(1), month.atEndOfMonth()), settings.settings) { f, e, shifts, s ->
+            val job = shifts.sumOf { (it.endMinute - it.startMinute).toLong() * (it.hourlyWageCents?.toLong() ?: s.jobWageCents) / 60 }
+            val soldItems = e.sales.sumOf { it.quantity }
+            val allNet = e.sales.sumOf { it.priceCents * it.quantity } - e.sales.sumOf {
+                app.lifedashboard.planner.EtsyMath.fees(
+                    app.lifedashboard.planner.EtsySaleData(java.time.LocalDate.ofEpochDay(it.dateEpochDay), it.orderRef, it.title, it.priceCents, it.quantity), e.fees,
+                )
+            }
+            app.lifedashboard.planner.SavingsPlan(
+                neededCents = f.savingsRates.sumOf { it.second },
+                fixedIncomeCents = f.monthlyIncomeCents,
+                jobCents = job,
+                etsyNetCents = e.thisMonth.netCents,
+                jobWageCents = s.jobWageCents,
+                etsyNetPerSaleCents = if (soldItems > 0) (allNet / soldItems).coerceAtLeast(0) else 0,
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    }
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
@@ -138,6 +165,7 @@ private val MoneyGradient = listOf(Color(0xFF0F9D58), Color(0xFF1DB370), Color(0
 @Composable
 fun FinanceScreen(onBack: () -> Unit, viewModel: FinanceViewModel = hiltViewModel()) {
     val data by viewModel.overview.collectAsStateWithLifecycle()
+    val savingsPlan by viewModel.savingsPlan.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var txDialog by remember { mutableStateOf<TransactionEntity?>(null) }
@@ -181,21 +209,22 @@ fun FinanceScreen(onBack: () -> Unit, viewModel: FinanceViewModel = hiltViewMode
             ) {
                 item {
                     GradientCard(MoneyGradient) {
-                        Text("Verfügbar (ohne Puffer)", color = Color.White.copy(alpha = 0.85f))
-                        Text(d.availableCents.euro(), color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                        Text("VERFÜGBAR (OHNE PUFFER)", color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.labelMedium, letterSpacing = 1.1.sp)
+                        Text(d.availableCents.euro(), color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.Light)
                         Spacer(Modifier.height(6.dp))
                         Text(
                             "Puffer geschützt: ${d.bufferCents.euro()} · Gesamt: ${d.totalCents.euro()}",
-                            color = Color.White,
+                            color = Color.White.copy(alpha = 0.78f),
+                            style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.clickable { bufferDialog = true },
                         )
                         Text(
                             "Prognose Monatsende: ${(d.forecastCents - d.bufferCents).euro()} verfügbar",
-                            color = Color.White,
-                            fontWeight = FontWeight.Medium,
+                            color = Color.White.copy(alpha = 0.78f),
+                            style = MaterialTheme.typography.bodyMedium,
                         )
                         if (d.forecastCents < d.bufferCents) {
-                            Text("So würdest du an deinen Puffer gehen – etwas weniger ausgeben.", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text("So würdest du an deinen Puffer gehen – etwas weniger ausgeben.", color = Color(0xFFE9B35B), style = MaterialTheme.typography.bodyMedium)
                         }
                         Text(
                             "Diesen Monat: +${d.monthIncomeCents.euro()} / −${d.monthSpentCents.euro()}",
@@ -203,6 +232,9 @@ fun FinanceScreen(onBack: () -> Unit, viewModel: FinanceViewModel = hiltViewMode
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
+                }
+                savingsPlan?.takeIf { it.neededCents > 0 }?.let { plan ->
+                    item { SavingsPlanCard(plan) }
                 }
                 message?.let { msg ->
                     item {
@@ -278,7 +310,7 @@ fun FinanceScreen(onBack: () -> Unit, viewModel: FinanceViewModel = hiltViewMode
                                     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) { Text(c, Modifier.weight(1f)); Text("${v.euro()} / Monat") }
                                 }
                                 androidx.compose.material3.FilledTonalButton(onClick = { viewModel.adoptBudgets(d.budgetSuggestions) }, modifier = Modifier.padding(top = 6.dp)) {
-                                    Text("✓ Budgets übernehmen")
+                                    Text("Budgets übernehmen")
                                 }
                             }
                             if (d.savingsRates.isNotEmpty()) {
@@ -287,7 +319,7 @@ fun FinanceScreen(onBack: () -> Unit, viewModel: FinanceViewModel = hiltViewMode
                                     val already = d.recurring.any { it.title == "Sparen: ${g.title}" }
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text("${g.title}: ${rate.euro()} / Monat", Modifier.weight(1f))
-                                        if (already) Text("✓ fest", color = LifeArea.SPORT.color)
+                                        if (already) Text("fest eingeplant", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         else TextButton(onClick = { viewModel.adoptRate(g, rate) }) { Text("Als feste Buchung") }
                                     }
                                 }
@@ -347,7 +379,7 @@ fun FinanceScreen(onBack: () -> Unit, viewModel: FinanceViewModel = hiltViewMode
                         }
                     }
                 }
-                item { Text("Umsätze", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp)) }
+                item { app.lifedashboard.ui.components.SectionTitle("Umsätze") }
                 items(d.transactions.take(60), key = { it.id }) { tx ->
                     SectionCard(onClick = { txDialog = tx }) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -571,4 +603,56 @@ private fun SavingsDialog(original: SavingsGoalEntity?, onSave: (SavingsGoalEnti
             }
         },
     )
+}
+
+
+/** Sparplan: Was die Sparziele pro Monat brauchen und woher es kommt (Taschengeld, Job, Etsy). */
+@Composable
+private fun SavingsPlanCard(plan: app.lifedashboard.planner.SavingsPlan) {
+    val tones = app.lifedashboard.ui.theme.LocalAppColors.current
+    SectionCard {
+        TileHeader(Icons.Rounded.Savings, "Sparplan", LifeArea.PRIVATE.color) {
+            Text(
+                if (plan.covered) "gedeckt" else "${plan.gapCents.euro()} fehlen",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (plan.covered) tones.positive else tones.warning,
+            )
+        }
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(plan.neededCents.euro(), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.alignByBaseline())
+            Text(
+                "  pro Monat für deine Sparziele",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.alignByBaseline(),
+            )
+        }
+        app.lifedashboard.ui.components.Meter(
+            plan.fraction,
+            color = if (plan.covered) tones.positive else MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 10.dp, bottom = 10.dp),
+        )
+        listOf(
+            "Taschengeld & feste Einnahmen" to plan.fixedIncomeCents,
+            "Job diesen Monat" to plan.jobCents,
+            "Etsy-Gewinn diesen Monat" to plan.etsyNetCents,
+        ).forEach { (label, cents) ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                Text(cents.euro(), style = MaterialTheme.typography.labelLarge, color = if (cents > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        val hint = when {
+            plan.covered -> "Passt: Deine Einnahmen decken die Sparraten. Der Rest ist frei verfügbar."
+            else -> {
+                val ways = listOfNotNull(
+                    plan.jobHoursForGap?.let { "$it Job-Stunden" },
+                    plan.etsySalesForGap?.let { "$it Etsy-Verkäufe" },
+                )
+                "Die Lücke schließt du mit etwa " + (if (ways.isEmpty()) "${plan.gapCents.euro()} zusätzlich" else ways.joinToString(" oder ")) +
+                    " pro Monat." + (if (plan.etsySalesForGap == null) " Sobald dein Shop Verkäufe hat, rechnet die App hier mit deinem echten Gewinn pro Verkauf." else "")
+            }
+        }
+        Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+    }
 }

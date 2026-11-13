@@ -181,3 +181,27 @@ object MonthForecast {
         return balanceCents + upcomingFixedCents - (perDay * remaining).roundToLong()
     }
 }
+
+/**
+ * Sparplan: Reichen Taschengeld, Job und Etsy für die Sparziele – und wenn nicht, was würde die Lücke schließen?
+ * Alle Beträge in Cent pro Monat.
+ */
+data class SavingsPlan(
+    val neededCents: Long,
+    val fixedIncomeCents: Long,
+    val jobCents: Long,
+    val etsyNetCents: Long,
+    /** Stundenlohn im Job (0 = unbekannt) */
+    val jobWageCents: Long,
+    /** Durchschnittlicher Gewinn pro Etsy-Verkauf (0 = noch keine Verkäufe) */
+    val etsyNetPerSaleCents: Long,
+) {
+    val incomeCents: Long get() = fixedIncomeCents + jobCents + etsyNetCents
+    val gapCents: Long get() = (neededCents - incomeCents).coerceAtLeast(0)
+    val covered: Boolean get() = neededCents > 0 && gapCents == 0L
+    val fraction: Float get() = if (neededCents <= 0) 0f else (incomeCents.toFloat() / neededCents).coerceIn(0f, 1f)
+    /** So viele Job-Stunden pro Monat würden die Lücke schließen (aufgerundet), null wenn kein Lohn bekannt */
+    val jobHoursForGap: Int? get() = if (jobWageCents > 0 && gapCents > 0) ((gapCents + jobWageCents - 1) / jobWageCents).toInt() else null
+    /** So viele Etsy-Verkäufe pro Monat würden die Lücke schließen, null solange es keine Verkäufe gibt */
+    val etsySalesForGap: Int? get() = if (etsyNetPerSaleCents > 0 && gapCents > 0) ((gapCents + etsyNetPerSaleCents - 1) / etsyNetPerSaleCents).toInt() else null
+}
