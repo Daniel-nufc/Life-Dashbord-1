@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,7 +55,7 @@ fun HeatmapCard(s: InsightState) {
                             else -> 1f
                         }
                         Box(
-                            Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(4.dp))
+                            Modifier.weight(1f).height(16.dp).clip(RoundedCornerShape(4.dp))
                                 .background(if (minutes == null) MaterialTheme.colorScheme.surface else accent.copy(alpha = alpha)),
                         )
                     }
