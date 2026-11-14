@@ -255,6 +255,24 @@ private fun androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridScop
         ExamCard(exam, data.forecasts[exam.exam.id], viewModel, onEdit, studied = data.studiedMinutes[exam.exam.id] ?: 0)
     }
     val past = data.exams.filter { it.daysLeft() < 0 }
+    if (data.weekBySubject.isNotEmpty()) {
+        // Lernzeit je Fach (Idee: Fokus-Statistik aus Pomodoro-Apps)
+        item {
+            SectionCard {
+                TileHeader(Icons.Rounded.Timer, "Lernzeit diese Woche", LifeArea.SCHOOL.color) {
+                    Text(studyHours(data.weekBySubject.sumOf { it.second }), style = MaterialTheme.typography.labelMedium, color = LifeArea.SCHOOL.color)
+                }
+                val max = data.weekBySubject.maxOf { it.second }.coerceAtLeast(1)
+                data.weekBySubject.take(6).forEach { (name, minutes) ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, modifier = Modifier.weight(1f))
+                        app.lifedashboard.ui.components.Meter(minutes.toFloat() / max, color = LifeArea.SCHOOL.color, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
+                        Text(studyHours(minutes), style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+        }
+    }
     if (past.isNotEmpty()) {
         wideItem {
             Text(
@@ -534,6 +552,12 @@ private fun androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridScop
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+                // Trend: letzte Note gegen den Schnitt davor (Idee: Noten-Apps)
+                when (app.lifedashboard.planner.Inspired.gradeTrend(sg.grades.sortedBy { it.dateEpochDay }.map { it.points })) {
+                    app.lifedashboard.planner.Inspired.Trend.UP -> Text("steigt  ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    app.lifedashboard.planner.Inspired.Trend.DOWN -> Text("fällt  ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+                    else -> Unit
                 }
                 Text(sg.average?.let { "%.1f P".format(it) } ?: "–", style = MaterialTheme.typography.titleLarge, color = accent, fontWeight = FontWeight.Bold)
                 IconButton(onClick = { onAddGrade(sg.subject.id) }) { Icon(Icons.Rounded.Add, "Note eintragen") }

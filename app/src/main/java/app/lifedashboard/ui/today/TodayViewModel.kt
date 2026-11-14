@@ -45,6 +45,9 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+data class Evening(val blocks: Int, val minutes: Int, val tasks: Int, val missed: Int, val tomorrowFirst: String?)
+data class Bag(val subjects: List<String>, val start: String, val extras: List<String>)
+
 sealed interface TodayUiState {
     data object Loading : TodayUiState
 
@@ -91,6 +94,12 @@ sealed interface TodayUiState {
         val askEnergy: Boolean = false,
         /** Heute leichter/mehr geplant, weil … (Abend-Check, Schlaf) */
         val wellbeingNote: String? = null,
+        /** Tagesabschluss (ab 20 Uhr): geschaffte Blöcke, Minuten, Aufgaben, verpasste Blöcke */
+        val evening: Evening? = null,
+        /** Schultasche für morgen (ab 18 Uhr): Fächer in Stundenplan-Reihenfolge + Beginn */
+        val bag: Bag? = null,
+        /** „Ein Satz zum Tag“ von heute */
+        val dayNote: String = "",
         /** Feste Termine, die sich heute überschneiden */
         val conflicts: List<Pair<String, String>> = emptyList(),
         /** Eigener Ganztagstermin (Spieltag, Turnier …): heute wird nur Dringendes geplant */
@@ -113,7 +122,7 @@ private data class Extra(val money: app.lifedashboard.data.repository.FinanceOve
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
 class TodayViewModel @Inject constructor(
-    agenda: AgendaRepository,
+    private val agendaRepo: AgendaRepository,
     private val tasks: TaskRepository,
     private val engine: PlanningEngine,
     private val studyRepo: StudyRepository,
@@ -163,7 +172,7 @@ class TodayViewModel @Inject constructor(
 
     private val inputs = date.flatMapLatest { d ->
         val extra = combine(finance.overview(d), etsy.overview(d)) { m, e -> Extra(m, e) }
-        combine(agenda.observe(d, 2), engine.observeDay(d), studyRepo.overview(d), goals.habits(d), extra) { r, p, s, h, x -> Inputs(r, p, s, h, x) }
+        combine(agendaRepo.observe(d, 2), engine.observeDay(d), studyRepo.overview(d), goals.habits(d), extra) { r, p, s, h, x -> Inputs(r, p, s, h, x) }
     }
 
     /** Level, Serie und Wochenziele für die Fortschritts-Karte */
@@ -179,7 +188,7 @@ class TodayViewModel @Inject constructor(
         // Plan automatisch aktualisieren, wenn sich Termine/Aufgaben/Klausuren ändern oder 15 Min vergehen
         viewModelScope.launch {
             date.flatMapLatest { d ->
-                combine(agenda.observe(d, 1), studyRepo.overview(d), clock.map { it.minute / 15 }.distinctUntilChanged()) { _, _, _ -> d }
+                combine(agendaRepo.observe(d, 1), studyRepo.overview(d), clock.map { it.minute / 15 }.distinctUntilChanged()) { _, _, _ -> d }
             }.debounce(800).collect { runCatching { engine.replan(it) } }
         }
     }
@@ -192,6 +201,19 @@ class TodayViewModel @Inject constructor(
     fun done(block: PlanBlockEntity) = launch { engine.done(block) }
     fun decline(block: PlanBlockEntity) = launch { engine.decline(block) }
     fun later(block: PlanBlockEntity) = launch { engine.later(block) }
+
+    fun saveDayNote(text: String) = launch { settings.setDayNote(LocalDate.now(), text) }
+
+    /** Countdowns (Idee: Countdown-Apps): eigene große Termine und Klausuren der nächsten 6 Wochen */
+    val countdowns: StateFlow<List<Pair<String, Int>>> = agendaRepo.observe(LocalDate.now(), 45).map { r ->
+        val today = LocalDate.now()
+        val own = r.days.drop(1).mapNotNull { d -> d.reservedBy?.let { it to (d.date.toEpochDay() - today.toEpochDay()).toInt() } }
+            .distinctBy { it.first } // mehrtägige Termine (Schülerreise) nur einmal
+        val exams = r.days.drop(1).flatMap { d ->
+            d.exams.map { e -> ((r.subjects[e.subjectId]?.name ?: e.title) + " (" + e.kind.name.lowercase().replaceFirstChar { c -> c.uppercase() } + ")") to (d.date.toEpochDay() - today.toEpochDay()).toInt() }
+        }
+        (own + exams).sortedBy { it.second }.take(5)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Abend-Check: Energie für morgen (1 = platt … 5 = fit) – morgen wird danach geplant. */
     fun setEnergy(level: Int) = launch {
@@ -317,6 +339,30 @@ class TodayViewModel @Inject constructor(
                 ).joinToString(" und ")
                 if (delta < 0) "Heute ${-delta} Min leichter geplant – $why." else "Heute $delta Min mehr drin – $why."
             },
+            evening = if (hour < 20) null else Evening(
+                blocks = input.plan.count { it.status == PlanStatus.DONE },
+                minutes = input.plan.filter { it.status == PlanStatus.DONE }.sumOf { it.endMinute - it.startMinute },
+                tasks = range.allTasks.count { t ->
+                    t.done && t.doneAtMillis?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).toLocalDate() } == today.date
+                },
+                missed = input.plan.count { it.status == PlanStatus.MISSED },
+                tomorrowFirst = range.days.getOrNull(1)?.let { t ->
+                    t.lessons.mapNotNull { l -> l.timeRange?.let { r -> r.start to l.subject.name } }.minByOrNull { it.first }
+                        ?.let { (start, name) -> "Morgen geht's um %d:%02d mit %s los.".format(start.hour, start.minute, name) }
+                        ?: t.reservedBy?.let { "Morgen: $it." }
+                },
+            ),
+            bag = range.days.getOrNull(1)?.takeIf { hour >= 18 && it.lessons.isNotEmpty() }?.let { t ->
+                val ordered = t.lessons.filter { it.timeRange != null }.sortedBy { it.timeRange!!.start }
+                val first = ordered.first().timeRange!!.start
+                Bag(
+                    subjects = ordered.map { it.subject.name }.distinct(),
+                    start = "%d:%02d".format(first.hour, first.minute),
+                    extras = t.routines.filter { it.area == app.lifedashboard.data.db.LifeArea.SPORT }.map { "Sportsachen für ${it.title}" } +
+                        t.tasksDue.filter { it.kind == app.lifedashboard.data.db.TaskKind.HOMEWORK }.map { "Hausaufgabe: ${it.title.ifBlank { range.subjects[it.subjectId]?.name ?: "?" }}" },
+                )
+            },
+            dayNote = range.settings.dayNotes[today.date.toEpochDay()].orEmpty(),
             conflicts = today.conflicts(),
             reservedBy = today.reservedBy,
             homeworkSubjects = run {

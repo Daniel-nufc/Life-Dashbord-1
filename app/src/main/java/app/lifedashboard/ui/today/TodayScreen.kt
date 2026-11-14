@@ -91,6 +91,7 @@ fun TodayScreen(
     var focusBlock by remember { mutableStateOf<app.lifedashboard.data.db.PlanBlockEntity?>(null) }
     var focusStarter by remember { mutableStateOf<Int?>(null) }
     val countdown by viewModel.holidayCountdown.collectAsStateWithLifecycle()
+    val countdowns by viewModel.countdowns.collectAsStateWithLifecycle()
     // Schnellkachel „Fokus“: nächsten Block sofort im Fokus-Modus öffnen
     val focusRequested by app.lifedashboard.ui.focus.FocusLauncher.requested.collectAsStateWithLifecycle()
     LaunchedEffect(focusRequested, state) {
@@ -172,6 +173,64 @@ fun TodayScreen(
                                         },
                                         label = { Text(subject.name) },
                                     )
+                                }
+                            }
+                        }
+                    }
+                }
+                s.bag?.let { bag ->
+                    item {
+                        SectionCard {
+                            TileHeader(Icons.Rounded.School, "Tasche für morgen", LifeArea.SCHOOL.color) {
+                                Text("ab ${bag.start}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text(bag.subjects.joinToString(" · "), style = MaterialTheme.typography.bodyLarge)
+                            bag.extras.forEach {
+                                Text("+ $it", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
+                            }
+                            Text("Heute Abend packen, morgen früh entspannt los.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                        }
+                    }
+                }
+                s.evening?.let { e ->
+                    item {
+                        SectionCard {
+                            TileHeader(Icons.Rounded.AutoAwesome, "Tagesabschluss", MaterialTheme.colorScheme.primary)
+                            Text(
+                                when {
+                                    e.blocks == 0 && e.tasks == 0 && e.missed == 0 -> "Heute war frei. Auch das gehört dazu."
+                                    e.blocks == 0 && e.tasks == 0 -> "Heute lief es nicht. Abhaken – morgen zählt der erste Block."
+                                    else -> listOfNotNull(
+                                        e.blocks.takeIf { it > 0 }?.let { "$it ${if (it == 1) "Block" else "Blöcke"} (${if (e.minutes >= 60) "%d:%02d Std".format(e.minutes / 60, e.minutes % 60) else "${e.minutes} Min"})" },
+                                        e.tasks.takeIf { it > 0 }?.let { "$it ${if (it == 1) "Aufgabe" else "Aufgaben"} abgehakt" },
+                                    ).joinToString(" und ") + " geschafft." + if (e.missed > 0) " ${e.missed} verpasst." else " Nichts verpasst."
+                                },
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            e.tomorrowFirst?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) }
+                            var note by remember(s.dayNote) { mutableStateOf(s.dayNote) }
+                            androidx.compose.material3.OutlinedTextField(
+                                value = note,
+                                onValueChange = { note = it.take(200) },
+                                label = { Text("Ein Satz zum Tag") },
+                                placeholder = { Text("Was lief heute gut?") },
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                maxLines = 3,
+                            )
+                            if (note != s.dayNote) {
+                                androidx.compose.material3.TextButton(onClick = { viewModel.saveDayNote(note) }) { Text("Speichern") }
+                            }
+                        }
+                    }
+                }
+                if (countdowns.isNotEmpty()) {
+                    item {
+                        SectionCard {
+                            TileHeader(Icons.Rounded.Event, "Countdown", LifeArea.PRIVATE.color)
+                            countdowns.forEach { (title, days) ->
+                                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, modifier = Modifier.weight(1f))
+                                    Text(if (days == 1) "morgen" else "in $days Tagen", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }

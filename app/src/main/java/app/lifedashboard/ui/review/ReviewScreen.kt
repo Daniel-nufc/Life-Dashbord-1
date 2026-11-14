@@ -49,10 +49,21 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class ReviewViewModel @Inject constructor(private val repo: ReviewRepository) : ViewModel() {
+class ReviewViewModel @Inject constructor(
+    private val repo: ReviewRepository,
+    settings: app.lifedashboard.data.settings.SettingsRepository,
+) : ViewModel() {
+    /** „Ein Satz zum Tag“ der letzten 7 Tage (neueste zuerst) */
+    val notes: StateFlow<List<Pair<java.time.LocalDate, String>>> = settings.settings.map { s ->
+        val from = java.time.LocalDate.now().toEpochDay() - 7
+        s.dayNotes.filterKeys { it >= from }.entries.sortedByDescending { it.key }.map { java.time.LocalDate.ofEpochDay(it.key) to it.value }
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), emptyList())
+
     private val _review = MutableStateFlow<WeekReview?>(null)
     val review: StateFlow<WeekReview?> = _review.asStateFlow()
 
@@ -68,6 +79,7 @@ class ReviewViewModel @Inject constructor(private val repo: ReviewRepository) : 
 @Composable
 fun ReviewScreen(onBack: () -> Unit, viewModel: ReviewViewModel = hiltViewModel()) {
     val review by viewModel.review.collectAsStateWithLifecycle()
+    val notes by viewModel.notes.collectAsStateWithLifecycle()
     val adopted = remember { mutableStateListOf<String>() }
     OneUiScaffold(
         title = "Wochenrückblick",
@@ -90,6 +102,20 @@ fun ReviewScreen(onBack: () -> Unit, viewModel: ReviewViewModel = hiltViewModel(
                             "Gewohnheiten ${r.habitRate} %",
                             "Ausgaben ${r.spentCents.euro()} · Etsy ${r.etsyRevenueCents.euro()}",
                         ).forEach { Text(it, color = Color.White) }
+                    }
+                }
+                if (notes.isNotEmpty()) {
+                    item {
+                        SectionCard {
+                            TileHeader(Icons.Rounded.ThumbUp, "Deine Sätze zur Woche", LifeArea.PRIVATE.color)
+                            notes.forEach { (day, text) ->
+                                Text(
+                                    "${listOf("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")[day.dayOfWeek.value - 1]}: $text",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(vertical = 2.dp),
+                                )
+                            }
+                        }
                     }
                 }
                 item {

@@ -42,6 +42,8 @@ data class StudyOverview(
     val forecasts: Map<Long, app.lifedashboard.planner.StudyForecast> = emptyMap(),
     /** Schon gelernt je Klausur (Minuten aus geschafften Lern-Blöcken) */
     val studiedMinutes: Map<Long, Int> = emptyMap(),
+    /** Lernzeit dieser Woche je Fach (Name → Minuten), meiste zuerst */
+    val weekBySubject: List<Pair<String, Int>> = emptyList(),
 ) {
     /** Schnitt über alle Fächer mit Noten (jedes Fach gleich gewichtet). */
     val overallAverage: Double? get() = grades.mapNotNull { it.average }.takeIf { it.isNotEmpty() }?.average()
@@ -148,6 +150,17 @@ class StudyRepository @Inject constructor(
                 sessionsThisWeek = sessions,
                 forecasts = forecasts,
                 studiedMinutes = studied,
+                weekBySubject = run {
+                    val examSubject = exams.associate { it.id to it.subjectId }
+                    val fromBlocks = recentBlocks.filter {
+                        it.status == app.lifedashboard.data.db.PlanStatus.DONE && it.demandKey.startsWith("study:") && it.dateEpochDay >= weekStart.toEpochDay()
+                    }.mapNotNull { b -> examSubject[b.demandKey.split(":").getOrNull(2)?.toLongOrNull()]?.let { it to (b.endMinute - b.startMinute) } }
+                    // Fokus-Timer mit gewähltem Fach (Blöcke aus dem Tagesplan haben kein Fach und sind oben schon gezählt)
+                    val fromTimer = sessions.mapNotNull { s -> s.subjectId?.let { it to s.minutes } }
+                    (fromBlocks + fromTimer).groupBy({ it.first }, { it.second })
+                        .mapNotNull { (id, m) -> subjectById[id]?.let { it.name to m.sum() } }
+                        .sortedByDescending { it.second }
+                },
             )
         }
     }
