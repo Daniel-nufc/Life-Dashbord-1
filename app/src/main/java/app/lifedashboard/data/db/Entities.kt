@@ -109,6 +109,8 @@ data class TaskEntity(
     val createdAtMillis: Long,
     /** Gesetzt bei Abgaben aus einem Kalender-Abo (z. B. Lernraum). */
     val externalUid: String? = null,
+    /** Wiederkehrende Aufgabe: alle N Tage (1 = täglich, 7 = wöchentlich …), null = einmalig */
+    val repeatDays: Int? = null,
 )
 
 /** Schicht im Minijob. */

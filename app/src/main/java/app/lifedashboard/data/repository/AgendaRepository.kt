@@ -157,6 +157,29 @@ data class AgendaRange(
 )
 
 /**
+ * Zeit-Einblicke (Idee: Google Kalender): wohin die Stunden der Woche gehen – Unterricht, Lernen/Hausaufgaben
+ * (geplante und geschaffte Blöcke), Sport (feste Trainings + Sport-Blöcke), Job, eigene Termine. Minuten je Bereich.
+ */
+fun weekHours(days: List<DayAgenda>, plan: List<PlanBlockEntity>): List<Pair<String, Int>> {
+    fun PlanBlockEntity.counts() = status == app.lifedashboard.data.db.PlanStatus.PROPOSED || status == app.lifedashboard.data.db.PlanStatus.ACCEPTED ||
+        status == app.lifedashboard.data.db.PlanStatus.DONE
+    val blocks = plan.filter { it.counts() }
+    fun type(vararg t: app.lifedashboard.planner.DemandType) = blocks.filter { it.type in t }.sumOf { it.endMinute - it.startMinute }
+    return listOf(
+        "Unterricht" to days.sumOf { d -> d.lessons.sumOf { it.timeRange?.duration?.toMinutes()?.toInt() ?: 0 } },
+        "Lernen" to type(app.lifedashboard.planner.DemandType.STUDY, app.lifedashboard.planner.DemandType.HOMEWORK, app.lifedashboard.planner.DemandType.REVIEW),
+        "Sport" to days.sumOf { d -> d.routines.filter { it.area == app.lifedashboard.data.db.LifeArea.SPORT }.sumOf { it.endMinute - it.startMinute } } +
+            type(app.lifedashboard.planner.DemandType.SPORT),
+        "Job" to days.sumOf { d -> d.shifts.sumOf { it.endMinute - it.startMinute } },
+        "Termine" to days.sumOf { d ->
+            d.events.sumOf { e -> if (e.startMinute == null) 0 else ((e.endMinute ?: (e.startMinute + 60)) - e.startMinute).coerceAtLeast(0) } +
+                d.externalEvents.sumOf { e -> if (e.startMinute == null) 0 else ((e.endMinute ?: (e.startMinute + 60)) - e.startMinute).coerceAtLeast(0) }
+        },
+        "Etsy" to type(app.lifedashboard.planner.DemandType.ETSY),
+    ).filter { it.second > 0 }
+}
+
+/**
  * Baut beliebige Zeiträume aus Regeln: Stundenplan (A/B), feste Trainings (Wochentage),
  * Ferien und Feiertage – nichts wird für einen festen Zeitraum vorab erzeugt.
  * Reine Funktion → mit Tests über ein ganzes Schuljahr geprüft.

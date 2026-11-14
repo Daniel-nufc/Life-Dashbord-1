@@ -276,6 +276,7 @@ private fun TodoDialog(request: EditRequest.Todo, onDismiss: () -> Unit, vm: Edi
     var due by remember { mutableStateOf(original?.dueEpochDay?.let(LocalDate::ofEpochDay) ?: request.date ?: LocalDate.now()) }
     var minutes by remember { mutableIntStateOf(original?.estimatedMinutes ?: 30) }
     var note by remember { mutableStateOf(original?.note ?: "") }
+    var repeat by remember { mutableIntStateOf(original?.repeatDays ?: 0) }
 
     EditorDialog(
         title = if (original == null || original.id == 0L) "Neue Aufgabe" else "Aufgabe bearbeiten",
@@ -296,6 +297,8 @@ private fun TodoDialog(request: EditRequest.Todo, onDismiss: () -> Unit, vm: Edi
                     doneAtMillis = original?.doneAtMillis,
                     note = note.trim().ifBlank { null },
                     createdAtMillis = original?.createdAtMillis ?: System.currentTimeMillis(),
+                    externalUid = original?.externalUid,
+                    repeatDays = repeat.takeIf { it > 0 && hasDue },
                 ),
             )
             onDismiss()
@@ -310,6 +313,8 @@ private fun TodoDialog(request: EditRequest.Todo, onDismiss: () -> Unit, vm: Edi
         }
         if (hasDue) {
             ValueButton("Fällig", due.friendly(), { context.pickDate(due) { due = it } }, Modifier.fillMaxWidth())
+            FieldLabel("Wiederholen")
+            ChoiceChips(listOf(0 to "Nie", 1 to "Täglich", 7 to "Wöchentlich", 14 to "Alle 2 Wochen", 30 to "Monatlich"), repeat) { repeat = it }
         }
         FieldLabel("Wie lange ungefähr?")
         ChoiceChips(durationOptions, minutes) { minutes = it }

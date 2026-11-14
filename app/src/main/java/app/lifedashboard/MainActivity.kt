@@ -63,9 +63,11 @@ class MainActivity : FragmentActivity() {
 
     /** Rückkehr von Strava: lifedashboard://localhost/strava?code=… */
     private fun handleLink(intent: android.content.Intent?) {
-        if (intent?.getBooleanExtra(app.lifedashboard.ui.focus.FocusLauncher.EXTRA, false) == true) {
+        if (intent?.getBooleanExtra(app.lifedashboard.ui.focus.FocusLauncher.EXTRA, false) == true || intent?.action == "app.lifedashboard.action.FOCUS") {
             app.lifedashboard.ui.focus.FocusLauncher.requested.value = true
         }
+        // App-Symbol lange drücken → „Neu eintragen“
+        if (intent?.action == "app.lifedashboard.action.ADD") app.lifedashboard.ui.focus.FocusLauncher.addRequested.value = true
         val data = intent?.data ?: return
         if (data.scheme != "lifedashboard" || data.path?.startsWith("/strava") != true) return
         lifecycleScope.launch {

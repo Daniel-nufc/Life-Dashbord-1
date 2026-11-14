@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App-Symbol lange drücken: direkt in den Fokus oder etwas eintragen -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="focus"
+        android:enabled="true"
+        android:icon="@drawable/ic_notification"
+        android:shortcutShortLabel="@string/shortcut_focus">
+        <intent
+            android:action="app.lifedashboard.action.FOCUS"
+            android:targetClass="app.lifedashboard.MainActivity"
+            android:targetPackage="app.lifedashboard" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="add"
+        android:enabled="true"
+        android:icon="@drawable/ic_notification"
+        android:shortcutShortLabel="@string/shortcut_add">
+        <intent
+            android:action="app.lifedashboard.action.ADD"
+            android:targetClass="app.lifedashboard.MainActivity"
+            android:targetPackage="app.lifedashboard" />
+    </shortcut>
+</shortcuts>

@@ -124,6 +124,14 @@ class TasksViewModel @Inject constructor(
 ) : ViewModel() {
     private val today = LocalDate.now()
 
+    /** Überfällige To-dos auf die nächsten drei Tage verteilen und neu einplanen */
+    fun rescheduleOverdue() {
+        viewModelScope.launch {
+            repository.rescheduleOverdue()
+            runCatching { engine.planDays(LocalDate.now(), 3) }
+        }
+    }
+
     val data: StateFlow<TasksData?> = combine(repository.tasks, timetable.subjects, engine.observeRange(today, today.plusDays(14))) { t, s, plan ->
         val now = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
         val upcoming = plan
@@ -245,7 +253,7 @@ fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
             app.lifedashboard.ui.components.AdaptiveList(padding) {
                 wideItem(key = "hero") {
-                    TasksHero(current, today, onStart = { task, block -> focus = task to block }, onOpen = { editing = it.toEditRequest() })
+                    TasksHero(current, today, onStart = { task, block -> focus = task to block }, onOpen = { editing = it.toEditRequest() }, onReschedule = viewModel::rescheduleOverdue)
                 }
                 wideItem(key = "switch") {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -372,7 +380,7 @@ fun TasksScreen(viewModel: TasksViewModel = hiltViewModel()) {
 
 /** Kopfkarte: Ring = Wochenquote, große Zahl = heute zu tun, darunter die nächste Aufgabe mit „Starten“. */
 @Composable
-private fun TasksHero(data: TasksData, today: LocalDate, onStart: (TaskEntity, PlanBlockEntity?) -> Unit, onOpen: (TaskEntity) -> Unit) {
+private fun TasksHero(data: TasksData, today: LocalDate, onStart: (TaskEntity, PlanBlockEntity?) -> Unit, onOpen: (TaskEntity) -> Unit, onReschedule: (() -> Unit)? = null) {
     val tones = LocalAppColors.current
     val t = today.toEpochDay()
     val monday = today.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
@@ -402,6 +410,15 @@ private fun TasksHero(data: TasksData, today: LocalDate, onStart: (TaskEntity, P
                 }
                 if (overdue.isNotEmpty()) {
                     Text("${overdue.size} überfällig – die zuerst.", color = tones.warning, style = MaterialTheme.typography.bodyMedium)
+                    if (onReschedule != null && overdue.any { it.kind == app.lifedashboard.data.db.TaskKind.TODO }) {
+                        Text(
+                            "Neu verteilen",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(50)).border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(50))
+                                .clickable(onClick = onReschedule).padding(horizontal = 14.dp, vertical = 8.dp),
+                        )
+                    }
                 } else {
                     Text(if (dueSoon.isEmpty()) "Nichts Dringendes. Stark." else "Heute erledigen, morgen entspannt.", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodyMedium)
                 }

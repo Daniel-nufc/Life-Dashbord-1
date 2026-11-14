@@ -44,6 +44,7 @@ class PlanningIntegrationTest {
     @Inject lateinit var engine: PlanningEngine
     @Inject lateinit var training: TrainingRepository
     @Inject lateinit var agenda: app.lifedashboard.data.repository.AgendaRepository
+    @Inject lateinit var taskRepo: app.lifedashboard.data.repository.TaskRepository
 
     private val today = LocalDate.now()
     private val tomorrow = today.plusDays(1)
@@ -274,5 +275,37 @@ class PlanningIntegrationTest {
         val pinned = blocks(day, 1).first { it.id == other.id }
         assertEquals(19 * 60, pinned.startMinute)
         assertTrue(pinned.pinned)
+    }
+
+    private fun todo(title: String, due: LocalDate?, repeat: Int? = null) = app.lifedashboard.data.db.TaskEntity(
+        title = title, area = app.lifedashboard.data.db.LifeArea.PRIVATE, kind = app.lifedashboard.data.db.TaskKind.TODO, subjectId = null,
+        dueEpochDay = due?.toEpochDay(), estimatedMinutes = 15, done = false, doneAtMillis = null, note = null, createdAtMillis = 0, repeatDays = repeat,
+    )
+
+    @Test
+    fun `wiederkehrende Aufgabe - Abhaken legt die naechste an, aber nie doppelt`() = runBlocking {
+        db.taskDao().upsert(todo("Zimmer aufräumen", today, repeat = 7))
+        val first = db.taskDao().observeAll().first().single()
+        taskRepo.setDone(first, true)
+        val open = db.taskDao().observeAll().first().filter { !it.done }
+        assertEquals(1, open.size)
+        assertEquals(today.plusDays(7).toEpochDay(), open.single().dueEpochDay)
+        assertEquals(7, open.single().repeatDays)
+        // wieder öffnen und nochmal abhaken → keine zweite Kopie
+        taskRepo.setDone(first, false)
+        taskRepo.setDone(first, true)
+        assertEquals(1, db.taskDao().observeAll().first().count { !it.done })
+    }
+
+    @Test
+    fun `ueberfaellige To-dos werden auf drei Tage verteilt, Hausaufgaben bleiben`() = runBlocking {
+        (1..4).forEach { db.taskDao().upsert(todo("Alt $it", today.minusDays(it.toLong()))) }
+        db.taskDao().upsert(todo("HA", today.minusDays(1)).copy(kind = app.lifedashboard.data.db.TaskKind.HOMEWORK))
+        assertEquals(4, taskRepo.rescheduleOverdue(today))
+        val all = db.taskDao().observeAll().first()
+        val todos = all.filter { it.kind == app.lifedashboard.data.db.TaskKind.TODO }
+        assertTrue(todos.all { it.dueEpochDay!! in today.toEpochDay()..today.plusDays(2).toEpochDay() })
+        assertEquals(3, todos.map { it.dueEpochDay }.distinct().size)
+        assertEquals(today.minusDays(1).toEpochDay(), all.single { it.title == "HA" }.dueEpochDay)
     }
 }

@@ -3,8 +3,8 @@
 Private Android-App **Life Dashboard** für Daniel (Schüler, 11. Klasse, OSZ Max Taut Berlin). Läuft auf Galaxy S25 (Android 17) und Galaxy Tab S8+ (Android 16).
 Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (vorher „Auto Blocker“ kurz ausschalten).
 
-**Aktueller Stand: Version 36** (über 20 neue Funktionen, siehe `docs/IDEEN.md`; Datenbank-Version 15, alle Tests grün). Die Versionsnummer der APK ist die GitHub-Build-Nummer (`GITHUB_RUN_NUMBER`).
-**Code:** `main` = Version 29. Version 30–36 liegen auf `ccr-eb37e95e-gq983n` (noch nicht in `main`). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
+**Aktueller Stand: Version 41** (zwei Runden mit je über 20 neuen Funktionen, siehe `docs/IDEEN.md`; Datenbank-Version 16, alle Tests grün). Die Versionsnummer der APK ist die GitHub-Build-Nummer (`GITHUB_RUN_NUMBER`).
+**Code:** `main` = Version 29. Version 30–41 liegen auf `ccr-eb37e95e-gq983n` (noch nicht in `main`). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
 
 ## Wie mit Daniel arbeiten
 - Immer **auf Deutsch**, einfach und kurz erklären. Daniel ist kein Entwickler und liest oft auf dem Handy.
@@ -95,6 +95,16 @@ Konzept und Status: **`docs/IDEEN.md`** (dort auch Ideen für später). Kurz, wo
 - **Überblick:** `planner/Insights.kt` (Heatmap, beste Zeit, Tage am Stück) → `ui/progress/InsightCards.kt`, Daten über `RootViewModel.insights`.
 - **Schnellzugriff:** Schnellkachel `ui/focus/FocusTile.kt` (`FocusTileService`, Manifest) und „Fokus starten“ im Heute-Widget → `FocusLauncher.requested` → Heute öffnet den Fokus.
 - **Tag verstehen:** `DayAgenda.reservedBy`, `DayAgenda.conflicts()` (Überschneidungen fester Termine) im Kalender und auf Heute.
+
+## Runde 2: von beliebten Apps abgeschaut (Version 41)
+Liste mit Vorbild-App je Funktion: `docs/IDEEN.md` (Nr. 28–48). Rechenlogik gesammelt in **`planner/Inspired.kt`**.
+- Fortschritt: `ForestCard`, `BossCard`, `WeekCompareCard`, `EnergyCard` in `ui/progress/InsightCards.kt` (Daten: `RootViewModel.insights`).
+- Fitness: `SleepCard`, `TrainingLoadCard`, `SportMonthCard` in `ui/sport/RunningCards.kt`; neue Bestleistung → `ReminderWorker.celebrateRecords` (`SettingsRepository.beatsRecord`, erster Wert wird nur gemerkt).
+- Finanzen: `ui/finance/MoneyIdeas.kt` (`SpendingRhythmCard`, `WorkHoursCard`).
+- Lernen: `StudyOverview.weekBySubject`, Noten-Trend (`Inspired.gradeTrend`).
+- Heute: `Evening` (Tagesabschluss ab 20 Uhr + „Ein Satz zum Tag“, `AppSettings.dayNotes`, 60 Tage, auch im Wochenrückblick), `Bag` (Tasche für morgen ab 18 Uhr), `TodayViewModel.countdowns`.
+- Aufgaben: `tasks.repeatDays` (Migration 15→16), nächste Aufgabe entsteht in `TaskRepository.setDone` (nie doppelt); `TaskRepository.rescheduleOverdue`.
+- Schnellzugriff: `res/xml/shortcuts.xml` (Aktionen `app.lifedashboard.action.FOCUS` / `.ADD`, in `MainActivity.handleLink`); Zeit-Einblicke: `weekHours()` in `AgendaRepository.kt`, Anzeige im Kalender-Kopf.
 
 ## Technik
 - Kotlin 2.2.21, AGP 8.13.0, Gradle 8.14.3, compileSdk/targetSdk 36, minSdk 34, KSP, Hilt 2.57.2, Compose BOM 2025.05.00, Material 3.

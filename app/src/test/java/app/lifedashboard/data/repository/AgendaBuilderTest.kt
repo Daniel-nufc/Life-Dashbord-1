@@ -135,4 +135,19 @@ class AgendaBuilderTest {
         val quiet = AgendaBuilder.buildDays(monday, 1, lessons, listOf(floorball), settings, emptyList()).single()
         assertTrue(quiet.conflicts().isEmpty())
     }
+
+    @Test
+    fun `Zeit-Einblicke zaehlen Unterricht, Training und Bloecke`() {
+        val monday = LocalDate.of(2026, 11, 16)
+        val days = AgendaBuilder.buildDays(monday, 7, lessons, listOf(floorball), settings, emptyList())
+        val block = app.lifedashboard.data.db.PlanBlockEntity(
+            dateEpochDay = monday.toEpochDay(), startMinute = 960, endMinute = 1010, type = app.lifedashboard.planner.DemandType.STUDY,
+            demandKey = "study:x", title = "Mathe", refId = null, status = app.lifedashboard.data.db.PlanStatus.DONE, createdAtMillis = 0,
+        )
+        val hours = weekHours(days, listOf(block, block.copy(status = app.lifedashboard.data.db.PlanStatus.DECLINED))).toMap()
+        assertEquals(180, hours["Unterricht"]) // Mo + Fr je 90 Min
+        assertEquals(270, hours["Sport"]) // Floorball Mo + Mi je 135 Min
+        assertEquals(50, hours["Lernen"]) // abgelehnter Block zählt nicht
+        assertTrue("Job" !in hours)
+    }
 }

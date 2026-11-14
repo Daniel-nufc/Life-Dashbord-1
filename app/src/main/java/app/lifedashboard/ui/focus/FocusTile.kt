@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 /** Signal: Fokus für den nächsten Block starten (von der Schnellkachel oder einem Widget). */
 object FocusLauncher {
     val requested = MutableStateFlow(false)
+    /** „Neu eintragen“ vom App-Symbol (langes Drücken) */
+    val addRequested = MutableStateFlow(false)
     const val EXTRA = "start_focus"
 }
 

@@ -47,8 +47,24 @@ class TaskRepository @Inject constructor(
 
     suspend fun save(task: TaskEntity) = dao.upsert(task)
 
-    suspend fun setDone(task: TaskEntity, done: Boolean) =
+    suspend fun setDone(task: TaskEntity, done: Boolean) {
         dao.setDone(task.id, done, if (done) System.currentTimeMillis() else null)
+        // Wiederkehrende Aufgabe (Idee: Todoist): beim Abhaken entsteht die nächste – aber nie doppelt
+        val every = task.repeatDays?.takeIf { it > 0 } ?: return
+        if (!done) return
+        val openTwin = dao.observeAll().first().any { !it.done && it.id != task.id && it.title == task.title && it.repeatDays == every }
+        if (openTwin) return
+        val next = app.lifedashboard.planner.Inspired.nextRepeat(task.dueEpochDay?.let(LocalDate::ofEpochDay), LocalDate.now(), every)
+        dao.upsert(task.copy(id = 0, done = false, doneAtMillis = null, dueEpochDay = next.toEpochDay(), createdAtMillis = System.currentTimeMillis(), externalUid = null))
+    }
+
+    /** Überfällige To-dos auf heute, morgen und übermorgen verteilen (Hausaufgaben bleiben, die sind wirklich zu spät). */
+    suspend fun rescheduleOverdue(today: LocalDate = LocalDate.now()): Int {
+        val overdue = dao.observeAll().first().filter { !it.done && it.kind == app.lifedashboard.data.db.TaskKind.TODO && (it.dueEpochDay ?: Long.MAX_VALUE) < today.toEpochDay() }
+            .sortedBy { it.dueEpochDay }
+        overdue.forEachIndexed { i, t -> dao.upsert(t.copy(dueEpochDay = today.plusDays((i % 3).toLong()).toEpochDay())) }
+        return overdue.size
+    }
 
     suspend fun delete(id: Long) = dao.delete(id)
 

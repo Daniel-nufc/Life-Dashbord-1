@@ -112,6 +112,13 @@ fun TodayScreen(
     var editing by remember { mutableStateOf<EditRequest?>(null) }
 
     val title = (state as? TodayUiState.Ready)?.greeting ?: "Heute"
+    val addRequested by app.lifedashboard.ui.focus.FocusLauncher.addRequested.collectAsStateWithLifecycle()
+    LaunchedEffect(addRequested) {
+        if (addRequested) {
+            showAdd = true
+            app.lifedashboard.ui.focus.FocusLauncher.addRequested.value = false
+        }
+    }
     OneUiScaffold(title = title, floatingActionButton = { AddFab { showAdd = true } }) { padding ->
         when (val s = state) {
             TodayUiState.Loading -> LoadingState()

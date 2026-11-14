@@ -197,6 +197,18 @@ private fun WeekContent(
                     app.lifedashboard.ui.components.MiniAction("Aktuelle Woche", filled = false, onClick = viewModel::thisWeek)
                 }
             }
+            // Zeit-Einblicke: wohin die Stunden dieser Woche gehen
+            week?.let { w ->
+                val hours = app.lifedashboard.data.repository.weekHours(w.days, plan)
+                if (hours.isNotEmpty()) {
+                    Text(
+                        hours.joinToString(" · ") { (label, min) -> "$label ${if (min % 60 == 0) "${min / 60}" else "%.1f".format(min / 60.0).replace('.', ',')} Std" },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+            }
         }
     }
     val dayPane: @Composable () -> Unit = {

@@ -49,6 +49,33 @@ Status: ✅ umgesetzt · 🔜 geplant · 💭 später
 | 26 | **Reservierte Tage sichtbar** (Kalender: „Reserviert: Spieltag“, Heute: „nur Dringendes“) | Versteht man die Planung | ✅ v36 |
 | 27 | **Überschneidungen** fester Termine (z. B. Spieltag ↔ Training/Schicht/Unterricht) im Kalender und auf Heute | Rechtzeitig klären | ✅ v36 |
 
+## Runde 2 (Version 41): von beliebten Apps abgeschaut
+Rechenlogik: `planner/Inspired.kt` (Tests: `InspiredTest`). Alles aus vorhandenen Daten, nichts kostet Geld, nichts verlässt das Gerät.
+
+| # | Feature | Abgeschaut von | Wo | Status |
+|---|---|---|---|---|
+| 28 | **Fokus-Wald**: je 25 geschaffte Minuten ein Baum, verpasste Blöcke verwelken | Forest | Fortschritt | ✅ v41 |
+| 29 | **Wochen-Boss**: Wochenziel als Gegner mit Lebenspunkten, jede Woche ein anderer | Habitica | Fortschritt | ✅ v41 |
+| 30 | **Du gegen letzte Woche** (zum selben Zeitpunkt) | Duolingo-Liga | Fortschritt | ✅ v41 |
+| 31 | **Energie-Verlauf** (14 Tage) + „an fitten Tagen schaffst du X %“ | Daylio | Fortschritt | ✅ v41 |
+| 32 | **Schlaf-Karte**: Schnitt, Schlafschuld, „heute bis 21:45 ins Bett“ | Sleep Cycle | Fitness | ✅ v41 |
+| 33 | **Trainingsbelastung**: 7 Tage gegen den 4-Wochen-Schnitt (wenig / gleichmäßig / Aufbau / zu viel) | Strava | Fitness | ✅ v41 |
+| 34 | **Sport-Monat**: dieser Monat gegen den letzten | Strava-Monatsrückblick | Fitness | ✅ v41 |
+| 35 | **Neue Bestleistung** als Benachrichtigung (längster Lauf, schnellste Pace) | Strava | Erinnerungen | ✅ v41 |
+| 36 | **Pro Tag verfügbar** bis zum nächsten Taschengeld | YNAB „safe to spend“ | Finanzen | ✅ v41 |
+| 37 | **Tage ohne Ausgabe** am Stück | No-Spend-Challenge | Finanzen | ✅ v41 |
+| 38 | **Was kostet das in Arbeit?** Preis → Stunden auf der Baustelle | Spar-Apps | Finanzen | ✅ v41 |
+| 39 | **Lernzeit je Fach** diese Woche | Focus To-Do | Lernen | ✅ v41 |
+| 40 | **Noten-Trend** je Fach (steigt / fällt) | Noten-Apps | Lernen → Noten | ✅ v41 |
+| 41 | **Tagesabschluss** ab 20 Uhr: was geschafft, was morgen zuerst | Sunsama | Heute | ✅ v41 |
+| 42 | **Ein Satz zum Tag** – erscheint im Wochenrückblick | Daylio | Heute, Wochenrückblick | ✅ v41 |
+| 43 | **Tasche für morgen**: Fächer, Sportsachen, fällige Hausaufgaben | MyStudyLife | Heute (ab 18 Uhr) | ✅ v41 |
+| 44 | **Countdown** zu eigenen Terminen und Klausuren (6 Wochen) | Countdown-Apps | Heute | ✅ v41 |
+| 45 | **Wiederkehrende Aufgaben** (täglich / wöchentlich / alle 2 Wochen / monatlich) | Todoist | Aufgabe bearbeiten | ✅ v41 |
+| 46 | **Überfällige neu verteilen** auf drei Tage | Todoist | Aufgaben | ✅ v41 |
+| 47 | **App-Symbol lange drücken**: „Fokus starten“, „Neu eintragen“ | Todoist/TickTick | Homescreen | ✅ v41 |
+| 48 | **Zeit-Einblicke**: wohin die Stunden der Woche gehen | Google Kalender | Kalender | ✅ v41 |
+
 ## Später / Ideen-Speicher 💭
 - Hausaufgaben per Foto (Tafelbild) – bewusst nicht: Fotos sind sensibel, Speicherplatz.
 - Wetter für Sport-Zeitfenster (Open-Meteo, ohne Konto) – nur, wenn Daniel es will (Netzwerk-Zugriff).
