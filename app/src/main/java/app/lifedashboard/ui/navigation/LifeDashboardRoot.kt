@@ -153,6 +153,7 @@ class RootViewModel @Inject constructor(
     private val planDao: app.lifedashboard.data.db.PlanDao,
     private val engine: app.lifedashboard.data.planning.PlanningEngine,
     private val health: app.lifedashboard.data.sync.HealthRepository,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
 ) : ViewModel() {
     val progress: StateFlow<ProgressState?> = progressRepository.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -160,6 +161,25 @@ class RootViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val userName: StateFlow<String> = settings.settings.map { it.userName }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    /** Heatmap, beste Zeit, Tage am Stück – aus den Blöcken der letzten 8 Wochen */
+    val insights: StateFlow<app.lifedashboard.ui.progress.InsightState?> = run {
+        val today = java.time.LocalDate.now()
+        planDao.observeBetween(today.toEpochDay() - 56, today.toEpochDay()).map { blocks ->
+            val outcomes = blocks.filter { it.status == app.lifedashboard.data.db.PlanStatus.DONE || it.status == app.lifedashboard.data.db.PlanStatus.MISSED }
+                .map {
+                    app.lifedashboard.planner.PlanResult(
+                        java.time.LocalDate.ofEpochDay(it.dateEpochDay), it.startMinute, it.endMinute - it.startMinute,
+                        it.status == app.lifedashboard.data.db.PlanStatus.DONE,
+                    )
+                }
+            app.lifedashboard.ui.progress.InsightState(
+                heatmap = app.lifedashboard.planner.Insights.heatmap(outcomes, today),
+                bestTime = app.lifedashboard.planner.Insights.bestTime(outcomes),
+                runDays = app.lifedashboard.planner.Insights.currentRunDays(outcomes, today),
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    }
 
     /** Aktuelle Einstellungen (für den Ziele-Dialog) */
     val appSettings: StateFlow<app.lifedashboard.data.settings.AppSettings?> = settings.settings
@@ -218,6 +238,8 @@ class RootViewModel @Inject constructor(
 
     fun redeemGaming(minutes: Int) {
         viewModelScope.launch { settings.redeemGaming(minutes) }
+        // Timer: 5 Min vorher Hinweis, am Ende „Zockzeit vorbei“
+        app.lifedashboard.data.notify.GamingTimerWorker.start(appContext, minutes)
     }
 
     fun levelSeen(level: Int) {

@@ -252,7 +252,7 @@ private fun androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridScop
         }
     }
     items(data.upcoming, key = { it.exam.id }) { exam ->
-        ExamCard(exam, data.forecasts[exam.exam.id], viewModel, onEdit)
+        ExamCard(exam, data.forecasts[exam.exam.id], viewModel, onEdit, studied = data.studiedMinutes[exam.exam.id] ?: 0)
     }
     val past = data.exams.filter { it.daysLeft() < 0 }
     if (past.isNotEmpty()) {
@@ -356,7 +356,7 @@ private fun PlanStrip(forecast: app.lifedashboard.planner.StudyForecast, examDat
 }
 
 @Composable
-private fun ExamCard(exam: ExamWithTopics, forecast: app.lifedashboard.planner.StudyForecast?, viewModel: LearnViewModel, onEdit: (ExamEntity) -> Unit) {
+private fun ExamCard(exam: ExamWithTopics, forecast: app.lifedashboard.planner.StudyForecast?, viewModel: LearnViewModel, onEdit: (ExamEntity) -> Unit, studied: Int = 0) {
     var newTopic by remember(exam.exam.id) { mutableStateOf("") }
     var confirmDelete by remember(exam.exam.id) { mutableStateOf(false) }
     val accent = exam.subject?.let { Color(it.colorArgb) } ?: LifeArea.SCHOOL.color
@@ -387,6 +387,14 @@ private fun ExamCard(exam: ExamWithTopics, forecast: app.lifedashboard.planner.S
         }
         app.lifedashboard.ui.components.Meter(exam.progress / 100f, color = accent, modifier = Modifier.padding(vertical = 10.dp))
         forecast?.let { PlanStrip(it, exam.date, accent) }
+        if (studied > 0) {
+            Text(
+                "Schon gelernt: ${studyHours(studied)}" + (forecast?.let { f -> " · noch ${studyHours(f.neededMinutes)} nötig" } ?: ""),
+                style = MaterialTheme.typography.bodySmall,
+                color = accent,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
         exam.topics.forEach { topic -> TopicRow(topic, accent, viewModel) }
         Row(verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.material3.OutlinedTextField(
@@ -644,3 +652,5 @@ private fun FocusTab(data: StudyOverview, viewModel: LearnViewModel) {
         }
     }
 }
+
+private fun studyHours(min: Int) = if (min >= 60) "%d:%02d Std".format(min / 60, min % 60) else "$min Min"

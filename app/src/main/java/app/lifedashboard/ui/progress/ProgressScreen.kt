@@ -40,6 +40,7 @@ import app.lifedashboard.ui.navigation.RootViewModel
 @Composable
 fun ProgressScreen(onBack: () -> Unit, viewModel: RootViewModel = hiltViewModel()) {
     val state by viewModel.progress.collectAsStateWithLifecycle()
+    val insights by viewModel.insights.collectAsStateWithLifecycle()
     val name by viewModel.userName.collectAsStateWithLifecycle()
     val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
     var editGoals by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -77,6 +78,10 @@ fun ProgressScreen(onBack: () -> Unit, viewModel: RootViewModel = hiltViewModel(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                }
+                insights?.let { i ->
+                    item { HeatmapCard(i) }
+                    item { BestTimeCard(i.bestTime) }
                 }
                 item { IronmanPathCard(s.ironman) }
                 item {

@@ -40,6 +40,8 @@ data class StudyOverview(
     val sessionsThisWeek: List<StudySessionEntity>,
     /** Einschätzung je Klausur (passt / eng / Zeit fehlt), Schlüssel = Klausur-ID */
     val forecasts: Map<Long, app.lifedashboard.planner.StudyForecast> = emptyMap(),
+    /** Schon gelernt je Klausur (Minuten aus geschafften Lern-Blöcken) */
+    val studiedMinutes: Map<Long, Int> = emptyMap(),
 ) {
     /** Schnitt über alle Fächer mit Noten (jedes Fach gleich gewichtet). */
     val overallAverage: Double? get() = grades.mapNotNull { it.average }.takeIf { it.isNotEmpty() }?.average()
@@ -54,6 +56,7 @@ class StudyRepository @Inject constructor(
     private val jobs: JobRepository,
     private val schoolCalendar: SchoolCalendarRepository,
     private val agenda: AgendaRepository,
+    private val planDao: app.lifedashboard.data.db.PlanDao,
 ) {
     private companion object {
         val LATE_EVENING: java.time.LocalTime = java.time.LocalTime.of(21, 0)
@@ -73,9 +76,16 @@ class StudyRepository @Inject constructor(
             dao.observeTopics(),
             dao.observeGrades(),
             timetable.subjects,
-            combine(dao.observeSessionsSince(fromMillis), busy) { s, b -> s to b },
+            combine(
+                dao.observeSessionsSince(fromMillis), busy,
+                planDao.observeBetween(today.toEpochDay() - 90, today.toEpochDay()),
+            ) { s, b, blocks -> Triple(s, b, blocks) },
         ) { exams, topics, grades, subjects, sessionsAndBusy ->
-            val (sessions, busyDays) = sessionsAndBusy
+            val (sessions, busyDays, recentBlocks) = sessionsAndBusy
+            // Schon gelernt je Klausur: geschaffte Lern-Blöcke (study:<Tag>:<Klausur>:…) der letzten 90 Tage
+            val studied = recentBlocks.filter { it.status == app.lifedashboard.data.db.PlanStatus.DONE && it.demandKey.startsWith("study:") }
+                .groupBy { it.demandKey.split(":").getOrNull(2)?.toLongOrNull() ?: -1L }
+                .mapValues { (_, l) -> l.sumOf { it.endMinute - it.startMinute } }
             val (routineBlocks, shifts, freeRanges, reservedDays) = busyDays
             val targetPoints = app.lifedashboard.planner.Grades.pointsForGrade(TARGET_GRADE)
             val averageBySubject = grades.groupBy { it.subjectId }
@@ -137,6 +147,7 @@ class StudyRepository @Inject constructor(
                 dueReviews = due,
                 sessionsThisWeek = sessions,
                 forecasts = forecasts,
+                studiedMinutes = studied,
             )
         }
     }

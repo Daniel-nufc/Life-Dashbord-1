@@ -37,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -90,6 +91,15 @@ fun TodayScreen(
     var focusBlock by remember { mutableStateOf<app.lifedashboard.data.db.PlanBlockEntity?>(null) }
     var focusStarter by remember { mutableStateOf<Int?>(null) }
     val countdown by viewModel.holidayCountdown.collectAsStateWithLifecycle()
+    // Schnellkachel „Fokus“: nächsten Block sofort im Fokus-Modus öffnen
+    val focusRequested by app.lifedashboard.ui.focus.FocusLauncher.requested.collectAsStateWithLifecycle()
+    LaunchedEffect(focusRequested, state) {
+        val ready = state as? TodayUiState.Ready ?: return@LaunchedEffect
+        if (focusRequested) {
+            ready.nextBlock?.let { focusStarter = null; focusBlock = it }
+            app.lifedashboard.ui.focus.FocusLauncher.requested.value = false
+        }
+    }
     var miniFor by remember { mutableStateOf<app.lifedashboard.data.db.PlanBlockEntity?>(null) }
     val decline: (app.lifedashboard.data.db.PlanBlockEntity) -> Unit = { b ->
         if (b.type == app.lifedashboard.planner.DemandType.SPORT && b.endMinute - b.startMinute > 15) miniFor = b else viewModel.decline(b)

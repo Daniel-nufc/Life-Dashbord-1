@@ -63,6 +63,9 @@ class MainActivity : FragmentActivity() {
 
     /** Rückkehr von Strava: lifedashboard://localhost/strava?code=… */
     private fun handleLink(intent: android.content.Intent?) {
+        if (intent?.getBooleanExtra(app.lifedashboard.ui.focus.FocusLauncher.EXTRA, false) == true) {
+            app.lifedashboard.ui.focus.FocusLauncher.requested.value = true
+        }
         val data = intent?.data ?: return
         if (data.scheme != "lifedashboard" || data.path?.startsWith("/strava") != true) return
         lifecycleScope.launch {

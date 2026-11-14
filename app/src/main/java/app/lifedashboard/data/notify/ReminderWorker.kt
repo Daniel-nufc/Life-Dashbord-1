@@ -75,6 +75,10 @@ class ReminderWorker @AssistedInject constructor(
                 if (plan.isNotEmpty()) add("${plan.size} Blöcke geplant")
                 if (dueTomorrow > 0) add("$dueTomorrow fällig bis morgen")
                 training?.let { add("${it.title} ${minutesToTimeText(it.startMinute)}") }
+                // eigene Termine aus FamilyWall (Spieltag, Turnier …)
+                day.externalEvents.filter { it.blocksDay }.forEach { add(it.title) }
+                day.externalEvents.filter { it.startMinute != null }.take(2).forEach { add("${it.title} ${minutesToTimeText(it.startMinute!!)}") }
+                if (day.wellbeingAdjust() < 0) add("heute etwas leichter geplant")
             }
             notifier.send(
                 "morning", Channel.PLAN,
@@ -118,7 +122,7 @@ class ReminderWorker @AssistedInject constructor(
                         when (days) {
                             1 -> "Heute nur wiederholen, nichts Neues mehr. Früh schlafen – du bist vorbereitet."
                             3 -> "Endspurt: Lernstand ${exam.progress} %. Die schwächsten Themen zuerst."
-                            else -> "Noch eine Woche. Der Lernplan ist verteilt – jeden Tag ein Block reicht."
+                            else -> "Lernwoche startet: ab heute jeden Tag ein Stück, bis zu 1 Std mehr Lernzeit eingeplant. Vorher schon Gelerntes zählt mit."
                         },
                     )
                 }
@@ -128,6 +132,34 @@ class ReminderWorker @AssistedInject constructor(
         // 5) Training heute (ca. 1–2 Std vorher)
         day.routines.filter { it.area == LifeArea.SPORT && it.startMinute - nowMin in 60..120 }.forEach { r ->
             notifier.send("training:${r.id}", Channel.SPORT, "Heute ${r.title} um ${minutesToTimeText(r.startMinute)}", "Tasche packen, was trinken – los geht's!")
+        }
+
+        // 5d) Losgehen: eigener Termin mit Uhrzeit in 45–75 Min (selbst eingetragen oder FamilyWall)
+        val ownTimed = day.events.filter { it.startMinute != null }.map { Triple(it.title, it.startMinute!!, it.location) } +
+            day.externalEvents.filter { it.startMinute != null }.map { Triple(it.title, it.startMinute!!, null as String?) }
+        ownTimed.filter { (_, start, _) -> start - nowMin in 45..75 }.forEach { (title, start, location) ->
+            notifier.send(
+                "leave:$title:$start", Channel.PLAN,
+                "Um ${minutesToTimeText(start)}: $title",
+                (location?.let { "Ort: $it. " } ?: "") + "Plan den Weg ein – lieber 10 Minuten zu früh als gehetzt.",
+            )
+        }
+
+        // 5e) Vorabend (19–21 Uhr): morgen eigener Spieltag/Turnier/Ganztagstermin → Tasche heute packen
+        if (now.hour in 19..20) {
+            val tomorrowDay = range.days.getOrNull(1)
+            val sportWords = Regex("spiel|turnier|training|wettkampf|lauf|match", RegexOption.IGNORE_CASE)
+            val big = tomorrowDay?.externalEvents?.firstOrNull { it.blocksDay || sportWords.containsMatchIn(it.title) }
+                ?: tomorrowDay?.events?.firstOrNull { sportWords.containsMatchIn(it.title) }?.let { e ->
+                    app.lifedashboard.data.sync.ExternalEvent(e.id, e.title, tomorrowDay.date, e.startMinute, e.endMinute, 0, "")
+                }
+            if (big != null) {
+                notifier.send(
+                    "pack:${today.plusDays(1)}", Channel.SPORT,
+                    "Morgen: ${big.title}",
+                    "Tasche heute packen: Trikot, Schuhe, Trinkflasche, was zu essen. Morgen früh ist dann alles ruhig.",
+                )
+            }
         }
 
         // 5a) Abends: Plan für morgen bestätigen (20:30–21:29) – morgen musst du dann nur noch anfangen

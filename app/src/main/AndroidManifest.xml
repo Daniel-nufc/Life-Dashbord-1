@@ -65,6 +65,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Schnellkachel „Fokus“ -->
+        <service
+            android:name=".ui.focus.FocusTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_notification"
+            android:label="Fokus"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <activity-alias
             android:name="ViewPermissionUsageActivity"
             android:exported="true"

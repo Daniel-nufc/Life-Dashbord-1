@@ -161,6 +161,8 @@ fun FitnessScreen(onBack: () -> Unit, viewModel: FitnessViewModel = hiltViewMode
                 }
                 snapshot?.let { s -> item { WeekCharts(s) } }
                 item { TrainingMinutesCard(workouts, overview) }
+                item { TenKCard(workouts) }
+                if (workouts.isNotEmpty()) item { PersonalBestsCard(workouts) }
                 item {
                     StravaCard(
                         state = stravaState,
