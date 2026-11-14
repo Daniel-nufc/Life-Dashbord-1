@@ -125,4 +125,14 @@ class AgendaBuilderTest {
         assertTrue(cancelled.lessons.isEmpty())
         assertEquals("MA-B", cancelled.cancelledLessons.single().subject.code)
     }
+
+    @Test
+    fun `Ueberschneidungen fester Termine werden erkannt`() {
+        val monday = LocalDate.of(2026, 11, 16)
+        val match = app.lifedashboard.data.sync.ExternalEvent(1, "Spieltag", monday, 18 * 60 + 30, 20 * 60, 0, "FamilyWall")
+        val day = AgendaBuilder.buildDays(monday, 1, lessons, listOf(floorball), settings, emptyList(), external = listOf(match)).single()
+        assertEquals(listOf("Spieltag" to "Floorball"), day.conflicts())
+        val quiet = AgendaBuilder.buildDays(monday, 1, lessons, listOf(floorball), settings, emptyList()).single()
+        assertTrue(quiet.conflicts().isEmpty())
+    }
 }

@@ -13,12 +13,12 @@ Status: ✅ umgesetzt · 🔜 geplant · 💭 später
 | 2 | **Nach dem Fokus: „Wie gut sitzt es jetzt?“** – Verständnis-Regler fürs Thema, senkt die Restlernzeit | Fortschritt = Verständnis | ✅ v36 |
 | 3 | **Abend-Check** (Energie 1–5): müde → morgen 30 Min weniger, fit → bis 30 Min mehr | Plan passt sich dem Menschen an | ✅ v36 |
 | 4 | **Schlaf zählt**: unter 6 Std Schlaf (Health Connect) → heute 30 Min leichter | Kein Plan gegen den Körper | ✅ v36 |
-| 5 | **Zockzeit-Timer**: beim Einlösen läuft ein Timer, Hinweis 5 Min vor Ende | Belohnung ohne Endlos-Zocken | ✅ v36 |
+| 5 | **Zockzeit-Timer**: beim Einlösen läuft ein Timer, Hinweis 5 Min vor Ende und am Ende | Belohnung ohne Endlos-Zocken | ✅ v36 |
 
 ## B. Schule
 | # | Feature | Warum | Status |
 |---|---|---|---|
-| 6 | **Noten-Rechner**: Schnitt je Fach, Gesamtpunkte, Prognose Abi-Note | Ziel 1,7 sichtbar machen | ✅ v36 |
+| 6 | **Noten-Rechner**: Schnitt je Fach, Gesamtpunkte, Prognose Abi-Note (gab es schon, jetzt mit 7 + 8) | Ziel 1,7 sichtbar machen | ✅ |
 | 7 | **„Was brauche ich?“** je Fach: Punkte in der nächsten Klausur, um das Ziel zu halten | Klares Ziel pro Klausur | ✅ v36 |
 | 8 | **Größter Hebel**: welches Fach den Schnitt am meisten hebt | Lernzeit gezielt einsetzen | ✅ v36 |
 | 9 | **Klausur vorbei → Note eintragen** (Karte unter Lernen) | Noten-Rechner bleibt aktuell | ✅ v36 |
@@ -41,8 +41,13 @@ Status: ✅ umgesetzt · 🔜 geplant · 💭 später
 |---|---|---|---|
 | 19 | **Lern-Heatmap**: geschaffte Minuten je Tag der letzten 8 Wochen | Serie sichtbar | ✅ v36 |
 | 20 | **Deine beste Zeit**: zu welcher Uhrzeit du Blöcke wirklich schaffst | Planung nach echter Leistung | ✅ v36 |
-| 21 | **Morgen-Briefing** (6:45, werktags): erster Block, Klausur in Sicht, Spieltag | Tag ohne Nachdenken starten | ✅ v36 |
+| 21 | **Morgen-Briefing** erweitert: eigene FamilyWall-Termine (Spieltag, Turnier) und „heute leichter geplant“ | Tag ohne Nachdenken starten | ✅ v36 |
 | 22 | **Schnellkachel „Fokus“** (Schnelleinstellungen) startet den nächsten Block | Ohne Umweg ins Handy-Ablenkungsloch | ✅ v36 |
+| 23 | **„Schon gelernt“** je Klausur (geschaffte Lern-Blöcke) neben dem Lernplan | Fortschritt sehen | ✅ v36 |
+| 24 | **„Heute fällig, noch offen“** – Erinnerung 60–100 Min vor der Stunde | Keine verpasste Abgabe | ✅ v36 |
+| 25 | **Widget „Fokus starten“** im Heute-Widget | Vom Homescreen direkt in den Fokus | ✅ v36 |
+| 26 | **Reservierte Tage sichtbar** (Kalender: „Reserviert: Spieltag“, Heute: „nur Dringendes“) | Versteht man die Planung | ✅ v36 |
+| 27 | **Überschneidungen** fester Termine (z. B. Spieltag ↔ Training/Schicht/Unterricht) im Kalender und auf Heute | Rechtzeitig klären | ✅ v36 |
 
 ## Später / Ideen-Speicher 💭
 - Hausaufgaben per Foto (Tafelbild) – bewusst nicht: Fotos sind sensibel, Speicherplatz.

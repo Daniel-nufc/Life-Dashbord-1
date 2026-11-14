@@ -88,6 +88,32 @@ data class DayAgenda(
      */
     val reservedDay: Boolean get() = externalEvents.any { it.blocksDay }
 
+    /** Titel des eigenen Ganztagstermins, der den Tag reserviert (z. B. „Spieltag“) */
+    val reservedBy: String? get() = externalEvents.firstOrNull { it.blocksDay }?.title
+
+    /**
+     * Überschneidungen fester Termine (Unterricht, eigene Termine, FamilyWall, Schichten, Training):
+     * z. B. „Spieltag Kleinfeld ↔ Schicht“. Planungsblöcke zählen nicht – die weichen selbst aus.
+     */
+    fun conflicts(): List<Pair<String, String>> {
+        val fixed = buildList {
+            lessons.forEach { l -> l.timeRange?.let { add(l.subject.name to it) } }
+            events.forEach { e -> if (e.startMinute != null) add(e.title to app.lifedashboard.planner.TimeRange.ofMinutes(e.startMinute, maxOf(e.endMinute ?: (e.startMinute + 60), e.startMinute + 1))) }
+            externalEvents.forEach { e -> if (e.startMinute != null) add(e.title to app.lifedashboard.planner.TimeRange.ofMinutes(e.startMinute, maxOf(e.endMinute ?: (e.startMinute + 60), e.startMinute + 1))) }
+            shifts.forEach { s -> add("Schicht" to app.lifedashboard.planner.TimeRange.ofMinutes(s.startMinute, maxOf(s.endMinute, s.startMinute + 1))) }
+            routines.forEach { r -> add(r.title to app.lifedashboard.planner.TimeRange.ofMinutes(r.startMinute, maxOf(r.endMinute, r.startMinute + 1))) }
+        }
+        val schoolTitles = lessons.map { it.subject.name }.toSet()
+        val result = mutableListOf<Pair<String, String>>()
+        for (i in fixed.indices) for (j in i + 1 until fixed.size) {
+            val (a, ra) = fixed[i]
+            val (b, rb) = fixed[j]
+            if (a in schoolTitles && b in schoolTitles) continue // Doppelstunden o. Ä. sind keine Überschneidung
+            if (ra.overlaps(rb) && a != b) result += a to b
+        }
+        return result.distinct()
+    }
+
     /** Schul-Pensum (Lernen + Hausaufgaben) für diesen Tag: werktags 2 Std, mit Training/Job 1 Std, Samstag 2 Std, Sonntag frei. */
     fun schoolCapMinutes(examSoon: Boolean = false, examWeek: Boolean = false): Int {
         val base = baseSchoolCap(examSoon) + (if (examWeek && !reservedDay && date.dayOfWeek != DayOfWeek.SUNDAY) 60 else 0)

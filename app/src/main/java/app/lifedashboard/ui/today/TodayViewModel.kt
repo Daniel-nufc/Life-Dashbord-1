@@ -91,6 +91,10 @@ sealed interface TodayUiState {
         val askEnergy: Boolean = false,
         /** Heute leichter/mehr geplant, weil … (Abend-Check, Schlaf) */
         val wellbeingNote: String? = null,
+        /** Feste Termine, die sich heute überschneiden */
+        val conflicts: List<Pair<String, String>> = emptyList(),
+        /** Eigener Ganztagstermin (Spieltag, Turnier …): heute wird nur Dringendes geplant */
+        val reservedBy: String? = null,
         /** Nach der Schule: die Fächer von heute – Hausaufgaben mit einem Tipp erfassen */
         val homeworkSubjects: List<SubjectEntity> = emptyList(),
     ) : TodayUiState
@@ -313,6 +317,8 @@ class TodayViewModel @Inject constructor(
                 ).joinToString(" und ")
                 if (delta < 0) "Heute ${-delta} Min leichter geplant – $why." else "Heute $delta Min mehr drin – $why."
             },
+            conflicts = today.conflicts(),
+            reservedBy = today.reservedBy,
             homeworkSubjects = run {
                 val lastLessonEnd = today.lessons.mapNotNull { it.timeRange?.end }.maxOrNull()
                 if (lastLessonEnd == null || time.isBefore(lastLessonEnd) || hour >= 22) emptyList()

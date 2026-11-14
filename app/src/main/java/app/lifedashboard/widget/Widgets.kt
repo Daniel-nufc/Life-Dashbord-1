@@ -112,6 +112,21 @@ private fun TodayContent(data: TodayData) {
                 Text(line.title, style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 13.sp), maxLines = 1)
             }
         }
+        if (data.now != null) {
+            // Direkt in den Fokus-Modus für den nächsten Block
+            Spacer(GlanceModifier.height(6.dp))
+            Text(
+                "Fokus starten",
+                style = TextStyle(color = GlanceTheme.colors.primary, fontSize = 14.sp, fontWeight = FontWeight.Bold),
+                modifier = GlanceModifier.clickable(
+                    actionStartActivity<MainActivity>(
+                        androidx.glance.action.actionParametersOf(
+                            androidx.glance.action.ActionParameters.Key<Boolean>(app.lifedashboard.ui.focus.FocusLauncher.EXTRA) to true,
+                        ),
+                    ),
+                ),
+            )
+        }
         if (data.homework > 0) {
             Spacer(GlanceModifier.height(6.dp))
             Text(

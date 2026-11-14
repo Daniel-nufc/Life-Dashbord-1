@@ -3,8 +3,8 @@
 Private Android-App **Life Dashboard** für Daniel (Schüler, 11. Klasse, OSZ Max Taut Berlin). Läuft auf Galaxy S25 (Android 17) und Galaxy Tab S8+ (Android 16).
 Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (vorher „Auto Blocker“ kurz ausschalten).
 
-**Aktueller Stand: Version 35** (flexible Planung, neuer Lernplan, Tagesplan im Abgleich, Datenbank-Version 15, alle Tests grün). Die Versionsnummer der APK ist die GitHub-Build-Nummer (`GITHUB_RUN_NUMBER`).
-**Code:** `main` = Version 29. Version 30–35 liegen auf `ccr-eb37e95e-gq983n` (noch nicht in `main`). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
+**Aktueller Stand: Version 36** (über 20 neue Funktionen, siehe `docs/IDEEN.md`; Datenbank-Version 15, alle Tests grün). Die Versionsnummer der APK ist die GitHub-Build-Nummer (`GITHUB_RUN_NUMBER`).
+**Code:** `main` = Version 29. Version 30–36 liegen auf `ccr-eb37e95e-gq983n` (noch nicht in `main`). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
 
 ## Wie mit Daniel arbeiten
 - Immer **auf Deutsch**, einfach und kurz erklären. Daniel ist kein Entwickler und liest oft auf dem Handy.
@@ -17,7 +17,7 @@ Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (
 
 ## Profil (für die Planung)
 - Werktags 6:00–22:00, Wochenende ab ca. 9:30. Lernt am besten nachmittags, Pomodoro 25 Min. Schulweg < 30 Min.
-- Stundenplan A/B-Woche: KW 46/2026 (9.11.2026) = **Woche A**. Gezählt werden Schulwochen, reine Ferienwochen werden übersprungen. Berliner Ferien 2026/27 sind hinterlegt.
+- Stundenplan A/B-Woche: KW 46/2026 (9.11.2026) = **Woche A**. Gezählt werden Schulwochen, reine Ferienwochen werden übersprungen. Berliner Ferien 2026/27 sind hinterlegt, 2027/28 vorläufig (KMK, seit v36).
 - Floorball Berliner TSC: Mo + Mi, Training 18:30–20:00, Abfahrt 18:00.
 - Notenpunkte 0–15, Ziel Abi 1,7. Fächer u. a. TuMM = Management, TuMT = Technik, PM = Projektmanagement, BIO-Pro = Bio, DS = Darstellendes Spiel.
 - Ziel Ironman (zuerst 10 km). Minijob als Baustellenhelfer. Taschengeld 20 € am 21. (DKB) + 20 € bar vom Opa. Erspartes = geschützter **Puffer**. Sparziele: Führerschein, Feriencamp.
@@ -85,6 +85,17 @@ Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (
 - **Lernplan neu (Daniels Wunsch):** Restzeit = Aufwand × (1 − Fortschritt) – Fortschritt = Verständnis. **Untergrenze** je Klausurart (`StudyExam.minimumMinutes`: Klausur 8 Std, Test 3 Std, sonst 4 Std; × Schwierigkeit × Noten-Zuschlag). **Zwei Phasen:** ist die Klausur > 9 Tage weg, ~30 % als lockere Einheiten etwa alle 3 Tage (freiester Tag im 3-Tage-Fenster, ab max. 35 Tage vorher), Rest in der **Lernwoche** (7 Tage, gleichmäßig; reicht es nicht, früher bis 21 Tage). **Lernwoche +1 Std** Schul-Pensum (`schoolCapMinutes(examWeek)`, gleiche Regel in `StudyRepository.capacity`).
 - **Abgleich:** `plan_blocks` werden abgeglichen, aber nur Nicht-Vorschläge (`SyncTable.track = "status != 'PROPOSED'"`, Trigger mit WHEN; naturalKey `dateEpochDay + demandKey` → auf beiden Geräten bestätigte Blöcke werden eins). WLAN reagiert nur auf `sync_meta`-Änderungen. **Verschiedene App-Versionen gleichen trotzdem ab** (nur DB < 12 wird abgelehnt). „Jetzt abgleichen“ liest die Cloud-Datei zweimal (6 s Abstand) gegen gleichzeitiges Schreiben. Kalender-Abo-Kennungen aus dem Link (`ical-<hash>:`) statt Abo-Nummer (alte werden umbenannt), Klausur-Erkennung erkennt Klausuren des anderen Geräts.
 
+## Viele neue Funktionen (Version 36, Daniels Auftrag „mind. 20 sinnvolle Features“)
+Konzept und Status: **`docs/IDEEN.md`** (dort auch Ideen für später). Kurz, wo was liegt:
+- **Anfangen:** „Nur 5 Min“ in `NextUpHero` → `FocusMode(starterMinutes)`; nach Lern-Fokus Verständnis-Regler (`FocusMode.onUnderstanding` → `StudyRepository.setProgress`, Thema aus `demandKey` study:<Tag>:<Klausur>:<Thema>).
+- **Befinden:** Abend-Check ab 18 Uhr (`AppSettings.energyLog`, `SettingsRepository.setEnergy`), wenig Schlaf (`shortSleepDays`, `RootViewModel` über `HealthRepository.lastNightSleep`) → `DayAgenda.wellbeingAdjust()` ±30 Min im Schul-Pensum (nie unter 30, freie Tage bleiben 0).
+- **Schule:** ausgefallene Stunden (`AppSettings.cancelledLessons` „epochDay:Stunde“, Chips im Kalender, `DayAgenda.cancelledLessons`); Hausaufgaben-Chips nach Schulschluss auf Heute; `Grades.neededNext` / `Grades.biggestLever` im Noten-Reiter; „Klausur vorbei → Note“ im Klausuren-Reiter; „Schon gelernt“ (`StudyOverview.studiedMinutes`); Ferien-Countdown (`schoolDaysUntilBreak`) in der Kopfkarte; Ferien 2027/28 per `seedVersion 9` (`addMissingHolidays`) + Erinnerung im Ferien-Bildschirm.
+- **Sport:** `planner/RunningProgress.kt` (Weg zu 10 km, Bestleistungen) → `ui/sport/RunningCards.kt`. Weiterhin keine Sportart vorschreiben – nur Auswertung.
+- **Erinnerungen (`ReminderWorker`):** Losgehen vor eigenen Terminen, Tasche packen am Vorabend, heute fällige HA vor der Stunde, Morgen-Briefing mit FamilyWall-Terminen, „Lernwoche startet“; `GamingTimerWorker` beim Einlösen von Zockzeit.
+- **Überblick:** `planner/Insights.kt` (Heatmap, beste Zeit, Tage am Stück) → `ui/progress/InsightCards.kt`, Daten über `RootViewModel.insights`.
+- **Schnellzugriff:** Schnellkachel `ui/focus/FocusTile.kt` (`FocusTileService`, Manifest) und „Fokus starten“ im Heute-Widget → `FocusLauncher.requested` → Heute öffnet den Fokus.
+- **Tag verstehen:** `DayAgenda.reservedBy`, `DayAgenda.conflicts()` (Überschneidungen fester Termine) im Kalender und auf Heute.
+
 ## Technik
 - Kotlin 2.2.21, AGP 8.13.0, Gradle 8.14.3, compileSdk/targetSdk 36, minSdk 34, KSP, Hilt 2.57.2, Compose BOM 2025.05.00, Material 3.
 - Room 2.7.1 + SQLCipher 4.10 (Passwort aus dem Keystore), DataStore, WorkManager + hilt-work, Health Connect 1.1.0, Glance-Widgets.
@@ -95,7 +106,7 @@ Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (
 | Was | Wo |
 |---|---|
 | Datenbank, Migrationen, Schema | `app/.../data/db/` (`AppDatabase.ALL_MIGRATIONS`), Schemas in `app/schemas/` |
-| Startdaten (Stundenplan, Ferien, Ziele …) | `data/seed/SeedDataInitializer.kt` (seedVersion, aktuell 8) |
+| Startdaten (Stundenplan, Ferien, Ziele …) | `data/seed/SeedDataInitializer.kt` (seedVersion, aktuell 9) |
 | Einstellungen | `data/settings/SettingsRepository.kt` |
 | Tagesplanung | `data/planning/PlanningEngine.kt` + `planner/DayPlanner.kt` |
 | Lernplan | `planner/StudyPlanner.kt`, `data/repository/StudyRepository.kt` |

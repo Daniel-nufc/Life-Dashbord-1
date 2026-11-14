@@ -129,6 +129,18 @@ fun TodayScreen(
                         holidayCountdown = countdown,
                     )
                 }
+                if (s.conflicts.isNotEmpty() || s.reservedBy != null) {
+                    item(span = StaggeredGridItemSpan.FullLine) {
+                        Column(Modifier.padding(horizontal = 4.dp)) {
+                            s.reservedBy?.let {
+                                Text("Heute: $it – nur Dringendes ist eingeplant. Viel Erfolg!", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                            }
+                            s.conflicts.forEach { (a, b) ->
+                                Text("Überschneidung heute: $a und $b – kläre, was gilt.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
                 s.wellbeingNote?.let { note ->
                     item(span = StaggeredGridItemSpan.FullLine) {
                         Text(note, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))

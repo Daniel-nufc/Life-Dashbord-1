@@ -360,8 +360,19 @@ private fun DayPane(
                 )
             }
             day.holiday?.let { Pill(it.take(22), LifeArea.SPORT.color) }
+            day.reservedBy?.let { Pill("Reserviert: ${it.take(18)}", LifeArea.PRIVATE.color) }
             if (isToday) Pill("Heute", MaterialTheme.colorScheme.primary)
             IconButton(onClick = { onAdd(day.date) }) { Icon(Icons.Rounded.Add, contentDescription = "Eintragen") }
+        }
+
+        // Feste Termine überschneiden sich (z. B. Spieltag und Schicht) – rechtzeitig klären
+        day.conflicts().forEach { (a, b) ->
+            Text(
+                "Überschneidung: $a und $b",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 4.dp),
+            )
         }
 
         // Stunde fällt aus? Antippen → die Zeit wird frei und neu verplant (nochmal antippen = findet doch statt)

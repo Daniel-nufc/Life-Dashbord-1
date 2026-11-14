@@ -111,6 +111,18 @@ class ReminderWorker @AssistedInject constructor(
             }
         }
 
+        // 3b) Heute fällig und noch offen: rechtzeitig vor der Stunde des Fachs erinnern (60–100 Min vorher)
+        range.allTasks.filter { !it.done && it.kind == TaskKind.HOMEWORK && it.dueEpochDay == today.toEpochDay() }.forEach { task ->
+            val cutoff = day.homeworkCutoff(task.subjectId) ?: return@forEach
+            if (cutoff.minuteOfDay() - nowMin in 60..100) {
+                notifier.send(
+                    "hw-today:${task.id}", Channel.SCHOOL,
+                    "Heute fällig: ${task.title.ifBlank { "Hausaufgabe" }}",
+                    "Noch offen – bis ${minutesToTimeText(cutoff.minuteOfDay())} erledigen, dann ist sie sicher.",
+                )
+            }
+        }
+
         // 4) Klausur in 7 / 3 / 1 Tagen (morgens)
         if (now.hour in 7..19) {
             study.overview(today).first().upcoming.forEach { exam ->
