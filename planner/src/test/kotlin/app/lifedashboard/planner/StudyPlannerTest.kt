@@ -135,4 +135,22 @@ fun `Lernzeit - locker vorlernen, dann gleichmaessige Lernwoche`() {
         val done = half.copy(topics = half.topics.map { it.copy(progress = 100) })
         assertEquals(0, StudyPlanner.remainingMinutes(done))
     }
+
+    @Test
+    fun `was brauche ich in der naechsten Klausur`() {
+        // bisher 9 und 11 Punkte (gleich gewichtet), Ziel 12 → nächste Note 16 nötig → allein nicht zu schaffen
+        assertEquals(16, Grades.neededNext(listOf(9 to 1.0, 11 to 1.0), 12.0))
+        // Klausur zählt doppelt: (9 + 11 + 2x) / 4 ≥ 12 → x ≥ 14
+        assertEquals(14, Grades.neededNext(listOf(9 to 1.0, 11 to 1.0), 12.0, nextWeight = 2.0))
+        assertEquals(0, Grades.neededNext(listOf(15 to 1.0, 15 to 1.0), 5.0))
+        assertEquals(12, Grades.neededNext(emptyList(), 11.9))
+    }
+
+    @Test
+    fun `groesster Hebel ist das schwaechste Fach unter dem Ziel`() {
+        val lever = Grades.biggestLever(mapOf("Mathe" to 7.0, "Deutsch" to 11.0, "Bio" to 13.0, "Englisch" to 9.0), 12.0)!!
+        assertEquals("Mathe", lever.subject)
+        assertEquals(1.25, lever.gainOverall, 0.001)
+        assertEquals(null, Grades.biggestLever(mapOf("Bio" to 13.0), 12.0))
+    }
 }

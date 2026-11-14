@@ -295,4 +295,27 @@ object Grades {
 
     /** Punkte, die man im Schnitt für eine Zielnote braucht (z. B. 1,7 → 11,9). */
     fun pointsForGrade(grade: Double): Double = (17.0 - 3.0 * grade).coerceIn(0.0, 15.0)
+
+    /**
+     * „Was brauche ich?“ – Punkte in der nächsten Note (Gewicht [nextWeight]), damit der Fach-Schnitt
+     * mindestens [target] erreicht. 0 = Ziel schon sicher, über 15 = mit einer Note allein nicht mehr zu schaffen.
+     */
+    fun neededNext(current: List<Pair<Int, Double>>, target: Double, nextWeight: Double = 1.0): Int {
+        val weight = current.sumOf { it.second }
+        val sum = current.sumOf { it.first * it.second }
+        val needed = (target * (weight + nextWeight) - sum) / nextWeight
+        return kotlin.math.ceil(needed - 1e-9).toInt().coerceAtLeast(0)
+    }
+
+    data class Lever(val subject: String, val average: Double, val gainOverall: Double)
+
+    /**
+     * Größter Hebel: das Fach, das den Gesamtschnitt am meisten hebt, wenn es aufs Ziel kommt
+     * (= größter Abstand zum Ziel; alle Fächer zählen gleich).
+     */
+    fun biggestLever(averages: Map<String, Double>, target: Double): Lever? {
+        if (averages.isEmpty()) return null
+        val (subject, avg) = averages.filterValues { it < target }.minByOrNull { it.value } ?: return null
+        return Lever(subject, avg, (target - avg) / averages.size)
+    }
 }

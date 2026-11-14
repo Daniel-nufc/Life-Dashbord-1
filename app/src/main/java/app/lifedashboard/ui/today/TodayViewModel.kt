@@ -32,6 +32,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
+import app.lifedashboard.data.repository.range
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -119,7 +120,16 @@ class TodayViewModel @Inject constructor(
     progressRepository: app.lifedashboard.data.repository.ProgressRepository,
     private val settings: app.lifedashboard.data.settings.SettingsRepository,
     private val usage: app.lifedashboard.data.sync.UsageRepository,
+    schoolCalendar: app.lifedashboard.data.repository.SchoolCalendarRepository,
 ) : ViewModel() {
+
+    /** „Noch 7 Schultage bis Weihnachtsferien“ – nur in den letzten 4 Wochen davor */
+    val holidayCountdown: StateFlow<String?> = schoolCalendar.holidays.map { list ->
+        val breaks = list.filter { it.kind == app.lifedashboard.data.db.HolidayKind.SCHOOL_HOLIDAY }.map { it.name.substringBefore(" (") to it.range() }
+        app.lifedashboard.planner.schoolDaysUntilBreak(LocalDate.now(), breaks, list.map { it.range() })
+            ?.takeIf { it.second in 1..20 }
+            ?.let { (name, days) -> "noch $days ${if (days == 1) "Schultag" else "Schultage"} bis ${name.substringBefore(" 20")}" }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
 
 

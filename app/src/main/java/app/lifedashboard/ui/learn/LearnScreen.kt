@@ -124,7 +124,7 @@ fun LearnScreen(viewModel: LearnViewModel = hiltViewModel()) {
                     }
                 }
                 when (tab) {
-                    0 -> examsTab(data, viewModel, onEdit = { examDialog = ExamDialogRequest(it) })
+                    0 -> examsTab(data, viewModel, onEdit = { examDialog = ExamDialogRequest(it) }, onAddGrade = { gradeDialog = GradeDialogRequest(null, it) })
                     1 -> gradesTab(data, onAddGrade = { gradeDialog = GradeDialogRequest(null, it) }, onEditGrade = { gradeDialog = GradeDialogRequest(it, it.subjectId) }, onEditSubject = { s -> gradeDialog = null; subjectToEdit = s })
                     else -> item { FocusTab(data, viewModel) }
                 }
@@ -170,7 +170,29 @@ private fun androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridScop
     data: StudyOverview,
     viewModel: LearnViewModel,
     onEdit: (ExamEntity) -> Unit,
+    onAddGrade: (Long) -> Unit = {},
 ) {
+    // Klausur vorbei (letzte 3 Wochen), aber noch keine Note im Fach seitdem → nachfragen
+    val finished = data.exams.filter { e ->
+        e.daysLeft() in -21..-1 && data.grades.firstOrNull { it.subject.id == e.exam.subjectId }?.grades.orEmpty()
+            .none { g -> g.dateEpochDay >= e.exam.dateEpochDay }
+    }
+    finished.forEach { e ->
+        wideItem {
+            SectionCard {
+                TileHeader(Icons.Rounded.Event, "Klausur vorbei: ${e.subject?.name ?: e.exam.title}", LifeArea.SCHOOL.color)
+                Text(
+                    "Wie lief's? Trag die Note ein, sobald du sie hast – dann stimmt dein Schnitt und die Lernzeit für dieses Fach passt sich an.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                    Button(onClick = { onAddGrade(e.exam.subjectId) }) { Text("Note eintragen") }
+                    TextButton(onClick = { viewModel.deleteExam(e.exam.id) }) { Text("Klausur entfernen") }
+                }
+            }
+        }
+    }
     val next = data.upcoming.firstOrNull()
     wideItem {
         if (next == null) {
@@ -479,6 +501,19 @@ private fun androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridScop
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+    val target = Grades.pointsForGrade(TARGET_GRADE)
+    Grades.biggestLever(data.grades.mapNotNull { sg -> sg.average?.let { sg.subject.name to it } }.toMap(), target)?.let { lever ->
+        wideItem {
+            SectionCard {
+                TileHeader(Icons.Rounded.Event, "Größter Hebel: ${lever.subject}", LifeArea.SCHOOL.color)
+                Text(
+                    "Hier stehst du bei %.1f Punkten. Kommst du in diesem Fach aufs Ziel, steigt dein Gesamtschnitt um %.1f Punkte – mehr als in jedem anderen Fach. Lernzeit lohnt sich hier am meisten."
+                        .format(lever.average, lever.gainOverall),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+    }
     items(data.grades.sortedBy { it.average ?: 99.0 }, key = { it.subject.id }) { sg ->
         val accent = Color(sg.subject.colorArgb)
         SectionCard {
@@ -496,6 +531,19 @@ private fun androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridScop
                 IconButton(onClick = { onAddGrade(sg.subject.id) }) { Icon(Icons.Rounded.Add, "Note eintragen") }
             }
             if (sg.grades.isNotEmpty()) {
+                // „Was brauche ich?“ für die nächste Klausur (gleiches Gewicht wie bisherige Klausuren)
+                val nextWeight = sg.grades.filter { it.kind == app.lifedashboard.data.db.GradeKind.KLAUSUR }.map { it.weight }.average().takeIf { !it.isNaN() } ?: 1.0
+                val needed = Grades.neededNext(sg.grades.map { it.points to it.weight }, target, nextWeight)
+                Text(
+                    when {
+                        needed <= 0 -> "Ziel sicher – auch eine schwache nächste Note hält dich auf Kurs."
+                        needed <= 15 -> "Nächste Klausur: mind. $needed Punkte fürs Ziel."
+                        else -> "Mit einer Klausur allein nicht mehr aufs Ziel – mündlich und Tests mitnehmen."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (needed > 15) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
                     sg.grades.forEach { g ->
                         FilterChip(selected = false, onClick = { onEditGrade(g) }, label = { Text("${g.points} P · ${g.kind.label()}") })

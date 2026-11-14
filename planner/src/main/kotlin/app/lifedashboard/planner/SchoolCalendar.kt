@@ -64,3 +64,19 @@ object BerlinSchoolCalendar {
 /** Schulfrei? (Ferien, Feiertag, eigener freier Tag – oder Wochenende) */
 fun isSchoolFree(date: LocalDate, freeRanges: List<DateRange>): Boolean =
     date.dayOfWeek.value >= 6 || freeRanges.any { date in it }
+
+/**
+ * Countdown bis zu den nächsten richtigen Ferien (mind. 5 Tage): Schultage ab heute (heute zählt mit,
+ * Wochenenden/Feiertage nicht). null, wenn keine Ferien bekannt sind.
+ */
+fun schoolDaysUntilBreak(today: LocalDate, breaks: List<Pair<String, DateRange>>, freeRanges: List<DateRange>): Pair<String, Int>? {
+    val next = breaks.filter { it.second.start.isAfter(today) && it.second.start.toEpochDay() - it.second.endInclusive.toEpochDay() <= -4 }
+        .minByOrNull { it.second.start } ?: return null
+    var count = 0
+    var d = today
+    while (d.isBefore(next.second.start)) {
+        if (!isSchoolFree(d, freeRanges)) count++
+        d = d.plusDays(1)
+    }
+    return next.first to count
+}

@@ -57,6 +57,7 @@ fun NextUpHero(
     onLater: (PlanBlockEntity) -> Unit,
     /** „Keine Lust“: nur 5 Minuten anfangen */
     onStartSmall: ((PlanBlockEntity) -> Unit)? = null,
+    holidayCountdown: String? = null,
 ) {
     val tones = LocalAppColors.current
     val block = s.nextBlock
@@ -67,6 +68,9 @@ fun NextUpHero(
             Text(s.dateLabel, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
             Pill("Woche ${s.weekType.name}", Color.White.copy(alpha = 0.2f))
             s.holiday?.let { Pill(it.take(18), Color.White.copy(alpha = 0.2f)) }
+        }
+        holidayCountdown?.let {
+            Text(it, color = tones.energy, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
         }
         Spacer(Modifier.height(18.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {

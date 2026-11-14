@@ -24,7 +24,7 @@ Status: ✅ umgesetzt · 🔜 geplant · 💭 später
 | 9 | **Klausur vorbei → Note eintragen** (Karte unter Lernen) | Noten-Rechner bleibt aktuell | ✅ v36 |
 | 10 | **Hausaufgaben nach der Schule erfassen**: Fächer von heute als Chips, ein Tipp → fällig zur nächsten Stunde | Nichts vergessen, null Tipparbeit | ✅ v36 |
 | 11 | **Stunde fällt aus** markieren → Zeit wird frei und neu verplant | Vertretung/Ausfall ist Alltag | ✅ v36 |
-| 12 | **Hausaufgaben-Dauer lernen** je Fach aus erledigten Blöcken → bessere Schätzung | Realistische Pläne | ✅ v36 |
+| 12 | **„Lernwoche startet“** – Hinweis 7 Tage vor jeder Klausur (Hausaufgaben-Dauer je Fach lernt die App schon seit v28) | Rechtzeitig loslegen | ✅ v36 |
 | 13 | **Ferien 2027/28** (vorläufig) + Erinnerung, wenn die Ferien auslaufen | A/B-Woche & Planung stimmen weiter | ✅ v36 |
 | 14 | **Ferien-Countdown** in der Kopfkarte („noch 12 Schultage bis …“) | Motivation | ✅ v36 |
 

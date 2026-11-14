@@ -89,6 +89,7 @@ fun TodayScreen(
     val social by viewModel.socialToday.collectAsStateWithLifecycle()
     var focusBlock by remember { mutableStateOf<app.lifedashboard.data.db.PlanBlockEntity?>(null) }
     var focusStarter by remember { mutableStateOf<Int?>(null) }
+    val countdown by viewModel.holidayCountdown.collectAsStateWithLifecycle()
     var miniFor by remember { mutableStateOf<app.lifedashboard.data.db.PlanBlockEntity?>(null) }
     val decline: (app.lifedashboard.data.db.PlanBlockEntity) -> Unit = { b ->
         if (b.type == app.lifedashboard.planner.DemandType.SPORT && b.endMinute - b.startMinute > 15) miniFor = b else viewModel.decline(b)
@@ -115,6 +116,7 @@ fun TodayScreen(
                         onStart = { focusStarter = null; focusBlock = it },
                         onLater = viewModel::later,
                         onStartSmall = { focusStarter = 5; focusBlock = it },
+                        holidayCountdown = countdown,
                     )
                 }
                 s.wellbeingNote?.let { note ->

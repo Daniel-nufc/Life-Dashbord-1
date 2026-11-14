@@ -82,4 +82,13 @@ class SchoolYearTest {
         kotlin.test.assertTrue(isSchoolFree(java.time.LocalDate.of(2028, 4, 12), free)) // Osterferien 2028
         kotlin.test.assertTrue(!isSchoolFree(java.time.LocalDate.of(2028, 3, 15), free)) // normaler Mittwoch
     }
+
+    @Test
+    fun `Countdown bis zu den Weihnachtsferien zaehlt nur Schultage`() {
+        val all = BerlinSchoolCalendar.entries
+        val breaks = all.filter { !it.publicHoliday }.map { it.name to it.range }
+        val (name, days) = schoolDaysUntilBreak(java.time.LocalDate.of(2026, 12, 14), breaks, all.map { it.range })!!
+        kotlin.test.assertEquals("Weihnachtsferien 2026/27", name)
+        kotlin.test.assertEquals(7, days) // Mo 14. – Di 22.12.: 7 Schultage
+    }
 }
