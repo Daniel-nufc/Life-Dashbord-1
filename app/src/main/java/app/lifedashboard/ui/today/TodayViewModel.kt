@@ -86,6 +86,12 @@ sealed interface TodayUiState {
         /** Heute schon verpasste Schul-Blöcke */
         val missedToday: Int = 0,
         val schoolBlocksLeft: Int = 0,
+        /** Abend-Check fällig (ab 18 Uhr, Energie für morgen noch nicht angegeben) */
+        val askEnergy: Boolean = false,
+        /** Heute leichter/mehr geplant, weil … (Abend-Check, Schlaf) */
+        val wellbeingNote: String? = null,
+        /** Nach der Schule: die Fächer von heute – Hausaufgaben mit einem Tipp erfassen */
+        val homeworkSubjects: List<SubjectEntity> = emptyList(),
     ) : TodayUiState
 }
 
@@ -105,7 +111,7 @@ class TodayViewModel @Inject constructor(
     agenda: AgendaRepository,
     private val tasks: TaskRepository,
     private val engine: PlanningEngine,
-    study: StudyRepository,
+    private val studyRepo: StudyRepository,
     private val goals: GoalRepository,
     private val finance: app.lifedashboard.data.repository.FinanceRepository,
     private val etsy: app.lifedashboard.data.repository.EtsyRepository,
@@ -143,7 +149,7 @@ class TodayViewModel @Inject constructor(
 
     private val inputs = date.flatMapLatest { d ->
         val extra = combine(finance.overview(d), etsy.overview(d)) { m, e -> Extra(m, e) }
-        combine(agenda.observe(d, 2), engine.observeDay(d), study.overview(d), goals.habits(d), extra) { r, p, s, h, x -> Inputs(r, p, s, h, x) }
+        combine(agenda.observe(d, 2), engine.observeDay(d), studyRepo.overview(d), goals.habits(d), extra) { r, p, s, h, x -> Inputs(r, p, s, h, x) }
     }
 
     /** Level, Serie und Wochenziele für die Fortschritts-Karte */
@@ -159,7 +165,7 @@ class TodayViewModel @Inject constructor(
         // Plan automatisch aktualisieren, wenn sich Termine/Aufgaben/Klausuren ändern oder 15 Min vergehen
         viewModelScope.launch {
             date.flatMapLatest { d ->
-                combine(agenda.observe(d, 1), study.overview(d), clock.map { it.minute / 15 }.distinctUntilChanged()) { _, _, _ -> d }
+                combine(agenda.observe(d, 1), studyRepo.overview(d), clock.map { it.minute / 15 }.distinctUntilChanged()) { _, _, _ -> d }
             }.debounce(800).collect { runCatching { engine.replan(it) } }
         }
     }
@@ -172,6 +178,23 @@ class TodayViewModel @Inject constructor(
     fun done(block: PlanBlockEntity) = launch { engine.done(block) }
     fun decline(block: PlanBlockEntity) = launch { engine.decline(block) }
     fun later(block: PlanBlockEntity) = launch { engine.later(block) }
+
+    /** Abend-Check: Energie für morgen (1 = platt … 5 = fit) – morgen wird danach geplant. */
+    fun setEnergy(level: Int) = launch {
+        val tomorrow = LocalDate.now().plusDays(1)
+        settings.setEnergy(tomorrow, level)
+        engine.replan(tomorrow)
+    }
+
+    /** Thema zum Lern-Block (für „Wie gut sitzt es jetzt?“ nach dem Fokus) */
+    suspend fun topicFor(block: PlanBlockEntity): app.lifedashboard.data.db.TopicEntity? {
+        if (!block.demandKey.startsWith("study:")) return null
+        val topicId = block.demandKey.split(":").getOrNull(3)?.toLongOrNull()?.takeIf { it > 0 } ?: return null
+        return studyRepo.topic(topicId)
+    }
+
+    /** Verständnis nach dem Lernen – senkt die restliche Lernzeit für das Thema. */
+    fun setUnderstanding(topic: app.lifedashboard.data.db.TopicEntity, progress: Int) = launch { studyRepo.setProgress(topic, progress) }
 
     /** Selbst auf eine Uhrzeit gelegt: bleibt fest, der Rest des Tages plant drumherum. */
     fun move(block: PlanBlockEntity, time: java.time.LocalTime) =
@@ -268,6 +291,23 @@ class TodayViewModel @Inject constructor(
                 .minByOrNull { it.startMinute },
             missedToday = input.plan.count { it.status == PlanStatus.MISSED && it.type.isSchoolType() },
             schoolBlocksLeft = input.plan.count { (it.status == PlanStatus.PROPOSED || it.status == PlanStatus.ACCEPTED) && it.type.isSchoolType() },
+            askEnergy = hour >= 18 && today.date.plusDays(1).toEpochDay() !in range.settings.energyLog,
+            wellbeingNote = today.wellbeingAdjust().takeIf { it != 0 && today.schoolCapMinutes() > 0 }?.let { delta ->
+                val why = listOfNotNull(
+                    when (range.settings.energyLog[today.date.toEpochDay()]) {
+                        1, 2 -> "du warst gestern Abend platt"
+                        4, 5 -> "du warst gestern Abend fit"
+                        else -> null
+                    },
+                    if (today.date.toEpochDay() in range.settings.shortSleepDays) "du hast wenig geschlafen" else null,
+                ).joinToString(" und ")
+                if (delta < 0) "Heute ${-delta} Min leichter geplant – $why." else "Heute $delta Min mehr drin – $why."
+            },
+            homeworkSubjects = run {
+                val lastLessonEnd = today.lessons.mapNotNull { it.timeRange?.end }.maxOrNull()
+                if (lastLessonEnd == null || time.isBefore(lastLessonEnd) || hour >= 22) emptyList()
+                else today.lessons.map { it.subject }.distinctBy { it.id }
+            },
         )
     }
 }

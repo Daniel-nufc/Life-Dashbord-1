@@ -40,6 +40,8 @@ data class DayAgenda(
     /** Name der Ferien / des Feiertags, falls schulfrei */
     val holiday: String? = null,
     val exams: List<ExamEntity> = emptyList(),
+    /** Stunden, die heute ausfallen (selbst markiert) */
+    val cancelledLessons: List<LessonItem> = emptyList(),
 ) {
     val isWeekend: Boolean get() = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
     val isSchoolFree: Boolean get() = isWeekend || holiday != null
@@ -87,8 +89,25 @@ data class DayAgenda(
     val reservedDay: Boolean get() = externalEvents.any { it.blocksDay }
 
     /** Schul-Pensum (Lernen + Hausaufgaben) für diesen Tag: werktags 2 Std, mit Training/Job 1 Std, Samstag 2 Std, Sonntag frei. */
-    fun schoolCapMinutes(examSoon: Boolean = false, examWeek: Boolean = false): Int = baseSchoolCap(examSoon) +
-        (if (examWeek && !reservedDay && date.dayOfWeek != DayOfWeek.SUNDAY) 60 else 0)
+    fun schoolCapMinutes(examSoon: Boolean = false, examWeek: Boolean = false): Int {
+        val base = baseSchoolCap(examSoon) + (if (examWeek && !reservedDay && date.dayOfWeek != DayOfWeek.SUNDAY) 60 else 0)
+        return if (base <= 0) base else (base + wellbeingAdjust()).coerceAtLeast(30)
+    }
+
+    /**
+     * Abend-Check und Schlaf: platt (Energie 1–2) → 30 Min weniger, fit (4/5) → 15/30 Min mehr,
+     * unter 6 Std geschlafen → 30 Min weniger. Kein Plan gegen den Körper.
+     */
+    fun wellbeingAdjust(): Int {
+        val day = date.toEpochDay()
+        val energy = when (settings.energyLog[day]) {
+            1, 2 -> -30
+            4 -> 15
+            5 -> 30
+            else -> 0
+        }
+        return energy + (if (day in settings.shortSleepDays) -30 else 0)
+    }
 
     private fun baseSchoolCap(examSoon: Boolean): Int = when {
         reservedDay -> if (examSoon) 60 else 0
@@ -138,10 +157,14 @@ object AgendaBuilder {
             val weekType = calculator.weekTypeFor(date)
             val weekend = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
             val holiday = ranges.firstOrNull { date in it.second }?.first?.name
+            val dayLessons = if (weekend || holiday != null) emptyList() else lessons.forDay(date.dayOfWeek, weekType)
+            // Ausgefallene Stunden (Vertretung/Ausfall) zählen nicht – die Zeit wird frei
+            val (cancelled, held) = dayLessons.partition { l -> l.period != null && "$epoch:${l.period.number}" in settings.cancelledLessons }
             DayAgenda(
                 date = date,
                 weekType = weekType,
-                lessons = if (weekend || holiday != null) emptyList() else lessons.forDay(date.dayOfWeek, weekType),
+                lessons = held,
+                cancelledLessons = cancelled,
                 routines = routines.forDay(date.dayOfWeek),
                 events = events.filter { it.dateEpochDay == epoch },
                 shifts = shifts.filter { it.dateEpochDay == epoch },

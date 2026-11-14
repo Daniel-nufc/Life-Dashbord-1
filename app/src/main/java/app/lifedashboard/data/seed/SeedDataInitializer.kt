@@ -66,6 +66,27 @@ class SeedDataInitializer @Inject constructor(
             db.planDao().deleteOldTrainingBlocks(java.time.LocalDate.now().toEpochDay())
             settings.setSeedVersion(8)
         }
+        if (version < 9) {
+            addMissingHolidays()
+            settings.setSeedVersion(9)
+        }
+    }
+
+    /** Update 36: Ferien/Feiertage 2027/28 (vorläufig) ergänzen – vorhandene und selbst geänderte bleiben unangetastet. */
+    private suspend fun addMissingHolidays() {
+        val dao = db.holidayDao()
+        val existing = dao.all()
+        if (existing.isEmpty()) return // frische Installation: seedHolidays hat schon alles angelegt
+        val known = existing.map { it.startEpochDay to it.kind }.toSet()
+        val missing = app.lifedashboard.planner.BerlinSchoolCalendar.entries.map {
+            app.lifedashboard.data.db.SchoolHolidayEntity(
+                name = it.name,
+                startEpochDay = it.range.start.toEpochDay(),
+                endEpochDay = it.range.endInclusive.toEpochDay(),
+                kind = if (it.publicHoliday) app.lifedashboard.data.db.HolidayKind.PUBLIC_HOLIDAY else app.lifedashboard.data.db.HolidayKind.SCHOOL_HOLIDAY,
+            )
+        }.filter { (it.startEpochDay to it.kind) !in known }
+        if (missing.isNotEmpty()) dao.insertAll(missing)
     }
 
     /** Automatik: Gewohnheiten-Regeln, Führerschein-Schritte, Sparziele. */

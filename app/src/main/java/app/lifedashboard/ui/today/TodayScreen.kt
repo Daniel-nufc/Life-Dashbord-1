@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.ChecklistRtl
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DirectionsBus
@@ -73,6 +74,7 @@ import app.lifedashboard.data.repository.euro
 import java.time.LocalDate
 
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun TodayScreen(
     onOpenTasks: () -> Unit,
@@ -86,6 +88,7 @@ fun TodayScreen(
     val tomorrowPlan by viewModel.tomorrowPlan.collectAsStateWithLifecycle()
     val social by viewModel.socialToday.collectAsStateWithLifecycle()
     var focusBlock by remember { mutableStateOf<app.lifedashboard.data.db.PlanBlockEntity?>(null) }
+    var focusStarter by remember { mutableStateOf<Int?>(null) }
     var miniFor by remember { mutableStateOf<app.lifedashboard.data.db.PlanBlockEntity?>(null) }
     val decline: (app.lifedashboard.data.db.PlanBlockEntity) -> Unit = { b ->
         if (b.type == app.lifedashboard.planner.DemandType.SPORT && b.endMinute - b.startMinute > 15) miniFor = b else viewModel.decline(b)
@@ -107,7 +110,65 @@ fun TodayScreen(
                 verticalItemSpacing = 12.dp,
             ) {
                 item(span = StaggeredGridItemSpan.FullLine) {
-                    NextUpHero(s, progress, onStart = { focusBlock = it }, onLater = viewModel::later)
+                    NextUpHero(
+                        s, progress,
+                        onStart = { focusStarter = null; focusBlock = it },
+                        onLater = viewModel::later,
+                        onStartSmall = { focusStarter = 5; focusBlock = it },
+                    )
+                }
+                s.wellbeingNote?.let { note ->
+                    item(span = StaggeredGridItemSpan.FullLine) {
+                        Text(note, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
+                    }
+                }
+                if (s.homeworkSubjects.isNotEmpty()) {
+                    item {
+                        SectionCard {
+                            TileHeader(Icons.Rounded.School, "Hausaufgaben auf?", LifeArea.SCHOOL.color)
+                            Text(
+                                "Fach antippen – fällig wird es automatisch zur nächsten Stunde.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            androidx.compose.foundation.layout.FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(top = 8.dp),
+                            ) {
+                                s.homeworkSubjects.forEach { subject ->
+                                    androidx.compose.material3.AssistChip(
+                                        onClick = {
+                                            editing = EditRequest.Homework(
+                                                app.lifedashboard.data.db.TaskEntity(
+                                                    title = "", area = LifeArea.SCHOOL, kind = app.lifedashboard.data.db.TaskKind.HOMEWORK,
+                                                    subjectId = subject.id, dueEpochDay = null, estimatedMinutes = 30, done = false,
+                                                    doneAtMillis = null, note = null, createdAtMillis = System.currentTimeMillis(),
+                                                ),
+                                            )
+                                        },
+                                        label = { Text(subject.name) },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                if (s.askEnergy) {
+                    item {
+                        SectionCard {
+                            TileHeader(Icons.Rounded.Bolt, "Abend-Check", LifeArea.SPORT.color)
+                            Text(
+                                "Wie viel Energie hast du heute noch? Danach plane ich morgen – platt heißt leichter, fit heißt etwas mehr.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
+                                listOf(1 to "platt", 2 to "müde", 3 to "okay", 4 to "gut", 5 to "fit").forEach { (level, label) ->
+                                    androidx.compose.material3.FilterChip(selected = false, onClick = { viewModel.setEnergy(level) }, label = { Text(label) })
+                                }
+                            }
+                        }
+                    }
                 }
                 if (s.now.dayOfWeek == java.time.DayOfWeek.SUNDAY) {
                     item(span = StaggeredGridItemSpan.FullLine) {
@@ -223,7 +284,12 @@ fun TodayScreen(
         )
     }
     focusBlock?.let { b ->
-        app.lifedashboard.ui.focus.FocusMode(b, onDone = { viewModel.done(b) }, onClose = { focusBlock = null })
+        val topic by androidx.compose.runtime.produceState<app.lifedashboard.data.db.TopicEntity?>(null, b.id) { value = viewModel.topicFor(b) }
+        app.lifedashboard.ui.focus.FocusMode(
+            b, onDone = { viewModel.done(b) }, onClose = { focusBlock = null }, starterMinutes = focusStarter,
+            topicTitle = topic?.title, topicProgress = topic?.progress,
+            onUnderstanding = topic?.let { t -> { p: Int -> viewModel.setUnderstanding(t, p) } },
+        )
     }
     miniFor?.let { b ->
         app.lifedashboard.ui.focus.MiniSportDialog(

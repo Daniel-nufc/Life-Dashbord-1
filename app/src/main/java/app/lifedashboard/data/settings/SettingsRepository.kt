@@ -37,6 +37,12 @@ data class AppSettings(
     val systemCalendarIds: Set<Long>,
     /** Handy-Kalender, aus denen nur Termine für [userName] kommen (z. B. der FamilyWall-Familienkalender). */
     val onlyMineCalendarIds: Set<Long> = emptySet(),
+    /** Abend-Check: Energie 1–5 für den Tag, an dem sie gilt (epochDay → Stufe) */
+    val energyLog: Map<Long, Int> = emptyMap(),
+    /** Tage, an denen Daniel zu wenig geschlafen hat (< 6 Std, Health Connect) → leichter planen */
+    val shortSleepDays: Set<Long> = emptySet(),
+    /** Ausgefallene Stunden: „epochDay:Stunde“ */
+    val cancelledLessons: Set<String> = emptySet(),
     /** Reihenfolge der Bereiche bei Konflikten, Standard: Schule > Sport > Etsy. */
     val priorityOrder: List<String>,
     /** Geschützter Puffer (Notgroschen) in Cent – wird nie als „verfügbar“ gezählt. */
@@ -172,6 +178,12 @@ class SettingsRepository @Inject constructor(
                 priorityOrder = (p[PRIORITY_ORDER] ?: "SCHOOL,SPORT,ETSY").split(',').filter { it.isNotBlank() },
                 systemCalendarIds = p[SYSTEM_CALENDARS].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
                 onlyMineCalendarIds = p[ONLY_MINE_CALENDARS].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
+                energyLog = p[ENERGY_LOG].orEmpty().split(',').mapNotNull { e ->
+                    val (d, l) = e.split(':').takeIf { it.size == 2 } ?: return@mapNotNull null
+                    (d.toLongOrNull() ?: return@mapNotNull null) to (l.toIntOrNull() ?: return@mapNotNull null)
+                }.toMap(),
+                shortSleepDays = p[SHORT_SLEEP].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
+                cancelledLessons = p[CANCELLED_LESSONS].orEmpty(),
             )
         }
 
@@ -245,6 +257,37 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setSystemCalendarIds(ids: Set<Long>) {
         dataStore.edit { it[SYSTEM_CALENDARS] = ids.sorted().joinToString(",") }
+    }
+
+    /** Abend-Check: Energie für [day] (meist morgen) merken – nur die letzten 3 Wochen bleiben gespeichert. */
+    suspend fun setEnergy(day: java.time.LocalDate, level: Int) {
+        dataStore.edit {
+            val map = it[ENERGY_LOG].orEmpty().split(',').mapNotNull { e ->
+                val parts = e.split(':')
+                if (parts.size == 2) parts[0].toLongOrNull()?.let { d -> d to parts[1] } else null
+            }.toMap().toMutableMap()
+            map[day.toEpochDay()] = level.coerceIn(1, 5).toString()
+            val cutoff = day.toEpochDay() - 21
+            it[ENERGY_LOG] = map.filterKeys { d -> d >= cutoff }.entries.sortedBy { e -> e.key }.joinToString(",") { e -> "${e.key}:${e.value}" }
+        }
+    }
+
+    /** Zu wenig Schlaf an [day] → der Tag wird etwas leichter geplant. */
+    suspend fun markShortSleep(day: java.time.LocalDate, short: Boolean) {
+        dataStore.edit {
+            val set = it[SHORT_SLEEP].orEmpty().split(',').mapNotNull { d -> d.toLongOrNull() }.toMutableSet()
+            if (short) set += day.toEpochDay() else set -= day.toEpochDay()
+            it[SHORT_SLEEP] = set.filter { d -> d >= day.toEpochDay() - 21 }.sorted().joinToString(",")
+        }
+    }
+
+    /** Stunde fällt aus (Vertretung/Ausfall) – oder doch nicht. */
+    suspend fun setLessonCancelled(day: java.time.LocalDate, period: Int, cancelled: Boolean) {
+        dataStore.edit {
+            val key = "${day.toEpochDay()}:$period"
+            val keep = it[CANCELLED_LESSONS].orEmpty().filter { e -> (e.substringBefore(':').toLongOrNull() ?: 0) >= day.toEpochDay() - 30 }.toSet()
+            it[CANCELLED_LESSONS] = if (cancelled) keep + key else keep - key
+        }
     }
 
     suspend fun setOnlyMineCalendarIds(ids: Set<Long>) {
@@ -347,6 +390,9 @@ class SettingsRepository @Inject constructor(
         val SEED_VERSION = intPreferencesKey("seed_version")
         val SYSTEM_CALENDARS = stringPreferencesKey("system_calendar_ids")
         val ONLY_MINE_CALENDARS = stringPreferencesKey("only_mine_calendar_ids")
+        val ENERGY_LOG = stringPreferencesKey("energy_log")
+        val SHORT_SLEEP = stringPreferencesKey("short_sleep_days")
+        val CANCELLED_LESSONS = stringSetPreferencesKey("cancelled_lessons")
         val MINE_TITLES = stringSetPreferencesKey("mine_titles")
         val NOT_MINE_TITLES = stringSetPreferencesKey("not_mine_titles")
         val FAMILY_TITLES_SEEDED = booleanPreferencesKey("family_titles_seeded")

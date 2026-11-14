@@ -323,6 +323,7 @@ private fun WeekRow(day: DayAgenda, minutes: Int, selected: Boolean, onClick: ()
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun DayPane(
     day: DayAgenda,
@@ -361,6 +362,27 @@ private fun DayPane(
             day.holiday?.let { Pill(it.take(22), LifeArea.SPORT.color) }
             if (isToday) Pill("Heute", MaterialTheme.colorScheme.primary)
             IconButton(onClick = { onAdd(day.date) }) { Icon(Icons.Rounded.Add, contentDescription = "Eintragen") }
+        }
+
+        // Stunde fällt aus? Antippen → die Zeit wird frei und neu verplant (nochmal antippen = findet doch statt)
+        val allLessons = (day.lessons + day.cancelledLessons).filter { it.period != null }.sortedBy { it.period!!.number }
+        if (allLessons.isNotEmpty() && !day.date.isBefore(LocalDate.now())) {
+            Text(
+                if (day.cancelledLessons.isEmpty()) "Fällt etwas aus? Stunde antippen:" else "${day.cancelledLessons.size} ${if (day.cancelledLessons.size == 1) "Stunde fällt" else "Stunden fallen"} aus",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                allLessons.forEach { l ->
+                    val gone = l in day.cancelledLessons
+                    androidx.compose.material3.FilterChip(
+                        selected = gone,
+                        onClick = { viewModel.setLessonCancelled(day.date, l.period!!.number, !gone) },
+                        label = { Text("${l.period!!.number}. ${l.subject.code}" + if (gone) " · fällt aus" else "") },
+                    )
+                }
+            }
         }
 
         // Ganztägiges: Klausuren und Termine ohne Uhrzeit

@@ -102,4 +102,27 @@ class AgendaBuilderTest {
         assertEquals(false, normal.reservedDay)
         assertEquals(120, normal.schoolCapMinutes())
     }
+
+    @Test
+    fun `Abend-Check und Schlaf veraendern das Schul-Pensum`() {
+        val friday = LocalDate.of(2026, 11, 20)
+        fun cap(st: AppSettings) = AgendaBuilder.buildDays(friday, 1, lessons, emptyList(), st, emptyList()).single().schoolCapMinutes()
+        assertEquals(120, cap(settings))
+        assertEquals(90, cap(settings.copy(energyLog = mapOf(friday.toEpochDay() to 1))))
+        assertEquals(150, cap(settings.copy(energyLog = mapOf(friday.toEpochDay() to 5))))
+        assertEquals(60, cap(settings.copy(energyLog = mapOf(friday.toEpochDay() to 2), shortSleepDays = setOf(friday.toEpochDay()))))
+        // Sonntag bleibt frei, egal wie fit
+        val sunday = LocalDate.of(2026, 11, 22)
+        assertEquals(0, AgendaBuilder.buildDays(sunday, 1, lessons, emptyList(), settings.copy(energyLog = mapOf(sunday.toEpochDay() to 5)), emptyList()).single().schoolCapMinutes())
+    }
+
+    @Test
+    fun `ausgefallene Stunde macht die Zeit frei`() {
+        val friday = LocalDate.of(2026, 11, 20)
+        val normal = AgendaBuilder.buildDays(friday, 1, lessons, emptyList(), settings, emptyList()).single()
+        assertEquals(1, normal.lessons.size)
+        val cancelled = AgendaBuilder.buildDays(friday, 1, lessons, emptyList(), settings.copy(cancelledLessons = setOf("${friday.toEpochDay()}:1")), emptyList()).single()
+        assertTrue(cancelled.lessons.isEmpty())
+        assertEquals("MA-B", cancelled.cancelledLessons.single().subject.code)
+    }
 }

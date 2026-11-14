@@ -39,7 +39,16 @@ class CalendarViewModel @Inject constructor(
     private val tasks: TaskRepository,
     private val engine: app.lifedashboard.data.planning.PlanningEngine,
     private val training: app.lifedashboard.data.repository.TrainingRepository,
+    private val settings: app.lifedashboard.data.settings.SettingsRepository,
 ) : ViewModel() {
+
+    /** Stunde fällt aus – oder doch nicht. Der Tag wird danach neu geplant. */
+    fun setLessonCancelled(date: LocalDate, period: Int, cancelled: Boolean) {
+        viewModelScope.launch {
+            settings.setLessonCancelled(date, period, cancelled)
+            engine.replan(date)
+        }
+    }
 
     private val _weekStart = MutableStateFlow(planningMonday())
     val weekStart: StateFlow<LocalDate> = _weekStart.asStateFlow()

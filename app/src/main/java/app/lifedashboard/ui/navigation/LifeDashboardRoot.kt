@@ -152,6 +152,7 @@ class RootViewModel @Inject constructor(
     private val agenda: app.lifedashboard.data.repository.AgendaRepository,
     private val planDao: app.lifedashboard.data.db.PlanDao,
     private val engine: app.lifedashboard.data.planning.PlanningEngine,
+    private val health: app.lifedashboard.data.sync.HealthRepository,
 ) : ViewModel() {
     val progress: StateFlow<ProgressState?> = progressRepository.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -167,6 +168,11 @@ class RootViewModel @Inject constructor(
     init {
         // Erster Start mit v28: Coach startet heute neu (alter Rückstand aus nie gesehenen Vorschlägen zählt nicht)
         viewModelScope.launch { settings.ensureCoachStart() }
+        // Wenig geschlafen (unter 6 Std, Health Connect)? → heute etwas leichter planen
+        viewModelScope.launch {
+            val sleep = runCatching { health.lastNightSleep() }.getOrNull() ?: return@launch
+            settings.markShortSleep(java.time.LocalDate.now(), sleep < java.time.Duration.ofHours(6))
+        }
         viewModelScope.launch {
             titleChoices.ensureSeeded()
             connectFamilyWall()

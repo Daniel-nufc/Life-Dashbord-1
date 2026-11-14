@@ -73,12 +73,22 @@ import kotlinx.coroutines.delay
  * du kurz die App verlässt. Am Ende: „Geschafft“ (Punkte + Zockzeit) oder noch eine Runde.
  */
 @Composable
-fun FocusMode(block: PlanBlockEntity, onDone: () -> Unit, onClose: () -> Unit) {
+fun FocusMode(
+    block: PlanBlockEntity,
+    onDone: () -> Unit,
+    onClose: () -> Unit,
+    /** „Keine Lust“-Start: erst nur so viele Minuten – danach entscheidet Daniel, ob er weitermacht. */
+    starterMinutes: Int? = null,
+    /** Lern-Block zu einem Thema: danach fragen, wie gut es jetzt sitzt (= Fortschritt) */
+    topicTitle: String? = null,
+    topicProgress: Int? = null,
+    onUnderstanding: ((Int) -> Unit)? = null,
+) {
     val view = LocalView.current
     val tones = LocalAppColors.current
     val accent = block.type.area().color
     val plannedMinutes = (block.endMinute - block.startMinute).coerceAtLeast(5)
-    var totalSeconds by rememberSaveable(block.id) { mutableStateOf(plannedMinutes * 60) }
+    var totalSeconds by rememberSaveable(block.id) { mutableStateOf((starterMinutes?.coerceAtMost(plannedMinutes) ?: plannedMinutes) * 60) }
     var startedAt by rememberSaveable(block.id) { mutableLongStateOf(System.currentTimeMillis()) }
     var pausedElapsed by rememberSaveable(block.id) { mutableLongStateOf(-1L) }
     var finished by rememberSaveable(block.id) { mutableStateOf(false) }
@@ -144,8 +154,32 @@ fun FocusMode(block: PlanBlockEntity, onDone: () -> Unit, onClose: () -> Unit) {
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(top = 8.dp),
                         )
+                        var understanding by rememberSaveable(block.id) { mutableStateOf((topicProgress ?: 0).toFloat()) }
+                        if (onUnderstanding != null && topicTitle != null) {
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                "Wie gut sitzt „$topicTitle“ jetzt? ${understanding.toInt()} %",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium,
+                                textAlign = TextAlign.Center,
+                            )
+                            androidx.compose.material3.Slider(
+                                value = understanding,
+                                onValueChange = { understanding = (it / 10).toInt() * 10f },
+                                valueRange = 0f..100f,
+                                modifier = Modifier.widthIn(max = 420.dp),
+                            )
+                            Text(
+                                "Je besser es sitzt, desto weniger Lernzeit plane ich dafür.",
+                                color = Color.White.copy(alpha = 0.6f),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                         Spacer(Modifier.height(24.dp))
-                        BigButton("Weiter", accent, filled = true) { onClose() }
+                        BigButton("Weiter", accent, filled = true) {
+                            if (onUnderstanding != null && understanding.toInt() != (topicProgress ?: 0)) onUnderstanding(understanding.toInt())
+                            onClose()
+                        }
                     }
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.widthIn(max = 520.dp)) {
@@ -192,7 +226,12 @@ fun FocusMode(block: PlanBlockEntity, onDone: () -> Unit, onClose: () -> Unit) {
                             }
                         }
                         Spacer(Modifier.height(40.dp))
-                        if (left == 0L) {
+                        if (left == 0L && totalSeconds < plannedMinutes * 60) {
+                            // Anfangen war das Schwerste – jetzt einfach weiter
+                            BigButton("Weitermachen – noch ${plannedMinutes - totalSeconds / 60} Min", accent, filled = true) { totalSeconds = plannedMinutes * 60 }
+                            Spacer(Modifier.height(12.dp))
+                            BigButton("Für jetzt reicht's", accent, filled = false) { onClose() }
+                        } else if (left == 0L) {
                             BigButton("Geschafft", accent, filled = true) { finished = true; onDone() }
                             Spacer(Modifier.height(12.dp))
                             BigButton("Noch 25 Minuten", accent, filled = false) { totalSeconds += 25 * 60 }

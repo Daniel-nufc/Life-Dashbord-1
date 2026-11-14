@@ -72,4 +72,14 @@ class SchoolYearTest {
         val due = nextOccurrence(LocalDate.of(2026, 12, 22), slots, calc::weekTypeFor, isSchoolDay = { !isSchoolFree(it, free) })
         assertEquals(LocalDate.of(2027, 1, 8), due)
     }
+
+    @Test
+    fun `Schuljahr 2027-28 ist hinterlegt - Ferien ueberlappen nicht und liegen in der richtigen Reihenfolge`() {
+        val ranges = BerlinSchoolCalendar.entries.filter { !it.publicHoliday }.map { it.range }.sortedBy { it.start }
+        ranges.zipWithNext().forEach { (a, b) -> kotlin.test.assertTrue(a.endInclusive.isBefore(b.start), "$a / $b") }
+        kotlin.test.assertTrue(BerlinSchoolCalendar.coveredUntil(ranges)!!.isAfter(java.time.LocalDate.of(2028, 8, 1)))
+        val free = BerlinSchoolCalendar.entries.map { it.range }
+        kotlin.test.assertTrue(isSchoolFree(java.time.LocalDate.of(2028, 4, 12), free)) // Osterferien 2028
+        kotlin.test.assertTrue(!isSchoolFree(java.time.LocalDate.of(2028, 3, 15), free)) // normaler Mittwoch
+    }
 }

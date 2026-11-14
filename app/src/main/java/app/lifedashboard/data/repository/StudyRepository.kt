@@ -160,6 +160,8 @@ class StudyRepository @Inject constructor(
     suspend fun renameTopic(topic: TopicEntity, title: String, effortMinutes: Int) = dao.upsertTopic(topic.copy(title = title, effortMinutes = effortMinutes))
 
     /** Fortschritt setzen. Ab 50 % beginnt automatisch die Wiederholung nach 1 Tag. */
+    suspend fun topic(id: Long): TopicEntity? = dao.observeTopics().first().firstOrNull { it.id == id }
+
     suspend fun setProgress(topic: TopicEntity, progress: Int) {
         val today = LocalDate.now().toEpochDay()
         val startReview = topic.nextReviewEpochDay == null && progress >= 50

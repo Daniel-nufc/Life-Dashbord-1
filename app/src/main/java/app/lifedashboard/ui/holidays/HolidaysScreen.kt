@@ -91,6 +91,30 @@ fun HolidaysScreen(onBack: () -> Unit, viewModel: HolidaysViewModel = hiltViewMo
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                // Erinnerung: Ferien fürs nächste Schuljahr eintragen, bevor sie auslaufen (A/B-Woche und Planung hängen daran)
+                val coveredUntil = holidays.filter { it.kind == app.lifedashboard.data.db.HolidayKind.SCHOOL_HOLIDAY }
+                    .maxOfOrNull { it.endEpochDay }?.let(java.time.LocalDate::ofEpochDay)
+                if (coveredUntil != null && coveredUntil.isBefore(java.time.LocalDate.now().plusDays(150))) {
+                    wideItem {
+                        app.lifedashboard.ui.components.SectionCard {
+                            Text(
+                                "Ferien sind nur bis ${coveredUntil.dayOfMonth}.${coveredUntil.monthValue}.${coveredUntil.year} eingetragen. " +
+                                    "Trag die Ferien fürs nächste Schuljahr ein (berlin.de → Ferientermine), sonst stimmen A/B-Woche und Planung danach nicht.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+                if (holidays.any { it.name.contains("vorläufig") }) {
+                    wideItem {
+                        Text(
+                            "„vorläufig“ = aus der KMK-Übersicht, noch nicht von der Schule bestätigt. Bei Abweichung antippen und ändern.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 items(holidays, key = { it.id }) { h ->
                     SectionCard(onClick = { editing = h }) {
                         Row(verticalAlignment = Alignment.CenterVertically) {

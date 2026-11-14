@@ -55,6 +55,8 @@ fun NextUpHero(
     progress: ProgressState?,
     onStart: (PlanBlockEntity) -> Unit,
     onLater: (PlanBlockEntity) -> Unit,
+    /** „Keine Lust“: nur 5 Minuten anfangen */
+    onStartSmall: ((PlanBlockEntity) -> Unit)? = null,
 ) {
     val tones = LocalAppColors.current
     val block = s.nextBlock
@@ -144,6 +146,18 @@ fun NextUpHero(
                         .clickable { onLater(block) }
                         .padding(horizontal = 18.dp, vertical = 12.dp),
                 )
+                if (onStartSmall != null && block.endMinute - block.startMinute > 10) {
+                    Text(
+                        "Nur 5 Min",
+                        color = Color.White.copy(alpha = 0.75f),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(50))
+                            .clickable { onStartSmall(block) }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                    )
+                }
             }
         }
         // Strenger Coach: Rückstand und Coach-Satz unten in der Karte
