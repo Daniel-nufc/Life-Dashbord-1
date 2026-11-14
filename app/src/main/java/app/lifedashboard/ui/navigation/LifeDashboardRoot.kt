@@ -165,7 +165,7 @@ class RootViewModel @Inject constructor(
     /** Heatmap, beste Zeit, Tage am Stück – aus den Blöcken der letzten 8 Wochen */
     val insights: StateFlow<app.lifedashboard.ui.progress.InsightState?> = run {
         val today = java.time.LocalDate.now()
-        planDao.observeBetween(today.toEpochDay() - 56, today.toEpochDay()).map { blocks ->
+        kotlinx.coroutines.flow.combine(planDao.observeBetween(today.toEpochDay() - 56, today.toEpochDay()), settings.settings.map { it.energyLog }.distinctUntilChanged()) { blocks, energyLog ->
             val outcomes = blocks.filter { it.status == app.lifedashboard.data.db.PlanStatus.DONE || it.status == app.lifedashboard.data.db.PlanStatus.MISSED }
                 .map {
                     app.lifedashboard.planner.PlanResult(
@@ -177,6 +177,12 @@ class RootViewModel @Inject constructor(
                 heatmap = app.lifedashboard.planner.Insights.heatmap(outcomes, today),
                 bestTime = app.lifedashboard.planner.Insights.bestTime(outcomes),
                 runDays = app.lifedashboard.planner.Insights.currentRunDays(outcomes, today),
+                forest = app.lifedashboard.planner.Inspired.forest(outcomes, today),
+                compare = app.lifedashboard.planner.Inspired.weekCompare(outcomes, today),
+                energy = (13 downTo 0).map { energyLog[today.minusDays(it.toLong()).toEpochDay()] },
+                energyEffect = app.lifedashboard.planner.Inspired.energyEffect(
+                    energyLog.mapKeys { java.time.LocalDate.ofEpochDay(it.key) }, outcomes,
+                ),
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     }

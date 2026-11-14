@@ -79,7 +79,17 @@ fun ProgressScreen(onBack: () -> Unit, viewModel: RootViewModel = hiltViewModel(
                         )
                     }
                 }
+                item {
+                    BossCard(
+                        app.lifedashboard.planner.Inspired.weekBoss(
+                            s.sportWeek.goalMinutes + s.studyWeek.goalMinutes, s.sportWeek.minutes + s.studyWeek.minutes, java.time.LocalDate.now(),
+                        ),
+                    )
+                }
                 insights?.let { i ->
+                    item { ForestCard(i) }
+                    i.compare?.let { c -> item { WeekCompareCard(c) } }
+                    if (i.energy.count { it != null } >= 2) item { EnergyCard(i) }
                     item { HeatmapCard(i) }
                     item { BestTimeCard(i.bestTime) }
                 }

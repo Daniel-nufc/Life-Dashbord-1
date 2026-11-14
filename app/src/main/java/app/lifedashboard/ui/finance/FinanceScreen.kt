@@ -233,6 +233,8 @@ fun FinanceScreen(onBack: () -> Unit, viewModel: FinanceViewModel = hiltViewMode
                 savingsPlan?.takeIf { it.neededCents > 0 }?.let { plan ->
                     item { SavingsPlanCard(plan) }
                 }
+                item { SpendingRhythmCard(d) }
+                item { WorkHoursCard(savingsPlan?.jobWageCents ?: 0) }
                 message?.let { msg ->
                     item {
                         SectionCard(onClick = viewModel::dismissMessage) { Text(msg) }

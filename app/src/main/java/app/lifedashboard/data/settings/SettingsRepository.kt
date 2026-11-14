@@ -308,6 +308,21 @@ class SettingsRepository @Inject constructor(
         return result
     }
 
+    /**
+     * Bestleistung merken (z. B. „run_km“ → Meter). Liefert true, wenn [value] den gespeicherten Wert schlägt
+     * (beim allerersten Mal wird nur gemerkt, nicht gefeiert – sonst gäbe es für alte Läufe eine Meldung).
+     */
+    suspend fun beatsRecord(key: String, value: Long, higherIsBetter: Boolean = true): Boolean {
+        var beaten = false
+        dataStore.edit {
+            val k = androidx.datastore.preferences.core.longPreferencesKey("record_$key")
+            val old = it[k]
+            if (old == null) it[k] = value
+            else if ((higherIsBetter && value > old) || (!higherIsBetter && value < old)) { it[k] = value; beaten = true }
+        }
+        return beaten
+    }
+
     /** Einmal je Gerät: den FamilyWall-Kalender automatisch übernehmen (danach entscheidet Daniel). */
     suspend fun claimFamilyWallAutoConnect(): Boolean {
         var first = false

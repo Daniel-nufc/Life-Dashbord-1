@@ -42,6 +42,8 @@ class ReminderWorker @AssistedInject constructor(
     private val progress: app.lifedashboard.data.repository.ProgressRepository,
     private val usage: app.lifedashboard.data.sync.UsageRepository,
     private val strava: app.lifedashboard.data.sync.StravaRepository,
+    private val sport: app.lifedashboard.data.repository.SportRepository,
+    private val settings: app.lifedashboard.data.settings.SettingsRepository,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -49,9 +51,28 @@ class ReminderWorker @AssistedInject constructor(
         runCatching { automation.autoCheckHabits() }
         runCatching { strava.syncIfDue() }
         runCatching { training.syncFromHealth() }
+        runCatching { celebrateRecords() }
         runCatching { finance.generateRecurring() }
         app.lifedashboard.widget.updateWidgets(applicationContext)
         return Result.success()
+    }
+
+    /** Neue Bestleistung nach dem Abgleich mit Strava/Health Connect? → einmal feiern (Idee: Strava). */
+    private suspend fun celebrateRecords() {
+        val acts = sport.workouts.first().map {
+            app.lifedashboard.planner.Activity(it.date, it.workout.type.name, it.workout.durationMinutes, it.workout.distanceMeters)
+        }
+        val b = app.lifedashboard.planner.RunningProgress.bests(acts)
+        b.longestRunKm?.let { km ->
+            if (settings.beatsRecord("run_m", (km * 1000).toLong())) {
+                notifier.send("record:run:${(km * 10).toInt()}", Channel.SPORT, "Neue Bestleistung: %.1f km am Stück".format(km), "Dein längster Lauf bisher. Der Ironman-Weg wird kürzer.", ignoreLimit = true)
+            }
+        }
+        b.fastestPaceSecPerKm?.let { pace ->
+            if (settings.beatsRecord("pace_s", pace.toLong(), higherIsBetter = false)) {
+                notifier.send("record:pace:$pace", Channel.SPORT, "Neue Bestzeit: ${app.lifedashboard.planner.RunningProgress.pace(pace)}", "So schnell warst du noch nie über 3 km und mehr.", ignoreLimit = true)
+            }
+        }
     }
 
     private suspend fun check() {
