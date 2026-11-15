@@ -600,10 +600,22 @@ fun app.lifedashboard.data.db.GradeKind.label(): String = when (this) {
 private fun FocusTab(data: StudyOverview, viewModel: LearnViewModel) {
     val state by viewModel.focus.collectAsStateWithLifecycle()
     val isBreak = state.phase == FocusState.Phase.BREAK
+    var pickDuration by remember { mutableStateOf(false) }
     val color = if (isBreak) LifeArea.SPORT.color else LifeArea.SCHOOL.color
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionCard {
-            TileHeader(Icons.Rounded.Timer, if (isBreak) "Pause – kurz bewegen, Wasser trinken" else "Fokus 25 Minuten", color)
+            TileHeader(Icons.Rounded.Timer, if (isBreak) "Pause – kurz bewegen, Wasser trinken" else "Fokus ${state.totalSeconds / 60} Minuten", color) {
+                if (!isBreak) TextButton(onClick = { pickDuration = true }) { Text("Dauer") }
+            }
+            if (pickDuration) {
+                app.lifedashboard.ui.focus.DurationDialog(
+                    title = "Fokus-Dauer",
+                    initialMinutes = state.totalSeconds / 60,
+                    hint = "Wird gemerkt – gilt auch für die nächsten Runden",
+                    onDismiss = { pickDuration = false },
+                    onPick = { viewModel.setFocusMinutes(it); pickDuration = false },
+                )
+            }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FilterChip(selected = state.subjectId == null, onClick = { viewModel.selectFocusSubject(null) }, label = { Text("Allgemein") })
                 data.subjects.forEach { s ->
@@ -631,7 +643,7 @@ private fun FocusTab(data: StudyOverview, viewModel: LearnViewModel) {
                 Button(onClick = viewModel::startOrPause) {
                     Icon(if (state.running) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null)
                     Spacer(Modifier.width(6.dp))
-                    Text(if (state.running) "Pause" else if (state.phase == FocusState.Phase.IDLE) "Los – nur 25 Minuten" else "Weiter")
+                    Text(if (state.running) "Pause" else if (state.phase == FocusState.Phase.IDLE) "Los – ${state.totalSeconds / 60} Minuten" else "Weiter")
                 }
                 Spacer(Modifier.width(8.dp))
                 if (isBreak) {
@@ -653,7 +665,7 @@ private fun FocusTab(data: StudyOverview, viewModel: LearnViewModel) {
                 Pill("${sessions.sumOf { it.minutes }} Min", LifeArea.ETSY.color)
             }
             if (sessions.isEmpty()) {
-                Text("Noch keine Fokus-Runde diese Woche. Starte mit einer – nur 25 Minuten.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Noch keine Fokus-Runde diese Woche. Starte mit einer – die Dauer stellst du oben unter „Dauer“ ein.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             val bySubject = sessions.groupBy { it.subjectId }.mapValues { (_, list) -> list.sumOf { it.minutes } }
             val max = bySubject.values.maxOrNull() ?: 1

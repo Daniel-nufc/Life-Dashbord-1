@@ -93,6 +93,9 @@ fun FocusMode(
     var pausedElapsed by rememberSaveable(block.id) { mutableLongStateOf(-1L) }
     var finished by rememberSaveable(block.id) { mutableStateOf(false) }
     var confirmQuit by rememberSaveable(block.id) { mutableStateOf(false) }
+    // Dauer selbst festlegen (Antippen der Zeit) bzw. um eigene Minuten verlängern
+    var editDuration by rememberSaveable(block.id) { mutableStateOf(false) }
+    var extend by rememberSaveable(block.id) { mutableStateOf(false) }
     var now by androidx.compose.runtime.remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     // Bildschirm bleibt an, solange der Fokus läuft
@@ -217,11 +220,13 @@ fun FocusMode(
                                     fontSize = 68.sp,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = (-1).sp,
+                                    modifier = Modifier.clickable { editDuration = true },
                                 )
                                 Text(
-                                    if (pausedElapsed >= 0) "pausiert" else if (left == 0L) "Zeit um" else "noch übrig",
+                                    if (pausedElapsed >= 0) "pausiert" else if (left == 0L) "Zeit um" else "noch übrig · antippen zum Ändern",
                                     color = Color.White.copy(alpha = 0.6f),
                                     style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.clickable { editDuration = true },
                                 )
                             }
                         }
@@ -234,7 +239,7 @@ fun FocusMode(
                         } else if (left == 0L) {
                             BigButton("Geschafft", accent, filled = true) { finished = true; onDone() }
                             Spacer(Modifier.height(12.dp))
-                            BigButton("Noch 25 Minuten", accent, filled = false) { totalSeconds += 25 * 60 }
+                            BigButton("Verlängern …", accent, filled = false) { extend = true }
                         } else {
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 BigButton(if (pausedElapsed >= 0) "Weiter" else "Pause", accent, filled = false) {
@@ -247,6 +252,30 @@ fun FocusMode(
                                 }
                                 BigButton("Fertig", accent, filled = true) { finished = true; onDone() }
                             }
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                "Dauer: ${totalSeconds / 60} Min – ändern",
+                                color = Color.White.copy(alpha = 0.55f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.clickable { editDuration = true }.padding(8.dp),
+                            )
+                        }
+                        if (editDuration) {
+                            DurationDialog(
+                                title = "Fokus-Dauer",
+                                initialMinutes = totalSeconds / 60,
+                                hint = "Gesamtdauer – schon vergangen: ${elapsed / 60} Min",
+                                onDismiss = { editDuration = false },
+                                onPick = { m -> totalSeconds = maxOf(m * 60, (elapsed + 60).toInt()); editDuration = false },
+                            )
+                        }
+                        if (extend) {
+                            DurationDialog(
+                                title = "Verlängern um …",
+                                initialMinutes = 25,
+                                onDismiss = { extend = false },
+                                onPick = { m -> totalSeconds = elapsed.toInt() + m * 60; extend = false },
+                            )
                         }
                         Spacer(Modifier.height(16.dp))
                         Text(

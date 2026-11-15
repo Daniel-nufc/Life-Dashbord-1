@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -43,7 +44,31 @@ data class FocusState(
 class LearnViewModel @Inject constructor(
     private val study: StudyRepository,
     private val timetable: TimetableRepository,
+    private val settings: app.lifedashboard.data.settings.SettingsRepository,
 ) : ViewModel() {
+
+    /** Selbst gewählte Fokus-Dauer (Sekunden), gemerkt in den Einstellungen */
+    private var focusSeconds = FocusState.FOCUS_SECONDS
+
+    init {
+        viewModelScope.launch {
+            focusSeconds = settings.settings.first().focusMinutes * 60
+            val s = _focus.value
+            if (s.phase == FocusState.Phase.IDLE && !s.running) _focus.value = s.copy(remainingSeconds = focusSeconds, totalSeconds = focusSeconds)
+        }
+    }
+
+    /** Fokus-Dauer selbst festlegen: gilt sofort (solange die Runde nicht läuft) und ab jetzt als Standard */
+    fun setFocusMinutes(minutes: Int) {
+        val seconds = minutes.coerceIn(1, 240) * 60
+        focusSeconds = seconds
+        viewModelScope.launch { settings.setFocusMinutes(minutes) }
+        val s = _focus.value
+        if (s.phase != FocusState.Phase.BREAK) {
+            val passed = s.totalSeconds - s.remainingSeconds
+            _focus.value = s.copy(totalSeconds = maxOf(seconds, passed + 60), remainingSeconds = maxOf(seconds - passed, 60))
+        }
+    }
 
     val overview: StateFlow<StudyOverview?> = study.overview()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -105,7 +130,7 @@ class LearnViewModel @Inject constructor(
 
     fun reset() {
         ticker?.cancel()
-        _focus.value = FocusState(subjectId = _focus.value.subjectId, completedRounds = _focus.value.completedRounds)
+        _focus.value = FocusState(subjectId = _focus.value.subjectId, completedRounds = _focus.value.completedRounds, remainingSeconds = focusSeconds, totalSeconds = focusSeconds)
     }
 
     fun skipBreak() {
@@ -113,8 +138,8 @@ class LearnViewModel @Inject constructor(
         _focus.value = _focus.value.copy(
             phase = FocusState.Phase.IDLE,
             running = false,
-            remainingSeconds = FocusState.FOCUS_SECONDS,
-            totalSeconds = FocusState.FOCUS_SECONDS,
+            remainingSeconds = focusSeconds,
+            totalSeconds = focusSeconds,
         )
     }
 
@@ -122,6 +147,7 @@ class LearnViewModel @Inject constructor(
         val state = _focus.value
         if (state.phase == FocusState.Phase.FOCUS) {
             study.recordSession(state.subjectId, state.totalSeconds / 60, focusStartedAt)
+
             val rounds = state.completedRounds + 1
             val breakSeconds = if (rounds % 4 == 0) FocusState.LONG_BREAK else FocusState.SHORT_BREAK
             _focus.value = state.copy(

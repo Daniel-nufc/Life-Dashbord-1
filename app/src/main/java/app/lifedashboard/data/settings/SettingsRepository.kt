@@ -41,6 +41,8 @@ data class AppSettings(
     val energyLog: Map<Long, Int> = emptyMap(),
     /** Tage, an denen Daniel zu wenig geschlafen hat (< 6 Std, Health Connect) → leichter planen */
     val shortSleepDays: Set<Long> = emptySet(),
+    /** Fokus-Dauer für den Timer unter Lernen (Minuten), selbst gewählt */
+    val focusMinutes: Int = 25,
     /** „Ein Satz zum Tag“ (epochDay → Text), die letzten 60 Tage */
     val dayNotes: Map<Long, String> = emptyMap(),
     /** Ausgefallene Stunden: „epochDay:Stunde“ */
@@ -186,6 +188,7 @@ class SettingsRepository @Inject constructor(
                 }.toMap(),
                 shortSleepDays = p[SHORT_SLEEP].orEmpty().split(',').mapNotNull { it.toLongOrNull() }.toSet(),
                 cancelledLessons = p[CANCELLED_LESSONS].orEmpty(),
+                focusMinutes = p[FOCUS_MINUTES] ?: 25,
                 dayNotes = p[DAY_NOTES].orEmpty().split('\n').mapNotNull { line ->
                     val i = line.indexOf('\t')
                     if (i <= 0) null else line.substring(0, i).toLongOrNull()?.let { it to line.substring(i + 1) }
@@ -276,6 +279,10 @@ class SettingsRepository @Inject constructor(
             val cutoff = day.toEpochDay() - 21
             it[ENERGY_LOG] = map.filterKeys { d -> d >= cutoff }.entries.sortedBy { e -> e.key }.joinToString(",") { e -> "${e.key}:${e.value}" }
         }
+    }
+
+    suspend fun setFocusMinutes(minutes: Int) {
+        dataStore.edit { it[FOCUS_MINUTES] = minutes.coerceIn(1, 240) }
     }
 
     /** „Ein Satz zum Tag“ speichern (leer = löschen). Nur die letzten 60 Tage bleiben. */
@@ -426,6 +433,7 @@ class SettingsRepository @Inject constructor(
         val ONLY_MINE_CALENDARS = stringPreferencesKey("only_mine_calendar_ids")
         val ENERGY_LOG = stringPreferencesKey("energy_log")
         val DAY_NOTES = stringPreferencesKey("day_notes")
+        val FOCUS_MINUTES = intPreferencesKey("focus_minutes")
         val SHORT_SLEEP = stringPreferencesKey("short_sleep_days")
         val CANCELLED_LESSONS = stringSetPreferencesKey("cancelled_lessons")
         val MINE_TITLES = stringSetPreferencesKey("mine_titles")

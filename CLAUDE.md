@@ -3,8 +3,8 @@
 Private Android-App **Life Dashboard** für Daniel (Schüler, 11. Klasse, OSZ Max Taut Berlin). Läuft auf Galaxy S25 (Android 17) und Galaxy Tab S8+ (Android 16).
 Nicht im Play Store. Die APK wird per Datei geschickt und von Hand installiert (vorher „Auto Blocker“ kurz ausschalten).
 
-**Aktueller Stand: Version 42** (Fix: Springen beim Scrollen) – zwei Runden mit je über 20 neuen Funktionen, siehe `docs/IDEEN.md` ( Datenbank-Version 16, alle Tests grün). Die Versionsnummer der APK ist die GitHub-Build-Nummer (`GITHUB_RUN_NUMBER`).
-**Code:** `main` = Version 29. Version 30–42 liegen auf `ccr-eb37e95e-gq983n` (noch nicht in `main`). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
+**Aktueller Stand: Version 43** (Fokus-Dauer frei wählbar; v42: Fix Springen beim Scrollen) – zwei Runden mit je über 20 neuen Funktionen, siehe `docs/IDEEN.md` ( Datenbank-Version 16, alle Tests grün). Die Versionsnummer der APK ist die GitHub-Build-Nummer (`GITHUB_RUN_NUMBER`).
+**Code:** `main` = Version 29. Version 30–43 liegen auf `ccr-eb37e95e-gq983n` (noch nicht in `main`). Gearbeitet wurde auf `ccr-4b9f7b2a-x8cb8a` (baut auf `claude/life-dashboard-android-1h4pmk` = Version 23 auf). Neue Updates: auf dem Arbeits-Branch der Sitzung entwickeln und nur mit Daniels OK nach `main` übernehmen.
 
 ## Wie mit Daniel arbeiten
 - Immer **auf Deutsch**, einfach und kurz erklären. Daniel ist kein Entwickler und liest oft auf dem Handy.
@@ -110,6 +110,11 @@ Liste mit Vorbild-App je Funktion: `docs/IDEEN.md` (Nr. 28–48). Rechenlogik ge
 - Ursache 1 – **Endlosschleife:** `StudyRepository.overview` las seit v36 alle `plan_blocks` mit → jede Neuplanung änderte die Übersicht → `TodayViewModel` plante neu → … etwa jede Sekunde. Jede Neuplanung löschte alle Vorschläge und legte sie neu an (neue IDs) → Listen verloren die Scroll-Position.
 - Jetzt: Übersicht liest nur erledigte Lern-Blöcke (`distinctUntilChanged`); `TodayViewModel`/`CalendarViewModel` planen nur bei echter Änderung; **`replanLocked` ersetzt Vorschläge nur, wenn sie sich wirklich unterscheiden** (gleiche Vorschläge behalten ihre IDs, Test „Neuplanung ohne Änderung …“). Neue Auslöser für Neuplanung **immer mit `distinctUntilChanged`** bauen und nie Flows beobachten, die die Planung selbst schreibt.
 - Ursache 2 – **doppelter Listen-Schlüssel sonntags:** Aufgaben für morgen standen sonntags unter „Morgen“ und „Nächste Woche“ (`openSections`), Compose stürzt bzw. springt bei doppelten Keys.
+
+## Fokus-Dauer frei wählbar (Version 43)
+- `ui/focus/DurationDialog.kt`: Schnellauswahl (10–90 Min) + eigene Eingabe 1–240 Min.
+- Fokus-Modus: Zeit antippen oder „Dauer: X Min – ändern“ → Gesamtdauer setzen (nie unter bereits vergangener Zeit); nach Ablauf „Verlängern …“ um beliebige Minuten (statt fest 25).
+- Lernen → Fokus: Knopf „Dauer“, Wahl wird gemerkt (`AppSettings.focusMinutes`, Standard 25) und gilt für alle weiteren Runden; Pausen weiter 5 / 15 Min.
 
 ## Technik
 - Kotlin 2.2.21, AGP 8.13.0, Gradle 8.14.3, compileSdk/targetSdk 36, minSdk 34, KSP, Hilt 2.57.2, Compose BOM 2025.05.00, Material 3.
