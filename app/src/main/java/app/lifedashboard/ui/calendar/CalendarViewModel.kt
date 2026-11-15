@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import app.lifedashboard.data.db.PlanBlockEntity
 import kotlinx.coroutines.flow.stateIn
@@ -65,7 +66,7 @@ class CalendarViewModel @Inject constructor(
     init {
         // Diese und nächste Woche automatisch vorplanen; neu bei Änderungen (Termine, Aufgaben, Klausuren …)
         viewModelScope.launch {
-            _weekStart.flatMapLatest { start -> agenda.observe(start, 7).map { start } }
+            _weekStart.flatMapLatest { start -> agenda.observe(start, 7).distinctUntilChanged().map { start } }
                 .debounce(1_500)
                 .collect { start ->
                     val today = LocalDate.now()

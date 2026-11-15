@@ -188,7 +188,12 @@ class TodayViewModel @Inject constructor(
         // Plan automatisch aktualisieren, wenn sich Termine/Aufgaben/Klausuren ändern oder 15 Min vergehen
         viewModelScope.launch {
             date.flatMapLatest { d ->
-                combine(agendaRepo.observe(d, 1), studyRepo.overview(d), clock.map { it.minute / 15 }.distinctUntilChanged()) { _, _, _ -> d }
+                // nur echte Änderungen lösen eine Neuplanung aus (gleiche Daten → nichts tun)
+                combine(
+                    agendaRepo.observe(d, 1).distinctUntilChanged(),
+                    studyRepo.overview(d).map { o -> o.plan.filter { it.date == d } to o.dueReviews.size }.distinctUntilChanged(),
+                    clock.map { it.minute / 15 }.distinctUntilChanged(),
+                ) { a, s, c -> Triple(a, s, c) }.distinctUntilChanged().map { d }
             }.debounce(800).collect { runCatching { engine.replan(it) } }
         }
     }

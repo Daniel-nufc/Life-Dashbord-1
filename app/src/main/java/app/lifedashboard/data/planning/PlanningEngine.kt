@@ -159,8 +159,9 @@ class PlanningEngine @Inject constructor(
                 dao.setStatus(it.id, PlanStatus.MISSED)
                 if (it.status == PlanStatus.ACCEPTED) feedback(it, FeedbackAction.MISSED)
             }
-        // Offene Vorschläge ab jetzt neu berechnen
-        dao.delete(existing.filter { it.status == PlanStatus.PROPOSED && it.endMinute > nowMinute }.map { it.id })
+        // Offene Vorschläge ab jetzt werden neu berechnet – aber erst am Ende ersetzt, und nur wenn sich etwas ändert
+        // (sonst bekäme jeder Vorschlag bei jeder Neuberechnung eine neue Nummer → Listen springen, Endlosschleifen)
+        val oldProposals = existing.filter { it.status == PlanStatus.PROPOSED && it.endMinute > nowMinute }
 
         val range = agenda.observe(date, 1).first()
         val day = range.days.first()
@@ -282,21 +283,23 @@ class PlanningEngine @Inject constructor(
         val planned = (early + DayPlanner.plan(date, freeAfterEarly, rest, config, maxTotalMinutes = budget - early.sumOf { it.range.duration.toMinutes().toInt() }))
             // „Später“ heißt später: nicht vor dem Ende des verschobenen Blocks
             .filter { p -> movedAway[p.demandKey]?.let { p.range.start.minuteOfDay() >= it } ?: true }
-        dao.insertAll(
-            planned.map {
-                PlanBlockEntity(
-                    dateEpochDay = epoch,
-                    startMinute = it.range.start.minuteOfDay(),
-                    endMinute = it.range.end.minuteOfDay(),
-                    type = it.type,
-                    demandKey = it.demandKey,
-                    title = it.title,
-                    refId = it.refId,
-                    status = PlanStatus.PROPOSED,
-                    createdAtMillis = System.currentTimeMillis(),
-                )
-            },
-        )
+        val fresh = planned.map {
+            PlanBlockEntity(
+                dateEpochDay = epoch,
+                startMinute = it.range.start.minuteOfDay(),
+                endMinute = it.range.end.minuteOfDay(),
+                type = it.type,
+                demandKey = it.demandKey,
+                title = it.title,
+                refId = it.refId,
+                status = PlanStatus.PROPOSED,
+                createdAtMillis = System.currentTimeMillis(),
+            )
+        }
+        fun PlanBlockEntity.sig() = listOf(startMinute, endMinute, type, demandKey, title, refId)
+        if (oldProposals.map { it.sig() }.sortedBy { it.toString() } == fresh.map { it.sig() }.sortedBy { it.toString() }) return
+        dao.delete(oldProposals.map { it.id })
+        dao.insertAll(fresh)
     }
 
     /**

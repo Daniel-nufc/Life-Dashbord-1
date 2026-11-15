@@ -200,7 +200,9 @@ private fun openSections(open: List<TaskEntity>, today: LocalDate): List<Section
     (t + 2..sunday).forEach { day ->
         result += Section("d$day", LocalDate.ofEpochDay(day).dayOfWeek.longName(), open.filter { it.dueEpochDay == day })
     }
-    result += Section("next", "Nächste Woche", open.filter { val d = it.dueEpochDay; d != null && d > sunday && d <= sunday + 7 })
+    // ab übermorgen bzw. nach Sonntag – sonst stünde „morgen“ am Sonntag doppelt da (Morgen + Nächste Woche)
+    val afterThisWeek = maxOf(sunday, t + 1)
+    result += Section("next", "Nächste Woche", open.filter { val d = it.dueEpochDay; d != null && d > afterThisWeek && d <= sunday + 7 })
     result += Section("later", "Später", open.filter { val d = it.dueEpochDay; d != null && d > sunday + 7 })
     result += Section("someday", "Irgendwann", open.filter { it.dueEpochDay == null })
     return result.filter { it.tasks.isNotEmpty() }

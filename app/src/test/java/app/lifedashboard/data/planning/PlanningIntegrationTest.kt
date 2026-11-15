@@ -308,4 +308,17 @@ class PlanningIntegrationTest {
         assertEquals(3, todos.map { it.dueEpochDay }.distinct().size)
         assertEquals(today.minusDays(1).toEpochDay(), all.single { it.title == "HA" }.dueEpochDay)
     }
+
+    @Test
+    fun `Neuplanung ohne Aenderung behaelt die Vorschlaege - keine neuen Nummern, kein Springen`() = runBlocking {
+        seed.seedIfNeeded()
+        val bio = subject("Bio")
+        study.saveExam(ExamEntity(subjectId = bio.id, dateEpochDay = today.plusDays(5).toEpochDay(), title = "", kind = ExamKind.TEST, note = null), emptyList())
+        engine.planDays(tomorrow, 1)
+        val before = blocks(tomorrow, 1).filter { it.status == PlanStatus.PROPOSED }.map { it.id }.sorted()
+        assertTrue("es sollte Vorschläge geben", before.isNotEmpty())
+        repeat(3) { engine.replan(tomorrow) }
+        val after = blocks(tomorrow, 1).filter { it.status == PlanStatus.PROPOSED }.map { it.id }.sorted()
+        assertEquals(before, after)
+    }
 }

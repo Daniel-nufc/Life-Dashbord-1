@@ -19,7 +19,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 data class ExamWithTopics(val exam: ExamEntity, val subject: SubjectEntity?, val topics: List<TopicEntity>) {
     val date: LocalDate get() = LocalDate.ofEpochDay(exam.dateEpochDay)
@@ -80,7 +82,10 @@ class StudyRepository @Inject constructor(
             timetable.subjects,
             combine(
                 dao.observeSessionsSince(fromMillis), busy,
-                planDao.observeBetween(today.toEpochDay() - 90, today.toEpochDay()),
+                // nur erledigte Lern-Blöcke zählen – Vorschläge ändern sich ständig und dürfen hier nichts auslösen
+                planDao.observeBetween(today.toEpochDay() - 90, today.toEpochDay())
+                    .map { list -> list.filter { it.status == app.lifedashboard.data.db.PlanStatus.DONE && it.demandKey.startsWith("study:") } }
+                    .distinctUntilChanged(),
             ) { s, b, blocks -> Triple(s, b, blocks) },
         ) { exams, topics, grades, subjects, sessionsAndBusy ->
             val (sessions, busyDays, recentBlocks) = sessionsAndBusy
